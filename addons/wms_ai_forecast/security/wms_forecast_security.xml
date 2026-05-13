@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <record id="group_buyer" model="res.groups">
+            <field name="name">WMS / Buyer</field>
+            <field name="category_id" ref="wms_location.module_category_wms"/>
+            <field name="implied_ids" eval="[(4, ref('wms_location.group_wms_user')), (4, ref('purchase.group_purchase_user'))]"/>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <menuitem id="menu_wms_root"
+                  name="WMS"
+                  sequence="10"
+                  web_icon="wms_location,static/description/icon.png"/>
+
+        <menuitem id="menu_wms_operations"
+                  name="Operations"
+                  parent="menu_wms_root"
+                  sequence="10"/>
+
+        <menuitem id="menu_wms_config"
+                  name="Configuration"
+                  parent="menu_wms_root"
+                  sequence="90"
+                  groups="wms_location.group_wms_manager"/>
+
+        <menuitem id="menu_wms_racks"
+                  name="Racks"
+                  parent="menu_wms_config"
+                  action="action_wms_racks"
+                  sequence="10"/>
+
+        <menuitem id="menu_wms_slots"
+                  name="Slots"
+                  parent="menu_wms_operations"
+                  action="action_wms_slots"
+                  sequence="10"/>
+
+        <menuitem id="menu_wms_rack_generator"
+                  name="Generate Rack"
+                  parent="menu_wms_config"
+                  action="action_wms_rack_generator"
+                  sequence="20"/>
+
+    </data>
+</odoo>

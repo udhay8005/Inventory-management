@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <template id="report_product_label">
+            <t t-call="web.html_container">
+                <t t-foreach="docs" t-as="product">
+                    <t t-call="web.basic_layout">
+                        <div class="page" style="padding: 10px; font-family: sans-serif;">
+                            <div style="border:1px solid #000; padding:6px; width:60mm;">
+                                <h4 t-esc="product.name" style="margin:0 0 4px 0;"/>
+                                <div t-if="product.default_code">
+                                    <small>SKU: <span t-esc="product.default_code"/></small>
+                                </div>
+                                <div style="margin-top:6px;">
+                                    <img t-if="product.barcode"
+                                         t-att-src="'/report/barcode/?barcode_type=Code128&amp;value=%s&amp;width=400&amp;height=80' % product.barcode"
+                                         style="width:100%; height:auto;"/>
+                                </div>
+                                <div style="text-align:center; font-family:monospace;"
+                                     t-esc="product.barcode or 'NO BARCODE'"/>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </template>
+
+        <template id="report_location_label">
+            <t t-call="web.html_container">
+                <t t-foreach="docs" t-as="location">
+                    <t t-call="web.basic_layout">
+                        <div class="page" style="padding: 10px; font-family: sans-serif;">
+                            <div style="border:1px solid #000; padding:6px; width:60mm;">
+                                <h4 t-esc="location.complete_name" style="margin:0 0 4px 0;"/>
+                                <div>
+                                    <small>Type: <span t-esc="location.wms_location_type or '-'"/></small>
+                                </div>
+                                <div style="margin-top:6px;">
+                                    <img t-if="location.barcode"
+                                         t-att-src="'/report/barcode/?barcode_type=Code128&amp;value=%s&amp;width=400&amp;height=80' % location.barcode"
+                                         style="width:100%; height:auto;"/>
+                                </div>
+                                <div style="text-align:center; font-family:monospace;"
+                                     t-esc="location.barcode or 'NO BARCODE'"/>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+            </t>
+        </template>
+
+    </data>
+</odoo>

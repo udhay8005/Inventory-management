@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Product label -->
+        <record id="action_report_wms_product_label" model="ir.actions.report">
+            <field name="name">WMS Product Label</field>
+            <field name="model">product.product</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">wms_barcode.report_product_label</field>
+            <field name="report_file">wms_barcode.report_product_label</field>
+            <field name="print_report_name">'Label - %s' % object.default_code or object.name</field>
+            <field name="binding_model_id" ref="product.model_product_product"/>
+            <field name="binding_type">report</field>
+        </record>
+
+        <!-- Slot / Rack label -->
+        <record id="action_report_wms_location_label" model="ir.actions.report">
+            <field name="name">WMS Location Label</field>
+            <field name="model">stock.location</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">wms_barcode.report_location_label</field>
+            <field name="report_file">wms_barcode.report_location_label</field>
+            <field name="print_report_name">'Label - %s' % object.complete_name</field>
+            <field name="binding_model_id" ref="stock.model_stock_location"/>
+            <field name="binding_type">report</field>
+        </record>
+
+    </data>
+</odoo>

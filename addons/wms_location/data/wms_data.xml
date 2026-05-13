@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Apply FIFO removal strategy at the default warehouse stock location.
+            wms_fifo registers a custom strategy id; falling back to Odoo's
+            built-in fifo here gives a working default even if wms_fifo
+            isn't installed yet.
+        -->
+        <function model="stock.location" name="write"
+                  eval="[
+                      [ref('stock.stock_location_stock')],
+                      {'removal_strategy_id': ref('stock.removal_fifo')}
+                  ]"/>
+    </data>
+</odoo>

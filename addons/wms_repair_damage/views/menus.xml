@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <menuitem id="menu_wms_damage"
+                  name="Damages"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_damage"
+                  sequence="40"/>
+
+        <menuitem id="menu_wms_repair"
+                  name="Repair Orders"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_repair"
+                  sequence="45"/>
+    </data>
+</odoo>

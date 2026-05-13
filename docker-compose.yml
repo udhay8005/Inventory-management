@@ -1,0 +1,83 @@
+version: "3.9"
+
+# Inventory_mngt — Odoo CE 19 + PostgreSQL 16 + optional AI worker
+# All services connect on the same private bridge network.
+# Persistent data lives in named volumes; addons are bind-mounted for dev.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: wms_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ${DB_USER:-odoo}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-odoo}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/10-init.sh:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER:-odoo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [wms_net]
+
+  odoo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: wms/odoo:19
+    container_name: wms_odoo
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: db
+      USER: ${DB_USER:-odoo}
+      PASSWORD: ${DB_PASSWORD:-odoo}
+      ODOO_ADMIN_PASSWD: ${ODOO_ADMIN_PASSWD:-admin_change_me}
+    volumes:
+      - ./addons:/mnt/extra-addons:rw
+      - ./config/odoo.conf:/etc/odoo/odoo.conf:ro
+      - odoo_data:/var/lib/odoo
+      - odoo_logs:/var/log/odoo
+    ports:
+      - "${ODOO_PORT:-8069}:8069"
+      - "${ODOO_LONGPOLL_PORT:-8072}:8072"
+    networks: [wms_net]
+    command: >
+      odoo
+      --config=/etc/odoo/odoo.conf
+      --logfile=/var/log/odoo/odoo.log
+
+  # Optional out-of-process AI worker — only enable on small VPS / Pi when
+  # in-process cron isn't enough. Trains forecasts and writes back via XML-RPC.
+  ai_worker:
+    build:
+      context: ./ai_worker
+      dockerfile: Dockerfile
+    image: wms/ai_worker:1.0
+    container_name: wms_ai_worker
+    restart: unless-stopped
+    depends_on:
+      - odoo
+    environment:
+      ODOO_URL: http://odoo:8069
+      ODOO_DB: ${ODOO_DB:-wms}
+      ODOO_USER: ${ODOO_USER:-admin}
+      ODOO_PASSWORD: ${ODOO_USER_PASSWORD:-admin}
+      FORECAST_INTERVAL_HOURS: ${FORECAST_INTERVAL_HOURS:-6}
+    networks: [wms_net]
+    profiles: ["ai"]   # docker compose --profile ai up
+
+volumes:
+  db_data:
+  odoo_data:
+  odoo_logs:
+
+networks:
+  wms_net:
+    driver: bridge

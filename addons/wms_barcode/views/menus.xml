@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <menuitem id="menu_wms_scan_receipt"
+                  name="Scan Receipt"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_scan_receipt"
+                  sequence="20"/>
+
+        <menuitem id="menu_wms_scan_issue"
+                  name="Scan Issue (FIFO)"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_scan_issue"
+                  sequence="25"/>
+
+        <menuitem id="menu_wms_barcode_alias"
+                  name="Carton Barcodes"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_barcode_alias"
+                  sequence="30"/>
+    </data>
+</odoo>

@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_rack_generator_user,wms.rack.generator user,model_wms_rack_generator,group_wms_manager,1,1,1,1

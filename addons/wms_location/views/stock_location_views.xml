@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Extend stock.location form with WMS fields -->
+        <record id="view_stock_location_form_wms" model="ir.ui.view">
+            <field name="name">stock.location.form.wms</field>
+            <field name="model">stock.location</field>
+            <field name="inherit_id" ref="stock.view_location_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet/group" position="inside">
+                    <group string="WMS hierarchy">
+                        <field name="wms_location_type"/>
+                        <field name="wms_rack_code"
+                               invisible="wms_location_type != 'rack'"/>
+                        <field name="wms_divider_number"
+                               invisible="wms_location_type != 'divider'"/>
+                        <field name="wms_slot_number"
+                               invisible="wms_location_type != 'slot'"/>
+                        <field name="wms_capacity_units"
+                               invisible="wms_location_type != 'slot'"/>
+                        <field name="wms_current_qty"
+                               invisible="wms_location_type not in ('slot','divider','rack')"/>
+                        <field name="wms_occupancy_pct" widget="percentage"
+                               invisible="wms_location_type != 'slot' or wms_capacity_units == 0"/>
+                        <field name="wms_product_ids" widget="many2many_tags"
+                               invisible="wms_location_type != 'slot'"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Slot list -->
+        <record id="view_wms_slot_tree" model="ir.ui.view">
+            <field name="name">wms.slot.tree</field>
+            <field name="model">stock.location</field>
+            <field name="arch" type="xml">
+                <list string="Slots">
+                    <field name="complete_name" string="Slot"/>
+                    <field name="barcode"/>
+                    <field name="wms_slot_number"/>
+                    <field name="wms_capacity_units"/>
+                    <field name="wms_current_qty"/>
+                    <field name="wms_occupancy_pct" widget="percentage"/>
+                    <field name="wms_product_ids" widget="many2many_tags"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Slot kanban — quick visual occupancy -->
+        <record id="view_wms_slot_kanban" model="ir.ui.view">
+            <field name="name">wms.slot.kanban</field>
+            <field name="model">stock.location</field>
+            <field name="arch" type="xml">
+                <kanban default_group_by="location_id" class="o_kanban_small_column">
+                    <field name="wms_current_qty"/>
+                    <field name="wms_capacity_units"/>
+                    <field name="wms_product_ids"/>
+                    <field name="barcode"/>
+                    <templates>
+                        <t t-name="card">
+                            <div class="oe_kanban_card">
+                                <strong><field name="complete_name"/></strong>
+                                <div>Barcode: <field name="barcode"/></div>
+                                <div>Qty: <field name="wms_current_qty"/>
+                                     <span t-if="record.wms_capacity_units.raw_value">
+                                       / <field name="wms_capacity_units"/>
+                                     </span>
+                                </div>
+                                <div><field name="wms_product_ids" widget="many2many_tags"/></div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+        <record id="view_wms_slot_search" model="ir.ui.view">
+            <field name="name">wms.slot.search</field>
+            <field name="model">stock.location</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="complete_name"/>
+                    <field name="barcode"/>
+                    <field name="wms_product_ids"/>
+                    <filter name="empty" string="Empty"
+                            domain="[('wms_current_qty', '=', 0)]"/>
+                    <filter name="occupied" string="Occupied"
+                            domain="[('wms_current_qty', '>', 0)]"/>
+                    <group expand="0" string="Group By">
+                        <filter name="group_rack" string="Rack"
+                                context="{'group_by': 'location_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_slots" model="ir.actions.act_window">
+            <field name="name">Slots</field>
+            <field name="res_model">stock.location</field>
+            <field name="view_mode">list,kanban,form</field>
+            <field name="domain">[('wms_location_type', '=', 'slot')]</field>
+            <field name="search_view_id" ref="view_wms_slot_search"/>
+            <field name="context">{'search_default_group_rack': 1}</field>
+        </record>
+
+        <record id="action_wms_racks" model="ir.actions.act_window">
+            <field name="name">Racks</field>
+            <field name="res_model">stock.location</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('wms_location_type', '=', 'rack')]</field>
+        </record>
+
+    </data>
+</odoo>

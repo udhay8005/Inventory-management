@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <menuitem id="menu_wms_reports_root"
+                  name="Reports"
+                  parent="wms_location.menu_wms_root"
+                  sequence="70"/>
+
+        <menuitem id="menu_wms_oldest_stock"
+                  name="Oldest stock (FIFO)"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_oldest_stock"
+                  sequence="10"/>
+
+        <menuitem id="menu_wms_occupancy"
+                  name="Slot occupancy"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_occupancy"
+                  sequence="20"/>
+
+        <menuitem id="menu_wms_reorder_summary"
+                  name="Reorder summary"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_reorder_summary"
+                  sequence="30"/>
+    </data>
+</odoo>

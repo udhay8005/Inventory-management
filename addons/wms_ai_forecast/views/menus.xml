@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <menuitem id="menu_wms_forecast"
+                  name="Forecast / Reorder"
+                  parent="wms_location.menu_wms_root"
+                  sequence="50"/>
+
+        <menuitem id="menu_wms_forecast_list"
+                  name="Forecasts"
+                  parent="menu_wms_forecast"
+                  action="action_wms_forecast"
+                  sequence="10"/>
+    </data>
+</odoo>

@@ -1,0 +1,9 @@
+.env
+*.pyc
+__pycache__/
+*.log
+*.swp
+.idea/
+.vscode/
+backups/
+*.dump

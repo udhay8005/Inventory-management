@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_oldest_stock_list" model="ir.ui.view">
+            <field name="name">wms.oldest.stock.list</field>
+            <field name="model">wms.oldest.stock.report</field>
+            <field name="arch" type="xml">
+                <list decoration-danger="age_days > 365"
+                      decoration-warning="age_days > 180"
+                      decoration-info="age_days > 90">
+                    <field name="product_id"/>
+                    <field name="quantity"/>
+                    <field name="location_id"/>
+                    <field name="rack_id"/>
+                    <field name="in_date"/>
+                    <field name="age_days"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_oldest_stock_pivot" model="ir.ui.view">
+            <field name="name">wms.oldest.stock.pivot</field>
+            <field name="model">wms.oldest.stock.report</field>
+            <field name="arch" type="xml">
+                <pivot>
+                    <field name="rack_id" type="row"/>
+                    <field name="product_id" type="col"/>
+                    <field name="quantity" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="action_wms_oldest_stock" model="ir.actions.act_window">
+            <field name="name">Oldest stock (FIFO)</field>
+            <field name="res_model">wms.oldest.stock.report</field>
+            <field name="view_mode">list,pivot</field>
+        </record>
+    </data>
+</odoo>

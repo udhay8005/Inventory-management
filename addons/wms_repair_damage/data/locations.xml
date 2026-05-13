@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="seq_wms_damage" model="ir.sequence">
+            <field name="name">WMS Damage Sequence</field>
+            <field name="code">wms.damage</field>
+            <field name="prefix">DMG/</field>
+            <field name="padding">5</field>
+        </record>
+        <record id="seq_wms_repair" model="ir.sequence">
+            <field name="name">WMS Repair Sequence</field>
+            <field name="code">wms.repair</field>
+            <field name="prefix">REP/</field>
+            <field name="padding">5</field>
+        </record>
+    </data>
+</odoo>

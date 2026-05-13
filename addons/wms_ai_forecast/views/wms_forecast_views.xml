@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_forecast_list" model="ir.ui.view">
+            <field name="name">wms.forecast.list</field>
+            <field name="model">wms.forecast</field>
+            <field name="arch" type="xml">
+                <list decoration-success="velocity_class == 'fast'"
+                      decoration-info="velocity_class == 'normal'"
+                      decoration-warning="velocity_class == 'slow'"
+                      decoration-muted="velocity_class == 'dead'">
+                    <field name="product_id"/>
+                    <field name="velocity_class"/>
+                    <field name="monthly_avg"/>
+                    <field name="on_hand"/>
+                    <field name="reorder_qty" sum="Total to order"/>
+                    <field name="reorder_date"/>
+                    <field name="model_name"/>
+                    <field name="rmse"/>
+                    <field name="last_trained"/>
+                    <button name="action_push_to_po" type="object" icon="fa-shopping-cart"
+                            string="Create PO" invisible="reorder_qty &lt;= 0"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_forecast_form" model="ir.ui.view">
+            <field name="name">wms.forecast.form</field>
+            <field name="model">wms.forecast</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button name="action_retrain" type="object" string="Retrain now"/>
+                        <button name="action_push_to_po" type="object"
+                                string="Create draft PO" class="btn-primary"
+                                invisible="reorder_qty &lt;= 0"/>
+                    </header>
+                    <sheet>
+                        <group>
+                            <group string="Product">
+                                <field name="product_id"/>
+                                <field name="is_consumable"/>
+                                <field name="lead_time_days"/>
+                                <field name="safety_stock"/>
+                            </group>
+                            <group string="AI output">
+                                <field name="model_name"/>
+                                <field name="velocity_class"/>
+                                <field name="predicted_qty"/>
+                                <field name="monthly_avg"/>
+                                <field name="rmse"/>
+                                <field name="last_trained"/>
+                            </group>
+                            <group string="Reorder">
+                                <field name="on_hand"/>
+                                <field name="reorder_qty"/>
+                                <field name="reorder_date"/>
+                            </group>
+                        </group>
+                        <group invisible="not note">
+                            <field name="note" readonly="1"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_forecast_search" model="ir.ui.view">
+            <field name="name">wms.forecast.search</field>
+            <field name="model">wms.forecast</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <filter name="reorder_now" string="Reorder now"
+                            domain="[('reorder_qty', '>', 0)]"/>
+                    <filter name="fast" string="Fast moving"
+                            domain="[('velocity_class', '=', 'fast')]"/>
+                    <filter name="dead" string="Dead stock"
+                            domain="[('velocity_class', '=', 'dead')]"/>
+                    <group expand="0" string="Group By">
+                        <filter name="group_velocity" string="Velocity"
+                                context="{'group_by': 'velocity_class'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_forecast" model="ir.actions.act_window">
+            <field name="name">Forecasts</field>
+            <field name="res_model">wms.forecast</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_wms_forecast_search"/>
+            <field name="context">{'search_default_reorder_now': 1}</field>
+        </record>
+    </data>
+</odoo>

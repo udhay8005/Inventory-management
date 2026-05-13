@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_damage_form" model="ir.ui.view">
+            <field name="name">wms.damage.form</field>
+            <field name="model">wms.damage</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button name="action_confirm" type="object" string="Confirm"
+                                class="btn-primary" invisible="state != 'draft'"/>
+                        <button name="action_cancel" type="object" string="Cancel"
+                                invisible="state == 'cancelled'"/>
+                        <field name="state" widget="statusbar"/>
+                    </header>
+                    <sheet>
+                        <h1><field name="name" readonly="1"/></h1>
+                        <group>
+                            <field name="product_id"/>
+                            <field name="quantity"/>
+                            <field name="source_slot_id"/>
+                            <field name="warehouse_id" readonly="1"/>
+                            <field name="reason"/>
+                            <field name="picking_id" readonly="1"/>
+                        </group>
+                        <field name="note" placeholder="Describe what happened..."/>
+                    </sheet>
+                    <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_damage_list" model="ir.ui.view">
+            <field name="name">wms.damage.list</field>
+            <field name="model">wms.damage</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="quantity"/>
+                    <field name="source_slot_id"/>
+                    <field name="state"/>
+                    <field name="create_date"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_damage" model="ir.actions.act_window">
+            <field name="name">Damages</field>
+            <field name="res_model">wms.damage</field>
+            <field name="view_mode">list,form</field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_barcode_alias_user,wms.barcode.alias user,model_wms_barcode_alias,wms_location.group_wms_user,1,0,0,0
+access_wms_barcode_alias_mgr,wms.barcode.alias manager,model_wms_barcode_alias,wms_location.group_wms_manager,1,1,1,1
+access_wms_scan_receipt_user,wms.scan.receipt user,model_wms_scan_receipt,wms_location.group_wms_user,1,1,1,1
+access_wms_scan_receipt_line,wms.scan.receipt.line user,model_wms_scan_receipt_line,wms_location.group_wms_user,1,1,1,1
+access_wms_scan_issue_user,wms.scan.issue user,model_wms_scan_issue,wms_location.group_wms_user,1,1,1,1
+access_wms_scan_issue_plan,wms.scan.issue.plan user,model_wms_scan_issue_plan,wms_location.group_wms_user,1,1,1,1

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_scan_issue_form" model="ir.ui.view">
+            <field name="name">wms.scan.issue.form</field>
+            <field name="model">wms.scan.issue</field>
+            <field name="arch" type="xml">
+                <form string="Scan Issue (FIFO)">
+                    <group>
+                        <field name="warehouse_id"/>
+                        <field name="destination_id"/>
+                    </group>
+                    <group>
+                        <field name="last_scan" placeholder="scan product barcode"/>
+                        <field name="requested_qty"/>
+                        <button name="action_plan" type="object" string="Plan FIFO" class="btn-primary"/>
+                    </group>
+                    <field name="feedback" readonly="1"/>
+                    <field name="plan_line_ids">
+                        <list>
+                            <field name="product_id"/>
+                            <field name="location_id"/>
+                            <field name="in_date"/>
+                            <field name="available"/>
+                            <field name="take"/>
+                        </list>
+                    </field>
+                    <group>
+                        <field name="short_qty" readonly="1"/>
+                    </group>
+                    <footer>
+                        <button name="action_validate" type="object"
+                                string="Validate" class="btn-primary"
+                                invisible="short_qty &gt; 0"/>
+                        <button special="cancel" string="Cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_scan_issue" model="ir.actions.act_window">
+            <field name="name">Scan Issue</field>
+            <field name="res_model">wms.scan.issue</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+    </data>
+</odoo>

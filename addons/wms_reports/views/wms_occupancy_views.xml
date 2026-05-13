@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_occupancy_list" model="ir.ui.view">
+            <field name="name">wms.occupancy.list</field>
+            <field name="model">wms.occupancy.report</field>
+            <field name="arch" type="xml">
+                <list decoration-danger="occupancy_pct &gt; 90"
+                      decoration-warning="occupancy_pct &gt; 75"
+                      decoration-muted="on_hand == 0">
+                    <field name="location_id"/>
+                    <field name="rack_id"/>
+                    <field name="capacity"/>
+                    <field name="on_hand"/>
+                    <field name="occupancy_pct" widget="percentage"/>
+                    <field name="distinct_products"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_occupancy" model="ir.actions.act_window">
+            <field name="name">Slot occupancy</field>
+            <field name="res_model">wms.occupancy.report</field>
+            <field name="view_mode">list</field>
+        </record>
+    </data>
+</odoo>
