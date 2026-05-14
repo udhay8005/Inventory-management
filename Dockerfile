@@ -4,15 +4,10 @@ FROM odoo:19.0
 
 USER root
 
-# System deps:
-# - libpq-dev: psycopg
-# - fonts-dejavu-core: barcode label rendering
-# - python3-numpy / pandas via pip: ndarrays for forecasting
+# Fonts only — psycopg2 is bundled with the Odoo image, and the Python
+# libs below all ship manylinux wheels so we don't need build toolchain.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-dejavu-core \
-        libpq-dev \
-        build-essential \
-        python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Lightweight forecasting stack (~80MB).
@@ -20,6 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY ./requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
+
+# pip installing tzdata/pandas alongside the apt-installed pytz leaves
+# pkg_resources unable to read pytz's bundled zoneinfo (loader has no
+# get_data()), which breaks the Odoo activity widget. Force a clean pytz.
+RUN pip3 install --no-cache-dir --force-reinstall --no-deps --break-system-packages pytz
 
 # Pre-create log dir owned by odoo user
 RUN mkdir -p /var/log/odoo && chown odoo:odoo /var/log/odoo

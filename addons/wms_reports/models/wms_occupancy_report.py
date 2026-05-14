@@ -9,6 +9,8 @@ class WmsOccupancyReport(models.Model):
     _order = "occupancy_pct desc"
 
     location_id = fields.Many2one("stock.location", readonly=True, string="Slot")
+    divider_id = fields.Many2one("stock.location", readonly=True)
+    level_id = fields.Many2one("stock.location", readonly=True)
     rack_id = fields.Many2one("stock.location", readonly=True)
     capacity = fields.Float(readonly=True)
     on_hand = fields.Float(readonly=True)
@@ -22,6 +24,8 @@ class WmsOccupancyReport(models.Model):
             CREATE OR REPLACE VIEW wms_occupancy_report AS
               SELECT s.id AS id,
                      s.id AS location_id,
+                     d.id AS divider_id,
+                     l.id AS level_id,
                      r.id AS rack_id,
                      s.wms_capacity_units AS capacity,
                      COALESCE(SUM(q.quantity), 0) AS on_hand,
@@ -31,8 +35,9 @@ class WmsOccupancyReport(models.Model):
                      COUNT(DISTINCT q.product_id) AS distinct_products
                 FROM stock_location s
                 JOIN stock_location d ON d.id = s.location_id
-                JOIN stock_location r ON r.id = d.location_id
+                JOIN stock_location l ON l.id = d.location_id
+                JOIN stock_location r ON r.id = l.location_id
                 LEFT JOIN stock_quant q ON q.location_id = s.id AND q.quantity > 0
                WHERE s.wms_location_type = 'slot'
-            GROUP BY s.id, r.id
+            GROUP BY s.id, d.id, l.id, r.id
         """)

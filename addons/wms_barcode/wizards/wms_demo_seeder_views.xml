@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_demo_seeder_form" model="ir.ui.view">
+            <field name="name">wms.demo.seeder.form</field>
+            <field name="model">wms.demo.seeder</field>
+            <field name="arch" type="xml">
+                <form string="Seed demo products and stock">
+                    <div class="alert alert-info" role="alert">
+                        Creates 5 demo products with barcodes, 3 carton aliases,
+                        and (optionally) spreads stock across slots in the
+                        chosen rack with mixed in-dates so FIFO has data to
+                        play with. Safe to re-run — products are keyed by
+                        barcode and won't be duplicated.
+                    </div>
+                    <group>
+                        <field name="rack_id"/>
+                        <field name="add_stock"/>
+                    </group>
+                    <footer>
+                        <button name="action_seed" type="object"
+                                string="Seed demo data" class="btn-primary"/>
+                        <button special="cancel" string="Cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_demo_seeder" model="ir.actions.act_window">
+            <field name="name">Seed demo data</field>
+            <field name="res_model">wms.demo.seeder</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_wms_demo_seeder"
+                  name="Seed demo data"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_demo_seeder"
+                  sequence="80"
+                  groups="wms_location.group_wms_manager"/>
+    </data>
+</odoo>

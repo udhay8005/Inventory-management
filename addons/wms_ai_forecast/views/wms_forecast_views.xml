@@ -77,10 +77,8 @@
                             domain="[('velocity_class', '=', 'fast')]"/>
                     <filter name="dead" string="Dead stock"
                             domain="[('velocity_class', '=', 'dead')]"/>
-                    <group expand="0" string="Group By">
-                        <filter name="group_velocity" string="Velocity"
-                                context="{'group_by': 'velocity_class'}"/>
-                    </group>
+                    <filter name="group_velocity" string="Group by Velocity"
+                            context="{'group_by': 'velocity_class'}"/>
                 </search>
             </field>
         </record>

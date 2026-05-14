@@ -65,10 +65,19 @@ class WmsDamage(models.Model):
             if not damage_loc:
                 raise UserError("No Damage location for warehouse %s." % rec.warehouse_id.display_name)
 
-            picking_type = self.env["stock.picking.type"].search([
-                ("warehouse_id", "=", rec.warehouse_id.id),
-                ("code", "=", "internal"),
-            ], limit=1)
+            # Use the warehouse's int_type_id m2o directly.
+            # Odoo 19 archives the Internal Transfers picking type for
+            # 1-step warehouses, so a plain search filtered by
+            # code='internal' returns nothing (active filter excludes it).
+            picking_type = rec.warehouse_id.int_type_id
+            if not picking_type:
+                raise UserError(
+                    "Warehouse %s has no Internal Transfer picking type. "
+                    "Enable multi-step routes in Inventory settings."
+                    % rec.warehouse_id.display_name
+                )
+            if not picking_type.active:
+                picking_type.sudo().active = True   # auto-unarchive
             picking = self.env["stock.picking"].create({
                 "picking_type_id": picking_type.id,
                 "location_id": rec.source_slot_id.id,
@@ -76,7 +85,7 @@ class WmsDamage(models.Model):
                 "origin": rec.name,
             })
             self.env["stock.move"].create({
-                "name": "Damage: %s" % rec.product_id.display_name,
+                "description_picking": "Damage: %s" % rec.product_id.display_name,
                 "product_id": rec.product_id.id,
                 "product_uom_qty": rec.quantity,
                 "product_uom": rec.product_id.uom_id.id,
@@ -87,7 +96,8 @@ class WmsDamage(models.Model):
             picking.action_confirm()
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
-                ml.quantity = ml.reserved_uom_qty or ml.quantity
+                if not ml.quantity:
+                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
             picking.button_validate()
             rec.write({"state": "confirmed", "picking_id": picking.id})
 

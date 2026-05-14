@@ -7,29 +7,33 @@ Odoo's quant/move machinery working unchanged.
 
 ```
 stock.warehouse
-    └─ stock.location (view, usage='view')      WH/Stock
-        └─ stock.location (internal, type=rack)         WH/Stock/R-01
-            └─ stock.location (internal, type=divider)  WH/Stock/R-01/D-1   ← exactly 6 per rack
-                └─ stock.location (internal, type=slot) WH/Stock/R-01/D-1/S-1   ← exactly 3 per divider
+    └─ stock.location (view)               WH/Stock
+        └─ rack    (view)                  WH/Stock/R-01
+            └─ level   (view)              WH/Stock/R-01/L-1     ← exactly 6 per rack
+                └─ divider (view)          WH/Stock/R-01/L-1/D-1 ← variable count per level
+                    └─ slot (internal)     WH/Stock/R-01/L-1/D-1/S-1 ← exactly 3 per divider
 ```
+
+A typical 4-divider-per-level rack therefore has **6 × 4 × 3 = 72 slots**.
 
 ### Fields added to `stock.location` (in `wms_location`)
 
 | Field | Type | Notes |
 |---|---|---|
-| `wms_location_type` | Selection | `warehouse_view` / `rack` / `divider` / `slot` |
+| `wms_location_type` | Selection | `warehouse_view` / `rack` / `level` / `divider` / `slot` |
 | `wms_rack_code` | Char | e.g. `R-01` (only on rack) |
-| `wms_divider_number` | Integer | 1..6 (only on divider) |
+| `wms_level_number` | Integer | 1..6 (only on level) |
+| `wms_divider_number` | Integer | sequence within parent level (only on divider) |
 | `wms_slot_number` | Integer | 1..3 (only on slot) |
 | `wms_capacity_units` | Float | Soft cap shown in UI; not enforced like a hard lock |
-| `wms_is_damage` | Boolean | This internal location holds damaged stock |
-| `wms_is_repair` | Boolean | This internal location holds in-repair stock |
+| `wms_is_damage` | Boolean | Internal location holding damaged stock |
+| `wms_is_repair` | Boolean | Internal location holding in-repair stock |
 
 ### Constraints (Python `@api.constrains`)
 
-- A rack must have exactly 6 child dividers (warning, not crash, while being created — hard-error on save once "auto-generate slots" has been run).
-- A divider must have exactly 3 child slots.
-- `wms_divider_number` ∈ [1..6]; `wms_slot_number` ∈ [1..3].
+- A level's parent must be a rack; max **6** levels per rack.
+- A divider's parent must be a level; **no upper bound** (configurable per rack).
+- A slot's parent must be a divider; max **3** slots per divider.
 
 ## Quantities
 

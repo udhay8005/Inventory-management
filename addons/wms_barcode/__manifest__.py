@@ -11,9 +11,15 @@
         "views/wms_barcode_alias_views.xml",
         "wizards/scan_receipt_views.xml",
         "wizards/scan_issue_views.xml",
+        "wizards/wms_demo_seeder_views.xml",
         "reports/barcode_label_report.xml",
         "reports/barcode_label_template.xml",
         "views/menus.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "wms_barcode/static/src/scss/scan_wizard.scss",
+        ],
+    },
     "installable": True,
 }

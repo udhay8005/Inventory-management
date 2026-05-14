@@ -6,6 +6,12 @@
                   parent="wms_location.menu_wms_root"
                   sequence="70"/>
 
+        <menuitem id="menu_wms_product_stock"
+                  name="Where is product X?"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_product_stock"
+                  sequence="5"/>
+
         <menuitem id="menu_wms_oldest_stock"
                   name="Oldest stock (FIFO)"
                   parent="menu_wms_reports_root"
@@ -18,10 +24,28 @@
                   action="action_wms_occupancy"
                   sequence="20"/>
 
+        <menuitem id="menu_wms_movement_history"
+                  name="Movement history"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_movement_history"
+                  sequence="30"/>
+
+        <menuitem id="menu_wms_low_stock"
+                  name="Low stock alerts"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_low_stock_alerts"
+                  sequence="40"/>
+
+        <menuitem id="menu_wms_dead_stock"
+                  name="Dead stock"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_dead_stock"
+                  sequence="50"/>
+
         <menuitem id="menu_wms_reorder_summary"
                   name="Reorder summary"
                   parent="menu_wms_reports_root"
                   action="action_wms_reorder_summary"
-                  sequence="30"/>
+                  sequence="60"/>
     </data>
 </odoo>

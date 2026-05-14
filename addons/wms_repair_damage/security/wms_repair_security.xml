@@ -3,7 +3,6 @@
     <data noupdate="0">
         <record id="group_repair_tech" model="res.groups">
             <field name="name">WMS / Repair Tech</field>
-            <field name="category_id" ref="wms_location.module_category_wms"/>
             <field name="implied_ids" eval="[(4, ref('wms_location.group_wms_user'))]"/>
         </record>
     </data>

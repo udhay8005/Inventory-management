@@ -6,29 +6,53 @@
             <field name="model">wms.scan.issue</field>
             <field name="arch" type="xml">
                 <form string="Scan Issue (FIFO)">
-                    <group>
-                        <field name="warehouse_id"/>
-                        <field name="destination_id"/>
-                    </group>
-                    <group>
-                        <field name="last_scan" placeholder="scan product barcode"/>
-                        <field name="requested_qty"/>
-                        <button name="action_plan" type="object" string="Plan FIFO" class="btn-primary"/>
-                    </group>
-                    <field name="feedback" readonly="1"/>
-                    <field name="plan_line_ids">
-                        <list>
-                            <field name="product_id"/>
-                            <field name="location_id"/>
-                            <field name="in_date"/>
-                            <field name="available"/>
-                            <field name="take"/>
-                        </list>
-                    </field>
-                    <group>
-                        <field name="short_qty" readonly="1"/>
-                    </group>
+                    <sheet>
+                        <div class="alert alert-info" role="alert">
+                            <strong>Set qty, then scan.</strong>
+                            FIFO pulls the oldest stock first across all slots.
+                            Scan a carton barcode to use its preset count.
+                        </div>
+                        <div class="row">
+                            <div class="col-12 col-md-6">
+                                <field name="warehouse_id"/>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <field name="destination_id"/>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-12 col-md-4">
+                                <label for="requested_qty" class="fw-bold"/>
+                                <field name="requested_qty" nolabel="1"/>
+                            </div>
+                            <div class="col-12 col-md-8">
+                                <label for="last_scan" class="fw-bold"/>
+                                <field name="last_scan"
+                                       placeholder="Scan product / carton..."
+                                       default_focus="1" nolabel="1"/>
+                            </div>
+                            <div class="col-12">
+                                <field name="feedback" readonly="1" nolabel="1"/>
+                            </div>
+                        </div>
+                        <field name="plan_line_ids" class="mt-3">
+                            <list>
+                                <field name="product_id"/>
+                                <field name="location_id"/>
+                                <field name="in_date"/>
+                                <field name="available"/>
+                                <field name="take"/>
+                            </list>
+                        </field>
+                        <div class="row mt-2">
+                            <div class="col-12 col-md-4">
+                                <field name="short_qty" readonly="1"/>
+                            </div>
+                        </div>
+                    </sheet>
                     <footer>
+                        <button name="action_plan" type="object"
+                                string="Plan FIFO"/>
                         <button name="action_validate" type="object"
                                 string="Validate" class="btn-primary"
                                 invisible="short_qty &gt; 0"/>

@@ -6,24 +6,41 @@
             <field name="model">wms.scan.receipt</field>
             <field name="arch" type="xml">
                 <form string="Scan Receipt">
-                    <group>
-                        <field name="warehouse_id"/>
-                    </group>
-                    <group>
-                        <field name="last_scan" widget="char" placeholder="scan here..."/>
-                        <button name="action_process_scan" type="object"
-                                string="Process scan" class="btn-primary"/>
-                    </group>
-                    <field name="feedback" readonly="1"/>
-                    <field name="line_ids">
-                        <list editable="bottom">
-                            <field name="product_id"/>
-                            <field name="quantity"/>
-                            <field name="lot_id"/>
-                            <field name="location_dest_id"/>
-                        </list>
-                    </field>
+                    <sheet>
+                        <div class="alert alert-info" role="alert">
+                            <strong>Scanner ready.</strong>
+                            Cursor stays in the scan field — each barcode is
+                            processed automatically. Carton barcodes auto-fill
+                            their unit count.
+                        </div>
+                        <div class="row">
+                            <div class="col-12 col-md-4">
+                                <field name="warehouse_id"/>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <label for="last_scan" class="fw-bold"/>
+                                <field name="last_scan"
+                                       placeholder="Scan product, carton, or slot..."
+                                       default_focus="1" nolabel="1"/>
+                            </div>
+                            <div class="col-12">
+                                <field name="feedback" readonly="1" nolabel="1"/>
+                            </div>
+                        </div>
+                        <field name="line_ids" class="mt-3">
+                            <list editable="bottom">
+                                <field name="product_id"/>
+                                <field name="quantity"/>
+                                <field name="lot_id" optional="hide"/>
+                                <field name="location_dest_id"/>
+                            </list>
+                        </field>
+                    </sheet>
                     <footer>
+                        <button name="action_process_scan" type="object"
+                                string="Process scan"/>
                         <button name="action_validate" type="object"
                                 string="Validate &amp; Print" class="btn-primary"/>
                         <button special="cancel" string="Cancel"/>

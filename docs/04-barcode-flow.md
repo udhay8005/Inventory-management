@@ -55,7 +55,28 @@ override is logged and triggers a cycle-count suggestion for that slot.
 
 ## Hardware
 
-- USB HID barcode scanners "just work" — they type into the focused field.
-- Bluetooth scanners same, via OS pairing.
-- Thermal printer: any printer the host OS sees; PDF is generated, sent via
-  CUPS/Windows spooler. No special driver in the container.
+### Barcode scanners
+
+All three common form factors are supported out of the box. They all enumerate
+as **HID keyboards** to the OS, so no driver install is needed:
+
+| Form factor | Examples | Notes |
+|---|---|---|
+| **Wired USB** | Honeywell Voyager, Zebra DS2208 | Plug in → it types into the focused field. |
+| **2.4 GHz wireless (USB dongle)** | typical Amazon "rechargeable wireless scanner" | Same as wired — the dongle presents as a USB keyboard. |
+| **Bluetooth (BT/BLE HID)** | most modern handhelds | Pair once via OS, then identical behaviour. |
+
+Our scan wizards inherit `barcodes.barcode_events_mixin`, so every scan
+is processed automatically (no button click). Cursor stays in the scan
+field between scans for rapid-fire receiving.
+
+**Scanner configuration tip:** make sure your scanner is set to append
+**CR/LF (Enter)** as the suffix — this is the factory default for most
+2.4 GHz wireless models. If scans land in the field but never process,
+print the "Enable Enter Suffix" config barcode from the scanner's manual.
+
+### Thermal label printer
+
+Any printer the **host OS** can see. The container generates a PDF via the
+report engine; the browser prints to the user's local printer through the
+standard browser print dialog. Tested with Zebra GK420t and TSC TE244.

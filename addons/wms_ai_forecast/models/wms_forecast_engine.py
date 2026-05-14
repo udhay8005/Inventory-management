@@ -14,10 +14,15 @@ class WmsForecastEngine(models.AbstractModel):
 
     @api.model
     def run_all_forecasts(self):
-        """Entry point called by cron and the optional ai_worker."""
+        """Entry point called by cron and the optional ai_worker.
+
+        In Odoo 19 a "trackable" product has `is_storable=True` (the legacy
+        `type='product'` was retired). We forecast every storable product
+        and skip services / combos.
+        """
         products = self.env["product.product"].search([
             ("active", "=", True),
-            ("type", "in", ("product", "consu")),  # exclude services
+            ("is_storable", "=", True),
         ])
         _logger.info("wms_ai_forecast: training %d products", len(products))
         self.train_for_products(products)
@@ -80,13 +85,14 @@ class WmsForecastEngine(models.AbstractModel):
     def _train_one(self, product):
         observations = self._gather_outflow(product)
 
-        is_consumable = product.type == "consu"
+        # In Odoo 19 `product.type` is consu/service/combo; the AI's old
+        # consumable/reusable split keyed off type='consu'. We now key off
+        # whether the product has *any* movement history — zero-history
+        # products are flagged "monitor only" regardless of nominal type.
         note = ""
-
-        if not is_consumable and not observations:
-            # Non-consumable / reusable with zero usage in 2y → no prediction.
+        if not observations:
             result = forecasting.ForecastResult(0, 0, 0, "Manual", 0, "dead")
-            note = "Reusable item with no usage history"
+            note = "No usage history yet — monitor only"
         else:
             result = forecasting.forecast(observations, horizon_days=30)
 
@@ -116,7 +122,7 @@ class WmsForecastEngine(models.AbstractModel):
             "reorder_qty": reorder_qty,
             "reorder_date": reorder_date.date() if reorder_date else False,
             "velocity_class": result.velocity_class,
-            "is_consumable": is_consumable,
+            "is_consumable": product.type == "consu",
             "last_trained": fields.Datetime.now(),
             "model_name": result.model_name,
             "rmse": result.rmse,

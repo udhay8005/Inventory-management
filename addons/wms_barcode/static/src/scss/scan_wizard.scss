@@ -1,0 +1,43 @@
+/*
+ * Mobile / tablet polish for the scan wizards. Targets only the two
+ * scan forms via the dialog body class names so it doesn't leak into
+ * other backend forms.
+ */
+.o_dialog .modal-dialog:has(.o_form_view[data-model="wms.scan.receipt"]),
+.o_dialog .modal-dialog:has(.o_form_view[data-model="wms.scan.issue"]) {
+    /* Wider modal on phones/tablets so the line table doesn't horizontally scroll */
+    @media (max-width: 991.98px) {
+        max-width: 100vw;
+        width: 100vw;
+        margin: 0;
+        height: 100vh;
+        .modal-content { height: 100vh; border-radius: 0; }
+    }
+
+    /* Larger, finger-friendly scan input */
+    .o_field_widget[name="last_scan"] input,
+    .o_field_widget[name="requested_qty"] input {
+        font-size: 1.4rem;
+        height: 3rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    /* Bigger primary action on touch */
+    .modal-footer .btn-primary {
+        font-size: 1.05rem;
+        padding: 0.55rem 1.25rem;
+    }
+
+    /* Compact the lines table on small screens */
+    @media (max-width: 575.98px) {
+        .o_list_view td,
+        .o_list_view th {
+            padding: 4px 6px !important;
+            font-size: 0.85rem;
+        }
+        .alert {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+        }
+    }
+}

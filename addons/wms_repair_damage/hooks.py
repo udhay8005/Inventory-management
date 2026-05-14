@@ -13,5 +13,6 @@ def post_init_locations(env):
                     "name": name,
                     "location_id": view_loc.id,
                     "usage": "internal",
+                    "company_id": view_loc.company_id.id,
                     flag: True,
                 })

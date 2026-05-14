@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Full-page QWeb template for /wms/rack/<id>/grid.
+            web.frontend_layout gives us the Odoo header/footer; the body
+            is pure Bootstrap so it scales from phone to desktop.
+        -->
+        <template id="rack_grid_page" name="WMS Rack Visual Grid">
+            <!--
+                Self-contained HTML page. We load Odoo's frontend CSS asset
+                bundle for Bootstrap styling but DON'T inherit the portal
+                template (which requires the portal module and breaks on
+                bare backend installs).
+            -->
+            <t t-call="web.html_container">
+                <head>
+                    <title t-esc="'Rack %s — WMS' % rack.wms_rack_code"/>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <t t-call-assets="web.assets_frontend_minimal"
+                       t-css="true" t-js="false"/>
+                </head>
+                <body>
+                <div class="container-fluid my-3">
+
+                    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                        <div>
+                            <h2 class="mb-0">
+                                Rack <span t-esc="rack.wms_rack_code"/>
+                                <small class="text-muted ms-2" t-esc="rack.complete_name"/>
+                            </h2>
+                            <small>
+                                <span t-esc="total_slots"/> slots ·
+                                <strong t-esc="'%.0f' % rack_on_hand"/> units on hand
+                            </small>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge bg-light text-muted px-2 py-1">Empty</span>
+                            <span class="badge bg-info text-white px-2 py-1">Stocked (no capacity set)</span>
+                            <span class="badge bg-success text-white px-2 py-1">≤ 75%</span>
+                            <span class="badge bg-warning text-dark px-2 py-1">76 – 99%</span>
+                            <span class="badge bg-danger text-white px-2 py-1">Full / Over</span>
+                            <a t-att-href="'/odoo/action-base.action_open_window?type=ir.actions.act_window&amp;res_model=stock.location&amp;res_id=' + str(rack.id)"
+                               class="btn btn-sm btn-outline-secondary">
+                                Open in Odoo
+                            </a>
+                        </div>
+                    </div>
+
+                    <div t-if="not matrix" class="alert alert-warning">
+                        This rack has no levels yet. Use
+                        <em>WMS → Configuration → Generate Rack</em> to set it up.
+                    </div>
+
+                    <!--
+                        One <table> per rack — rows = levels (top→bottom),
+                        cells = dividers; each cell internally renders its 3 slots
+                        as small coloured boxes.
+                    -->
+                    <div class="table-responsive" t-if="matrix">
+                        <table class="table table-bordered table-sm align-middle mb-0"
+                               style="background:#fafafa;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width:60px;">Level</th>
+                                    <t t-foreach="matrix[0]['dividers']" t-as="dcol">
+                                        <th class="text-center">
+                                            <span t-esc="dcol['divider'].name"/>
+                                        </th>
+                                    </t>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="matrix" t-as="row">
+                                    <th class="text-center bg-white">
+                                        <span t-esc="row['level'].name"/>
+                                    </th>
+                                    <t t-foreach="row['dividers']" t-as="dcell">
+                                        <td style="vertical-align: top; padding: 4px;">
+                                            <div class="d-flex flex-column gap-1">
+                                                <t t-foreach="dcell['slots']" t-as="cell">
+                                                    <div t-att-class="'p-2 rounded ' + cell['color']"
+                                                         t-att-title="cell['slot'].complete_name + ' — ' + str(cell['on_hand']) + ' units'"
+                                                         style="min-height:48px; font-size:11px; line-height:1.2;">
+                                                        <div class="d-flex justify-content-between">
+                                                            <strong t-esc="cell['slot'].name"/>
+                                                            <span t-esc="'%.0f' % cell['on_hand']"/>
+                                                        </div>
+                                                        <div t-if="cell['products']" class="text-truncate"
+                                                             style="max-width: 160px;">
+                                                            <t t-foreach="cell['products']" t-as="p">
+                                                                <small t-esc="p.default_code or p.name"/>
+                                                                <t t-if="not p_last">, </t>
+                                                            </t>
+                                                        </div>
+                                                    </div>
+                                                </t>
+                                            </div>
+                                        </td>
+                                    </t>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                </body>
+            </t>
+        </template>
+
+        <!--
+            Server action that, given a rack record, opens its visual grid.
+            Plugged into the rack form via a button.
+        -->
+        <record id="action_open_rack_grid" model="ir.actions.server">
+            <field name="name">Open visual grid</field>
+            <field name="model_id" ref="stock.model_stock_location"/>
+            <field name="binding_model_id" ref="stock.model_stock_location"/>
+            <field name="binding_view_types">form,list</field>
+            <field name="state">code</field>
+            <field name="code">
+if record and record.wms_location_type == 'rack':
+    action = {
+        'type': 'ir.actions.act_url',
+        'url': '/wms/rack/%d/grid' % record.id,
+        'target': 'new',
+    }
+            </field>
+        </record>
+    </data>
+</odoo>

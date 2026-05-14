@@ -9,6 +9,8 @@
                       decoration-warning="occupancy_pct &gt; 75"
                       decoration-muted="on_hand == 0">
                     <field name="location_id"/>
+                    <field name="divider_id"/>
+                    <field name="level_id"/>
                     <field name="rack_id"/>
                     <field name="capacity"/>
                     <field name="on_hand"/>

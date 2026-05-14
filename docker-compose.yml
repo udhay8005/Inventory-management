@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Inventory_mngt — Odoo CE 19 + PostgreSQL 16 + optional AI worker
 # All services connect on the same private bridge network.
 # Persistent data lives in named volumes; addons are bind-mounted for dev.
@@ -51,6 +49,9 @@ services:
     command: >
       odoo
       --config=/etc/odoo/odoo.conf
+      --db_host=db
+      --db_user=${DB_USER:-odoo}
+      --db_password=${DB_PASSWORD:-odoo}
       --logfile=/var/log/odoo/odoo.log
 
   # Optional out-of-process AI worker — only enable on small VPS / Pi when

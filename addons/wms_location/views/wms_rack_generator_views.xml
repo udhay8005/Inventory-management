@@ -11,7 +11,9 @@
                         <field name="warehouse_id"/>
                         <field name="parent_location_id"/>
                         <field name="rack_code"/>
+                        <field name="dividers_per_level"/>
                         <field name="capacity_per_slot"/>
+                        <field name="level_prefix"/>
                         <field name="divider_prefix"/>
                         <field name="slot_prefix"/>
                     </group>

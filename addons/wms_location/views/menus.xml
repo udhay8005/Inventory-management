@@ -24,6 +24,18 @@
                   action="action_wms_racks"
                   sequence="10"/>
 
+        <menuitem id="menu_wms_levels"
+                  name="Levels"
+                  parent="menu_wms_config"
+                  action="action_wms_levels"
+                  sequence="11"/>
+
+        <menuitem id="menu_wms_dividers"
+                  name="Dividers"
+                  parent="menu_wms_config"
+                  action="action_wms_dividers"
+                  sequence="12"/>
+
         <menuitem id="menu_wms_slots"
                   name="Slots"
                   parent="menu_wms_operations"

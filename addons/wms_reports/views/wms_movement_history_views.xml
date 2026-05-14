@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Movement history is just stock.move filtered to validated moves
+            in/out/within the warehouse. We reuse Odoo's existing stock.move
+            views and only contribute a custom action + search context so a
+            warehouse user gets a useful default view without permission to
+            see all of Inventory.
+        -->
+        <record id="action_wms_movement_history" model="ir.actions.act_window">
+            <field name="name">Movement history</field>
+            <field name="res_model">stock.move</field>
+            <field name="view_mode">list,form,pivot</field>
+            <field name="domain">[('state', '=', 'done')]</field>
+            <field name="context">{
+                'search_default_groupby_product': 1,
+            }</field>
+        </record>
+
+        <record id="action_wms_low_stock_alerts" model="ir.actions.act_window">
+            <field name="name">Low stock alerts</field>
+            <field name="res_model">wms.forecast</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('reorder_qty', '>', 0)]</field>
+            <field name="context">{'search_default_reorder_now': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No alerts.</p>
+                <p>This dashboard lists products whose forecasted demand will
+                drop on-hand stock below the reorder point. Train the forecast
+                daily (via cron) or click <em>Retrain now</em> on a row to
+                refresh predictions.</p>
+            </field>
+        </record>
+
+        <record id="action_wms_dead_stock" model="ir.actions.act_window">
+            <field name="name">Dead stock</field>
+            <field name="res_model">wms.forecast</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('velocity_class', '=', 'dead')]</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Nothing dead here — clean inventory.</p>
+                <p>Products with no outflow in the last 90 days. Consider
+                clearing slots, returning to vendor, or reclassifying.</p>
+            </field>
+        </record>
+    </data>
+</odoo>

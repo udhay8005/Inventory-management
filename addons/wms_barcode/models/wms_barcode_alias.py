@@ -18,9 +18,10 @@ class WmsBarcodeAlias(models.Model):
                                   help="How many product units one scan of this barcode represents.")
     note = fields.Char()
 
-    _sql_constraints = [
-        ("barcode_unique", "UNIQUE(barcode)", "Each carton barcode must be unique."),
-    ]
+    _barcode_unique = models.Constraint(
+        "UNIQUE(barcode)",
+        "Each carton barcode must be unique.",
+    )
 
     @api.model
     def resolve(self, barcode):

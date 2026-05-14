@@ -9,9 +9,13 @@ class WmsScanIssue(models.TransientModel):
     against the oldest quants (via stock.location.find_oldest_quants_for_product)
     and shows them BEFORE validating, so a physical mis-count can be overridden
     before the picking commits.
+
+    Inherits `barcodes.barcode_events_mixin` so any wireless/USB HID scanner
+    fires `on_barcode_scanned` automatically.
     """
     _name = "wms.scan.issue"
     _description = "Scan-based issue (FIFO)"
+    _inherit = ["barcodes.barcode_events_mixin"]
 
     warehouse_id = fields.Many2one(
         "stock.warehouse", required=True,
@@ -30,6 +34,14 @@ class WmsScanIssue(models.TransientModel):
     plan_line_ids = fields.One2many("wms.scan.issue.plan", "wizard_id")
     short_qty = fields.Float(readonly=True,
                              help="Shortfall — what we couldn't allocate.")
+
+    def on_barcode_scanned(self, barcode):
+        """Auto-plan FIFO deduction when a scan is detected.
+        Uses the current `requested_qty` (default 1) — operator can
+        adjust qty between scans for bulk items.
+        """
+        self.last_scan = barcode
+        return self.action_plan()
 
     def action_plan(self):
         self.ensure_one()
@@ -74,12 +86,18 @@ class WmsScanIssue(models.TransientModel):
         if self.short_qty:
             raise UserError("Cannot validate: short by %s." % self.short_qty)
 
-        picking_type = self.env["stock.picking.type"].search([
-            ("warehouse_id", "=", self.warehouse_id.id),
-            ("code", "=", "outgoing" if self.destination_id.usage == "customer" else "internal"),
-        ], limit=1)
+        # Pick a picking type via warehouse-level m2o so we don't get bitten
+        # by Odoo 19 archiving the internal type for 1-step warehouses.
+        if self.destination_id.usage == "customer":
+            picking_type = self.warehouse_id.out_type_id
+        else:
+            picking_type = self.warehouse_id.int_type_id
         if not picking_type:
-            raise UserError("No matching picking type on warehouse.")
+            raise UserError(
+                "No matching picking type on warehouse %s." % self.warehouse_id.display_name
+            )
+        if not picking_type.active:
+            picking_type.sudo().active = True
 
         # Group plan lines by source so we make one move per (product, source).
         picking = self.env["stock.picking"].create({
@@ -90,7 +108,7 @@ class WmsScanIssue(models.TransientModel):
         })
         for line in self.plan_line_ids:
             move = self.env["stock.move"].create({
-                "name": line.product_id.display_name,
+                "description_picking": line.product_id.display_name,
                 "product_id": line.product_id.id,
                 "product_uom_qty": line.take,
                 "product_uom": line.product_id.uom_id.id,
@@ -102,7 +120,8 @@ class WmsScanIssue(models.TransientModel):
         picking.action_assign()
         for move in picking.move_ids:
             for ml in move.move_line_ids:
-                ml.quantity = ml.reserved_uom_qty or ml.quantity
+                if not ml.quantity:
+                    ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
 
         return {
@@ -115,6 +134,7 @@ class WmsScanIssue(models.TransientModel):
     def _reopen(self):
         return {
             "type": "ir.actions.act_window",
+            "name": "Scan Issue (FIFO)",
             "res_model": self._name,
             "res_id": self.id,
             "view_mode": "form",

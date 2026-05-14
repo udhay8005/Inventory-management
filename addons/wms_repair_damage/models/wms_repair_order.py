@@ -67,10 +67,17 @@ class WmsRepairOrder(models.Model):
         ], limit=1)
 
     def _internal_picking_type(self):
-        return self.env["stock.picking.type"].search([
-            ("warehouse_id", "=", self.warehouse_id.id),
-            ("code", "=", "internal"),
-        ], limit=1)
+        """Returns the warehouse's Internal Transfers picking type.
+
+        Odoo 19 archives this for 1-step warehouses, so a plain search by
+        code='internal' returns empty (active filter). Reading the m2o
+        directly avoids that; we auto-unarchive if needed so subsequent
+        pickings don't fail.
+        """
+        ptype = self.warehouse_id.int_type_id
+        if ptype and not ptype.active:
+            ptype.sudo().active = True
+        return ptype
 
     def action_start_repair(self):
         for rec in self:
@@ -87,7 +94,7 @@ class WmsRepairOrder(models.Model):
                 "origin": rec.name,
             })
             self.env["stock.move"].create({
-                "name": "Send to repair: %s" % rec.product_id.display_name,
+                "description_picking": "Send to repair: %s" % rec.product_id.display_name,
                 "product_id": rec.product_id.id,
                 "product_uom_qty": rec.quantity,
                 "product_uom": rec.product_id.uom_id.id,
@@ -98,7 +105,8 @@ class WmsRepairOrder(models.Model):
             picking.action_confirm()
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
-                ml.quantity = ml.reserved_uom_qty or ml.quantity
+                if not ml.quantity:
+                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
             picking.button_validate()
             rec.write({"state": "in_repair", "start_picking_id": picking.id})
 
@@ -117,7 +125,7 @@ class WmsRepairOrder(models.Model):
                 "origin": rec.name,
             })
             self.env["stock.move"].create({
-                "name": "Return from repair: %s" % rec.product_id.display_name,
+                "description_picking": "Return from repair: %s" % rec.product_id.display_name,
                 "product_id": rec.product_id.id,
                 "product_uom_qty": rec.quantity,
                 "product_uom": rec.product_id.uom_id.id,
@@ -128,7 +136,8 @@ class WmsRepairOrder(models.Model):
             picking.action_confirm()
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
-                ml.quantity = ml.reserved_uom_qty or ml.quantity
+                if not ml.quantity:
+                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
             picking.button_validate()
             rec.write({"state": "done", "finish_picking_id": picking.id})
 

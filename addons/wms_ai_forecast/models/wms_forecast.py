@@ -29,9 +29,10 @@ class WmsForecast(models.Model):
     safety_stock = fields.Float(readonly=True)
     note = fields.Char(readonly=True)
 
-    _sql_constraints = [
-        ("product_unique", "UNIQUE(product_id)", "One forecast row per product."),
-    ]
+    _product_unique = models.Constraint(
+        "UNIQUE(product_id)",
+        "One forecast row per product.",
+    )
 
     def action_retrain(self):
         self.env["wms.forecast.engine"].train_for_products(self.product_id)
@@ -50,6 +51,7 @@ class WmsForecast(models.Model):
                 "params": {"type": "warning", "title": "No vendor",
                            "message": "Configure a vendor on the product first."},
             }
+        # Odoo 19 renamed purchase.order.line.product_uom → product_uom_id.
         po = self.env["purchase.order"].create({
             "partner_id": supplier.partner_id.id,
             "order_line": [(0, 0, {
@@ -57,7 +59,7 @@ class WmsForecast(models.Model):
                 "product_qty": self.reorder_qty,
                 "name": self.product_id.display_name,
                 "date_planned": fields.Date.context_today(self),
-                "product_uom": self.product_id.uom_id.id,
+                "product_uom_id": self.product_id.uom_id.id,
                 "price_unit": supplier.price or 0.0,
             })],
         })
