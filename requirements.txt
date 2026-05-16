@@ -2,5 +2,5 @@ numpy>=1.26,<2.0
 pandas>=2.0,<3.0
 statsmodels>=0.14
 python-barcode>=0.15
-Pillow>=10.0
+Pillow>=12.2.0
 reportlab>=4.0
