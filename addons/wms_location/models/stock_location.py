@@ -1,13 +1,17 @@
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
-
 LOCATION_TYPES = [
     ("warehouse_view", "Warehouse view"),
+    ("zone", "Zone (building / floor / area)"),
     ("rack", "Rack"),
     ("level", "Level"),
     ("divider", "Divider"),
     ("slot", "Slot"),
+    # Non-rack storage: pallet area, floor stack, single-shelf slab,
+    # outside yard bay, etc. usage='internal' so quants can land here
+    # directly, no Level/Divider needed.
+    ("floor", "Floor / Open area"),
 ]
 
 # Physical constraints from the warehouse layout:
@@ -29,7 +33,9 @@ class StockLocation(models.Model):
     )
     wms_rack_code = fields.Char(string="Rack code", help="e.g. R-01")
     wms_level_number = fields.Integer(string="Level #", help="1..6 within parent rack")
-    wms_divider_number = fields.Integer(string="Divider #", help="position of divider within its level")
+    wms_divider_number = fields.Integer(
+        string="Divider #", help="position of divider within its level"
+    )
     wms_slot_number = fields.Integer(string="Slot #", help="1..3 within parent divider")
     wms_capacity_units = fields.Float(
         string="Capacity (units)",
@@ -61,8 +67,13 @@ class StockLocation(models.Model):
         "Slot number must be between 1 and 3.",
     )
 
-    @api.depends("name", "location_id", "wms_location_type",
-                 "location_id.name", "location_id.wms_location_type")
+    @api.depends(
+        "name",
+        "location_id",
+        "wms_location_type",
+        "location_id.name",
+        "location_id.wms_location_type",
+    )
     def _compute_display_name(self):
         """Make divider / slot display names self-contained.
 
@@ -75,9 +86,15 @@ class StockLocation(models.Model):
         wms_recs = self.filtered(lambda r: r.wms_location_type in ("divider", "slot"))
         for loc in wms_recs:
             parent = loc.location_id
-            if loc.wms_location_type == "divider" and parent and parent.wms_location_type == "level":
+            if (
+                loc.wms_location_type == "divider"
+                and parent
+                and parent.wms_location_type == "level"
+            ):
                 loc.display_name = "%s/%s" % (parent.name, loc.name)
-            elif loc.wms_location_type == "slot" and parent and parent.wms_location_type == "divider":
+            elif (
+                loc.wms_location_type == "slot" and parent and parent.wms_location_type == "divider"
+            ):
                 grandparent = parent.location_id
                 if grandparent and grandparent.wms_location_type == "level":
                     loc.display_name = "%s/%s/%s" % (grandparent.name, parent.name, loc.name)
@@ -96,9 +113,7 @@ class StockLocation(models.Model):
             loc.wms_current_qty = total
             loc.wms_product_ids = quants.mapped("product_id")
             loc.wms_occupancy_pct = (
-                (total / loc.wms_capacity_units * 100.0)
-                if loc.wms_capacity_units
-                else 0.0
+                (total / loc.wms_capacity_units * 100.0) if loc.wms_capacity_units else 0.0
             )
 
     @api.constrains("wms_location_type", "location_id")
@@ -112,11 +127,13 @@ class StockLocation(models.Model):
                         "A level's parent must be a Rack (got %s)."
                         % (parent.wms_location_type if parent else "<none>")
                     )
-                siblings = self.search_count([
-                    ("location_id", "=", parent.id),
-                    ("wms_location_type", "=", "level"),
-                    ("id", "!=", loc.id),
-                ])
+                siblings = self.search_count(
+                    [
+                        ("location_id", "=", parent.id),
+                        ("wms_location_type", "=", "level"),
+                        ("id", "!=", loc.id),
+                    ]
+                )
                 if siblings >= MAX_LEVELS:
                     raise ValidationError(
                         "Rack %s already has %d levels (max %d)."
@@ -135,11 +152,13 @@ class StockLocation(models.Model):
                         "A slot's parent must be a Divider (got %s)."
                         % (parent.wms_location_type if parent else "<none>")
                     )
-                siblings = self.search_count([
-                    ("location_id", "=", parent.id),
-                    ("wms_location_type", "=", "slot"),
-                    ("id", "!=", loc.id),
-                ])
+                siblings = self.search_count(
+                    [
+                        ("location_id", "=", parent.id),
+                        ("wms_location_type", "=", "slot"),
+                        ("id", "!=", loc.id),
+                    ]
+                )
                 if siblings >= MAX_SLOTS:
                     raise ValidationError(
                         "Divider %s already has %d slots (max %d)."
@@ -147,8 +166,7 @@ class StockLocation(models.Model):
                     )
 
     @api.model
-    def find_oldest_quants_for_product(self, product_id, qty_needed,
-                                       parent_location_id=None):
+    def find_oldest_quants_for_product(self, product_id, qty_needed, parent_location_id=None):
         """FIFO helper: returns (plan, missing) where `plan` is an ordered
         list of (quant, take_qty) tuples consuming the oldest quants first.
         """

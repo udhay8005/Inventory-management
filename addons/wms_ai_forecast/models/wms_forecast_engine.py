@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime, timedelta
 
 from odoo import api, fields, models
 
@@ -20,10 +19,12 @@ class WmsForecastEngine(models.AbstractModel):
         `type='product'` was retired). We forecast every storable product
         and skip services / combos.
         """
-        products = self.env["product.product"].search([
-            ("active", "=", True),
-            ("is_storable", "=", True),
-        ])
+        products = self.env["product.product"].search(
+            [
+                ("active", "=", True),
+                ("is_storable", "=", True),
+            ]
+        )
         _logger.info("wms_ai_forecast: training %d products", len(products))
         self.train_for_products(products)
 
@@ -32,8 +33,7 @@ class WmsForecastEngine(models.AbstractModel):
             try:
                 self._train_one(product)
             except Exception as exc:  # noqa: BLE001
-                _logger.warning("forecast train failed for %s: %s",
-                                product.display_name, exc)
+                _logger.warning("forecast train failed for %s: %s", product.display_name, exc)
 
     def _gather_outflow(self, product):
         """Return list of (datetime, qty) — daily outflow events."""
@@ -57,19 +57,23 @@ class WmsForecastEngine(models.AbstractModel):
         return [(row[0], float(row[1])) for row in self.env.cr.fetchall()]
 
     def _on_hand(self, product):
-        quants = self.env["stock.quant"].search([
-            ("product_id", "=", product.id),
-            ("location_id.usage", "=", "internal"),
-        ])
+        quants = self.env["stock.quant"].search(
+            [
+                ("product_id", "=", product.id),
+                ("location_id.usage", "=", "internal"),
+            ]
+        )
         return sum(q.quantity for q in quants)
 
     def _on_order(self, product):
         # Confirmed POs not yet received
-        lines = self.env["purchase.order.line"].search([
-            ("product_id", "=", product.id),
-            ("state", "in", ("purchase", "done")),
-        ])
-        return sum(l.product_qty - l.qty_received for l in lines)
+        lines = self.env["purchase.order.line"].search(
+            [
+                ("product_id", "=", product.id),
+                ("state", "in", ("purchase", "done")),
+            ]
+        )
+        return sum(line.product_qty - line.qty_received for line in lines)
 
     def _lead_time(self, product):
         seller = product.seller_ids[:1]
@@ -77,9 +81,12 @@ class WmsForecastEngine(models.AbstractModel):
 
     def _safety_stock(self, product):
         # If you use stock.warehouse.orderpoint, prefer that; else 0.
-        op = self.env["stock.warehouse.orderpoint"].search([
-            ("product_id", "=", product.id),
-        ], limit=1)
+        op = self.env["stock.warehouse.orderpoint"].search(
+            [
+                ("product_id", "=", product.id),
+            ],
+            limit=1,
+        )
         return op.product_min_qty if op else 0.0
 
     def _train_one(self, product):
@@ -111,7 +118,8 @@ class WmsForecastEngine(models.AbstractModel):
 
         # Upsert
         forecast = self.env["wms.forecast"].search(
-            [("product_id", "=", product.id)], limit=1,
+            [("product_id", "=", product.id)],
+            limit=1,
         )
         vals = {
             "product_id": product.id,
@@ -136,11 +144,13 @@ class WmsForecastEngine(models.AbstractModel):
         else:
             forecast = self.env["wms.forecast"].create(vals)
 
-        self.env["wms.forecast.history"].create({
-            "product_id": product.id,
-            "model_name": result.model_name,
-            "predicted_qty": result.predicted_qty,
-            "rmse": result.rmse,
-            "velocity_class": result.velocity_class,
-        })
+        self.env["wms.forecast.history"].create(
+            {
+                "product_id": product.id,
+                "model_name": result.model_name,
+                "predicted_qty": result.predicted_qty,
+                "rmse": result.rmse,
+                "velocity_class": result.velocity_class,
+            }
+        )
         return forecast

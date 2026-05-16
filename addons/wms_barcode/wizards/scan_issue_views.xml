@@ -48,6 +48,25 @@
                             <div class="col-12 col-md-4">
                                 <field name="short_qty" readonly="1"/>
                             </div>
+                            <div class="col-12 col-md-8">
+                                <field name="photo_required" invisible="1"/>
+                                <label for="photo">
+                                    Item photo
+                                    <span class="text-danger ms-1"
+                                          invisible="not photo_required">
+                                        * required
+                                    </span>
+                                </label>
+                                <!--
+                                    widget="image" renders an <input type="file"
+                                    accept="image/*"> which on mobile browsers
+                                    triggers the OS camera picker. The picker
+                                    closes automatically after capture.
+                                -->
+                                <field name="photo" widget="image"
+                                       nolabel="1"
+                                       options="{'size': [400, 300]}"/>
+                            </div>
                         </div>
                     </sheet>
                     <footer>

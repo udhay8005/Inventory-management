@@ -1,0 +1,63 @@
+# Local quality gates that run on every `git commit`.
+#
+# Install once per dev environment:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run against all files manually:
+#   pre-commit run --all-files
+#
+# CI mirrors these checks; passing pre-commit locally = green CI.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-xml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        language_version: python3.12
+        files: \.py$
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        args: ["--max-line-length=100", "--extend-ignore=E203,W503"]
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ["-ll", "-c", "pyproject.toml"]
+        additional_dependencies: ["bandit[toml]"]
+
+  - repo: local
+    hooks:
+      - id: odoo-manifest-version
+        name: Odoo manifest version sanity
+        entry: bash -c '
+          for m in addons/*/__manifest__.py; do
+            grep -q "19\.0\." "$m" || {
+              echo "::warning::$m missing 19.0.x version"; exit 1;
+            };
+          done'
+        language: system
+        pass_filenames: false
+        files: __manifest__\.py$

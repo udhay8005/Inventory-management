@@ -3,6 +3,7 @@ from odoo import api, fields, models, tools
 
 class WmsReorderSummary(models.Model):
     """Sum reorder quantities per vendor so buyers see a single shopping list."""
+
     _name = "wms.reorder.summary"
     _description = "Reorder summary by vendor"
     _auto = False
@@ -15,7 +16,8 @@ class WmsReorderSummary(models.Model):
     @api.model
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW wms_reorder_summary AS
               SELECT MIN(f.id) AS id,
                      ps.partner_id,
@@ -30,4 +32,5 @@ class WmsReorderSummary(models.Model):
                        )
                WHERE f.reorder_qty > 0
             GROUP BY ps.partner_id
-        """)
+        """
+        )

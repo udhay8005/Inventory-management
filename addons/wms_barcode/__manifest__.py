@@ -8,6 +8,7 @@
     "category": "Inventory/Warehouse",
     "data": [
         "security/ir.model.access.csv",
+        "data/wms_barcode_data.xml",
         "views/wms_barcode_alias_views.xml",
         "wizards/scan_receipt_views.xml",
         "wizards/scan_issue_views.xml",

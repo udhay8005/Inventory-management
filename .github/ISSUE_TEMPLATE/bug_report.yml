@@ -1,0 +1,47 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: A short, factual summary.
+    validations: { required: true }
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        1. Log in as ...
+        2. Go to WMS → ...
+        3. Click ...
+        4. Observe ...
+    validations: { required: true }
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations: { required: true }
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - Odoo version: 19.0
+        - Docker version:
+        - Browser:
+        - Module touched (if known):
+    validations: { required: false }
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Output of `docker compose logs --tail 100 odoo` around the error.
+        Paste only the relevant section. Redact secrets.
+      render: shell

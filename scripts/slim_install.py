@@ -27,11 +27,24 @@ UNWANTED = [
 ]
 
 KEEP_SAFE = {
-    "stock", "purchase", "account", "portal", "barcodes",
-    "barcodes_gs1_nomenclature", "product", "mail", "base", "web",
-    "purchase_stock", "stock_account",
-    "wms_location", "wms_fifo", "wms_barcode", "wms_repair_damage",
-    "wms_ai_forecast", "wms_reports",
+    "stock",
+    "purchase",
+    "account",
+    "portal",
+    "barcodes",
+    "barcodes_gs1_nomenclature",
+    "product",
+    "mail",
+    "base",
+    "web",
+    "purchase_stock",
+    "stock_account",
+    "wms_location",
+    "wms_fifo",
+    "wms_barcode",
+    "wms_repair_damage",
+    "wms_ai_forecast",
+    "wms_reports",
 }
 
 Module = env["ir.module.module"]
@@ -48,11 +61,7 @@ def transitive_dependents(module_name, seen=None):
     seen.add(module_name)
     # Direct dependents: modules that declare module_name in their `depends`
     deps = Dep.search([("name", "=", module_name)])
-    direct = {
-        d.module_id.name
-        for d in deps
-        if d.module_id.state == "installed"
-    }
+    direct = {d.module_id.name for d in deps if d.module_id.state == "installed"}
     result = set(direct)
     for d in direct:
         result |= transitive_dependents(d, seen)

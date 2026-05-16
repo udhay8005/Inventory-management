@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_wms_zone_generator_form" model="ir.ui.view">
+            <field name="name">wms.zone.generator.form</field>
+            <field name="model">wms.zone.generator</field>
+            <field name="arch" type="xml">
+                <form string="Generate Zone">
+                    <div class="alert alert-info" role="alert">
+                        A <b>Zone</b> groups racks and floor areas under a
+                        single named umbrella — e.g. "1st Floor",
+                        "Ground Floor / East", "Outside Yard". Use this
+                        wizard once per zone; counts can be 0 if the zone is
+                        a pure container.
+                    </div>
+                    <group>
+                        <field name="warehouse_id"/>
+                        <field name="parent_location_id"/>
+                        <field name="zone_name" placeholder="1st Floor"/>
+                    </group>
+                    <group string="Racks">
+                        <field name="rack_count"/>
+                        <field name="rack_start_number"
+                               invisible="rack_count == 0"/>
+                        <field name="rack_prefix"
+                               invisible="rack_count == 0"/>
+                        <field name="dividers_per_level"
+                               invisible="rack_count == 0"/>
+                        <field name="rack_capacity_per_slot"
+                               invisible="rack_count == 0"/>
+                    </group>
+                    <group string="Floor zones (no rack)">
+                        <field name="floor_count"/>
+                        <field name="floor_start_number"
+                               invisible="floor_count == 0"/>
+                        <field name="floor_prefix"
+                               invisible="floor_count == 0"/>
+                        <field name="floor_capacity"
+                               invisible="floor_count == 0"/>
+                    </group>
+                    <footer>
+                        <button name="action_generate" type="object"
+                                string="Generate" class="btn-primary"/>
+                        <button special="cancel" string="Cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_zone_generator" model="ir.actions.act_window">
+            <field name="name">Generate Zone</field>
+            <field name="res_model">wms.zone.generator</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <record id="action_wms_zones" model="ir.actions.act_window">
+            <field name="name">Zones</field>
+            <field name="res_model">stock.location</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('wms_location_type', '=', 'zone')]</field>
+        </record>
+
+        <!--
+            Batch reparent server action — select N racks (or floor zones)
+            in any list, click ☰ Action → "Move to zone". Operator picks
+            a zone, all selected get reparented in one transaction.
+        -->
+        <record id="action_move_to_zone" model="ir.actions.server">
+            <field name="name">Move to Zone</field>
+            <field name="model_id" ref="stock.model_stock_location"/>
+            <field name="binding_model_id" ref="stock.model_stock_location"/>
+            <field name="binding_view_types">list,form</field>
+            <field name="state">code</field>
+            <field name="code">
+# Opens the picker wizard for the selected records.
+records = records.filtered(lambda r: r.wms_location_type in ('rack', 'floor'))
+if not records:
+    raise UserError("Select at least one Rack or Floor zone to move.")
+action = {
+    'type': 'ir.actions.act_window',
+    'name': 'Move to Zone',
+    'res_model': 'wms.move.to.zone',
+    'view_mode': 'form',
+    'target': 'new',
+    'context': {'default_location_ids': [(6, 0, records.ids)]},
+}
+            </field>
+        </record>
+
+        <record id="view_wms_move_to_zone_form" model="ir.ui.view">
+            <field name="name">wms.move.to.zone.form</field>
+            <field name="model">wms.move.to.zone</field>
+            <field name="arch" type="xml">
+                <form string="Move to Zone">
+                    <group>
+                        <field name="target_zone_id"/>
+                    </group>
+                    <field name="location_ids" readonly="1">
+                        <list>
+                            <field name="display_name"/>
+                            <field name="wms_location_type"/>
+                        </list>
+                    </field>
+                    <footer>
+                        <button name="action_move" type="object"
+                                string="Move" class="btn-primary"/>
+                        <button special="cancel" string="Cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>

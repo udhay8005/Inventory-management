@@ -1,5 +1,12 @@
+"""Unit tests for the rack / level / divider / slot hierarchy.
+
+Tagged with `wms` so CI can run only our tests via `--test-tags wms`.
+"""
+
 from odoo.exceptions import ValidationError
 from odoo.tests.common import TransactionCase, tagged
+from odoo.tools import mute_logger
+from psycopg2.errors import CheckViolation
 
 
 @tagged("post_install", "-at_install", "wms")
@@ -13,105 +20,152 @@ class TestWmsLocation(TransactionCase):
     def _gen_rack(self, code="R-TEST", dividers_per_level=4):
         return (
             self.env["wms.rack.generator"]
-            .create({
-                "rack_code": code,
-                "parent_location_id": self.parent.id,
-                "dividers_per_level": dividers_per_level,
-            })
+            .create(
+                {
+                    "rack_code": code,
+                    "parent_location_id": self.parent.id,
+                    "dividers_per_level": dividers_per_level,
+                }
+            )
             .action_generate()
         )
 
+    # ─── happy path ─────────────────────────────────────────────────────
     def test_generator_creates_full_hierarchy(self):
         self._gen_rack("R-T1", dividers_per_level=4)
-        rack = self.env["stock.location"].search([
-            ("wms_rack_code", "=", "R-T1"),
-        ], limit=1)
-        levels = self.env["stock.location"].search([
-            ("location_id", "=", rack.id),
-            ("wms_location_type", "=", "level"),
-        ])
-        dividers = self.env["stock.location"].search([
-            ("location_id", "in", levels.ids),
-            ("wms_location_type", "=", "divider"),
-        ])
-        slots = self.env["stock.location"].search([
-            ("location_id", "in", dividers.ids),
-            ("wms_location_type", "=", "slot"),
-        ])
+        rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-T1")], limit=1)
+        levels = self.env["stock.location"].search(
+            [
+                ("location_id", "=", rack.id),
+                ("wms_location_type", "=", "level"),
+            ]
+        )
+        dividers = self.env["stock.location"].search(
+            [
+                ("location_id", "in", levels.ids),
+                ("wms_location_type", "=", "divider"),
+            ]
+        )
+        slots = self.env["stock.location"].search(
+            [
+                ("location_id", "in", dividers.ids),
+                ("wms_location_type", "=", "slot"),
+            ]
+        )
         self.assertEqual(len(levels), 6, "should have 6 levels")
         self.assertEqual(len(dividers), 6 * 4, "should have 24 dividers (6×4)")
         self.assertEqual(len(slots), 6 * 4 * 3, "should have 72 slots (6×4×3)")
 
+    # ─── constraint paths ───────────────────────────────────────────────
+    # The DB-level CHECK constraints fire BEFORE the Python @api.constrains
+    # in some scenarios — accept either ValidationError (Python) or a
+    # psycopg2 CheckViolation (PG) so the test reflects either guardrail
+    # firing first.
+
+    @mute_logger("odoo.sql_db")
     def test_seventh_level_rejected(self):
         self._gen_rack("R-T2")
-        rack = self.env["stock.location"].search([
-            ("wms_rack_code", "=", "R-T2"),
-        ], limit=1)
-        with self.assertRaises(ValidationError):
-            self.env["stock.location"].create({
-                "name": "L-7",
-                "location_id": rack.id,
-                "usage": "view",
-                "wms_location_type": "level",
-                "wms_level_number": 7,
-                "company_id": rack.company_id.id,
-            })
+        rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-T2")], limit=1)
+        # Odoo's overridden assertRaises only accepts a single exception
+        # class. Both ValidationError (Python @api.constrains) and
+        # CheckViolation (PG CHECK on wms_level_number) are valid here —
+        # whichever fires first depends on commit ordering.
+        try:
+            self.env["stock.location"].create(
+                {
+                    "name": "L-7",
+                    "location_id": rack.id,
+                    "usage": "view",
+                    "wms_location_type": "level",
+                    "wms_level_number": 7,
+                    "company_id": rack.company_id.id,
+                }
+            )
+        except (ValidationError, CheckViolation):
+            return  # expected
+        self.fail("Expected ValidationError or CheckViolation for level #7")
 
+    @mute_logger("odoo.sql_db")
     def test_fourth_slot_rejected(self):
+        """A 4th slot under a divider is rejected by the parent-count
+        Python constraint. We use slot_number=1 (within the 1..3 CHECK
+        range) so the Python constraint, not the DB CHECK, fires.
+        """
         self._gen_rack("R-T3")
-        divider = self.env["stock.location"].search([
-            ("wms_location_type", "=", "divider"),
-        ], limit=1)
+        # find the first divider with exactly 3 slots already (i.e. full)
+        divider = self.env["stock.location"].search(
+            [
+                ("wms_location_type", "=", "divider"),
+                ("location_id.location_id.wms_rack_code", "=", "R-T3"),
+            ],
+            limit=1,
+        )
         with self.assertRaises(ValidationError):
-            self.env["stock.location"].create({
-                "name": "S-4",
-                "location_id": divider.id,
-                "usage": "internal",
-                "wms_location_type": "slot",
-                "wms_slot_number": 4,
-                "company_id": divider.company_id.id,
-            })
+            self.env["stock.location"].create(
+                {
+                    "name": "S-extra",
+                    "location_id": divider.id,
+                    "usage": "internal",
+                    "wms_location_type": "slot",
+                    "wms_slot_number": 1,  # valid range; over-count is what fails
+                    "company_id": divider.company_id.id,
+                }
+            )
 
     def test_divider_under_rack_rejected(self):
         """Dividers must sit under a Level, not directly under a Rack."""
         self._gen_rack("R-T4")
-        rack = self.env["stock.location"].search([
-            ("wms_rack_code", "=", "R-T4"),
-        ], limit=1)
+        rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-T4")], limit=1)
         with self.assertRaises(ValidationError):
-            self.env["stock.location"].create({
-                "name": "D-bad",
-                "location_id": rack.id,
-                "usage": "view",
-                "wms_location_type": "divider",
-                "company_id": rack.company_id.id,
-            })
+            self.env["stock.location"].create(
+                {
+                    "name": "D-bad",
+                    "location_id": rack.id,
+                    "usage": "view",
+                    "wms_location_type": "divider",
+                    "company_id": rack.company_id.id,
+                }
+            )
 
+    # ─── FIFO helper ────────────────────────────────────────────────────
     def test_fifo_helper(self):
         self._gen_rack("R-FIFO", dividers_per_level=2)
-        slots = self.env["stock.location"].search([
-            ("wms_location_type", "=", "slot"),
-            ("location_id.location_id.location_id.wms_rack_code", "=", "R-FIFO"),
-        ], limit=3)
+        slots = self.env["stock.location"].search(
+            [
+                ("wms_location_type", "=", "slot"),
+                ("location_id.location_id.location_id.wms_rack_code", "=", "R-FIFO"),
+            ],
+            limit=3,
+        )
         self.assertEqual(len(slots), 3)
-        product = self.env["product.product"].create({
-            "name": "Demo Widget",
-            "type": "product",
-        })
-        q1 = self.env["stock.quant"].create({
-            "product_id": product.id,
-            "location_id": slots[0].id,
-            "quantity": 5,
-            "in_date": "2025-01-01 10:00:00",
-        })
-        q2 = self.env["stock.quant"].create({
-            "product_id": product.id,
-            "location_id": slots[1].id,
-            "quantity": 5,
-            "in_date": "2025-02-01 10:00:00",
-        })
+        # Odoo 19: storable products are type='consu' with is_storable=True.
+        # `type='product'` was retired upstream.
+        product = self.env["product.product"].create(
+            {
+                "name": "Demo Widget",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        q1 = self.env["stock.quant"].create(
+            {
+                "product_id": product.id,
+                "location_id": slots[0].id,
+                "quantity": 5,
+                "in_date": "2025-01-01 10:00:00",
+            }
+        )
+        q2 = self.env["stock.quant"].create(
+            {
+                "product_id": product.id,
+                "location_id": slots[1].id,
+                "quantity": 5,
+                "in_date": "2025-02-01 10:00:00",
+            }
+        )
         plan, missing = self.env["stock.location"].find_oldest_quants_for_product(
-            product.id, 6,
+            product.id,
+            6,
         )
         self.assertEqual(missing, 0)
         self.assertEqual(plan[0][0], q1)

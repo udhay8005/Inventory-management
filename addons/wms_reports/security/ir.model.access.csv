@@ -3,3 +3,4 @@ access_wms_oldest_user,wms.oldest.stock user,model_wms_oldest_stock_report,wms_l
 access_wms_occupancy_user,wms.occupancy user,model_wms_occupancy_report,wms_location.group_wms_user,1,0,0,0
 access_wms_reorder_summary_user,wms.reorder.summary user,model_wms_reorder_summary,wms_location.group_wms_user,1,0,0,0
 access_wms_product_stock_user,wms.product.stock user,model_wms_product_stock_report,wms_location.group_wms_user,1,0,0,0
+access_wms_cycle_count_due_user,wms.cycle.count.due user,model_wms_cycle_count_due,wms_location.group_wms_user,1,0,0,0

@@ -13,14 +13,16 @@ Or simply:
     --no-http
   >>> exec(open('/scripts/seed_demo.py').read())   # if mounted
 """
+
 rack = env["stock.location"].search([("wms_location_type", "=", "rack")], limit=1)
 seeder = env["wms.demo.seeder"].create({"rack_id": rack.id, "add_stock": True})
 seeder.action_seed()
 env.cr.commit()
-print("Seeded products:", env["product.product"].search_count(
-    [("barcode", "like", "8901111%")]
-))
-print("Quants on slots:", env["stock.quant"].search_count(
-    [("location_id.wms_location_type", "=", "slot"), ("quantity", ">", 0)]
-))
+print("Seeded products:", env["product.product"].search_count([("barcode", "like", "8901111%")]))
+print(
+    "Quants on slots:",
+    env["stock.quant"].search_count(
+        [("location_id.wms_location_type", "=", "slot"), ("quantity", ">", 0)]
+    ),
+)
 print("Carton aliases:", env["wms.barcode.alias"].search_count([]))

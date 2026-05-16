@@ -1,0 +1,18 @@
+# Automatic reviewer assignment based on the path of changed files.
+# Replace @your-username with the real GitHub handles when you adopt this.
+
+# Default owner — everything
+*                                       @your-username
+
+# Per-module ownership (uncomment as you grow the team)
+# addons/wms_location/                  @your-username
+# addons/wms_barcode/                   @your-username
+# addons/wms_ai_forecast/               @ml-lead-username
+# addons/wms_reports/                   @your-username
+# docs/                                 @your-username
+
+# Critical files — require an extra review
+.github/workflows/                      @your-username
+Dockerfile                              @your-username
+docker-compose.yml                      @your-username
+scripts/                                @your-username

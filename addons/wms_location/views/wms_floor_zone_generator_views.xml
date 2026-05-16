@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_wms_floor_zone_generator_form" model="ir.ui.view">
+            <field name="name">wms.floor.zone.generator.form</field>
+            <field name="model">wms.floor.zone.generator</field>
+            <field name="arch" type="xml">
+                <form string="Generate Floor Zones">
+                    <div class="alert alert-info" role="alert">
+                        Use floor zones for items <em>not</em> stored in a
+                        multi-tier rack — pallet areas, single-shelf slabs,
+                        outside yard bays, receiving/staging benches. Each
+                        zone gets a unique barcode and behaves like a slot
+                        for receiving, FIFO issue, and reports.
+                    </div>
+                    <group>
+                        <field name="warehouse_id"/>
+                        <field name="parent_location_id"/>
+                        <field name="zone_prefix"/>
+                        <field name="start_number"/>
+                        <field name="count"/>
+                        <field name="capacity_units"/>
+                    </group>
+                    <footer>
+                        <button name="action_generate" type="object"
+                                string="Generate" class="btn-primary"/>
+                        <button special="cancel" string="Cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_floor_zone_generator" model="ir.actions.act_window">
+            <field name="name">Generate Floor Zones</field>
+            <field name="res_model">wms.floor.zone.generator</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <record id="action_wms_floor_zones" model="ir.actions.act_window">
+            <field name="name">Floor Zones</field>
+            <field name="res_model">stock.location</field>
+            <field name="view_mode">list,form</field>
+            <field name="domain">[('wms_location_type', '=', 'floor')]</field>
+        </record>
+
+    </data>
+</odoo>

@@ -18,6 +18,18 @@
                   sequence="90"
                   groups="wms_location.group_wms_manager"/>
 
+        <menuitem id="menu_wms_zones"
+                  name="Zones"
+                  parent="menu_wms_config"
+                  action="action_wms_zones"
+                  sequence="5"/>
+
+        <menuitem id="menu_wms_zone_generator"
+                  name="Generate Zone"
+                  parent="menu_wms_config"
+                  action="action_wms_zone_generator"
+                  sequence="15"/>
+
         <menuitem id="menu_wms_racks"
                   name="Racks"
                   parent="menu_wms_config"
@@ -42,11 +54,36 @@
                   action="action_wms_slots"
                   sequence="10"/>
 
+        <!--
+            Cycle Count = Odoo's built-in stock.quant "Inventory Adjustments"
+            view. We just expose it under our WMS / Operations menu so a
+            warehouse user can find it without diving into the Inventory app.
+            The standard action lives in stock/views/stock_quant_views.xml.
+        -->
+        <menuitem id="menu_wms_cycle_count"
+                  name="Cycle Count"
+                  parent="menu_wms_operations"
+                  action="stock.action_view_quants"
+                  sequence="50"/>
+
         <menuitem id="menu_wms_rack_generator"
                   name="Generate Rack"
                   parent="menu_wms_config"
                   action="action_wms_rack_generator"
                   sequence="20"/>
+
+        <!-- Non-rack storage -->
+        <menuitem id="menu_wms_floor_zones"
+                  name="Floor Zones"
+                  parent="menu_wms_operations"
+                  action="action_wms_floor_zones"
+                  sequence="15"/>
+
+        <menuitem id="menu_wms_floor_zone_generator"
+                  name="Generate Floor Zones"
+                  parent="menu_wms_config"
+                  action="action_wms_floor_zone_generator"
+                  sequence="25"/>
 
     </data>
 </odoo>

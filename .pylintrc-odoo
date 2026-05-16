@@ -1,0 +1,27 @@
+# pylint-odoo specific config (loaded only by the lint job in CI)
+[MASTER]
+load-plugins=pylint_odoo
+score=no
+
+[ODOOLINT]
+manifest-required-keys=name,license,depends
+manifest-version-format=(19\.0\.\d+\.\d+\.\d+)
+readme-template-url=
+
+[MESSAGES CONTROL]
+# Enable only the high-signal Odoo lints. Disable noisy ones for now.
+disable=all
+enable=
+    manifest-required-key,
+    manifest-required-author,
+    method-required-super,
+    missing-readme,
+    consider-merging-classes-inherited,
+    odoo-addons-relative-import,
+    odoo-exception-warning,
+    sql-injection,
+    translation-required,
+    xml-syntax-error,
+    deprecated-odoo-model-method,
+    print-used,
+    redundant-modulename-xml
