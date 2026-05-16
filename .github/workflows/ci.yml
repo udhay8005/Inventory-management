@@ -60,7 +60,11 @@ jobs:
         run: isort --check-only --diff addons/ scripts/ ai_worker/
 
       - name: Flake8 (style + obvious errors)
-        run: flake8 addons/ --max-line-length=100 --extend-ignore=E203,W503
+        # Config is in `.flake8` at the repo root — passing CLI flags here
+        # OVERRIDES the config (passing --extend-ignore on the CLI replaces
+        # the file's value rather than merging). Stay silent and let the
+        # config drive, so local `make lint` matches CI exactly.
+        run: flake8 addons/
 
       - name: Pylint-Odoo (manifest + Odoo conventions)
         run: |
