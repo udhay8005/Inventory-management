@@ -136,90 +136,51 @@ jobs:
       matrix:
         odoo_version: ["19.0"]
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: odoo
-          POSTGRES_PASSWORD: odoo
-          POSTGRES_DB: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd="pg_isready -U odoo"
-          --health-interval=5s
-          --health-timeout=3s
-          --health-retries=20
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile','requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
-
-      - uses: docker/setup-buildx-action@v3
-
-      - name: Build Odoo image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          load: true
-          tags: wms/odoo:${{ matrix.odoo_version }}-ci
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-      - name: Rotate cache
+      - name: Prepare .env for compose
         run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+          cp .env.example .env
+          # Make sure DB_PASSWORD matches whatever the dev .env uses so
+          # docker-compose.yml's bake-in is consistent.
+          sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=odoo_ci_password|' .env
+          cat .env
+
+      - name: Bring up db + odoo via compose
+        # Uses the same docker-compose.yml that runs locally; gives us the
+        # private bridge network, working Postgres connection, and the
+        # bake-in odoo.conf the local devs use. Far fewer moving parts
+        # than reproducing the same env via raw `docker run`.
+        run: |
+          docker compose up -d --build db
+          # Wait for db health
+          for i in {1..30}; do
+            if docker compose exec -T db pg_isready -U odoo > /dev/null 2>&1; then
+              echo "db is healthy"; break;
+            fi
+            sleep 2
+          done
+          docker compose build odoo
 
       - name: Create CI database
         run: |
-          docker run --rm --network=host -e PGPASSWORD=odoo postgres:16-alpine \
-            psql -h localhost -U odoo -d postgres \
-            -c "ALTER USER odoo CREATEDB;" \
-            -c "CREATE DATABASE wms_ci OWNER odoo;"
+          docker compose exec -T db psql -U odoo -d postgres \
+              -c "CREATE DATABASE wms_ci OWNER odoo;"
 
-      - name: Install + run WMS module tests only
-        # --test-tags wms restricts to tests tagged with @tagged("wms"),
-        # so Odoo's own ~4400 test suite (which has pre-existing failures
-        # in test_cli / mail / stock when run against a partial install)
-        # is skipped. We tag every WMS test class with `wms`.
-        #
-        # We capture stdout *and* the docker exit code separately, then
-        # decide pass/fail from BOTH the exit code and a log scan — so a
-        # crashing image (no log) is treated as a hard failure too.
-        # Disable pipefail so `| tee` doesn't mask the docker exit code.
-        # Also stream the output to the job log live (via tee) AND save
-        # it to a file for artifact upload — the previous version with
-        # `> odoo_test.log 2>&1` lost stdout entirely on the GH runner.
+      - name: Run WMS module tests
         shell: bash --noprofile --norc {0}
         run: |
           set +e
-          echo "=== pre-flight ===" | tee odoo_test.log
-          echo "pwd = $(pwd)" | tee -a odoo_test.log
-          echo "docker images:" | tee -a odoo_test.log
-          docker images wms/odoo --format '{{.Repository}}:{{.Tag}} {{.Size}}' | tee -a odoo_test.log
-          echo "postgres reachable check:" | tee -a odoo_test.log
-          docker run --rm --network=host postgres:16-alpine \
-            psql -h 127.0.0.1 -U odoo -d postgres -c '\l' 2>&1 \
-            | tee -a odoo_test.log || true
-          echo "=== launching odoo ===" | tee -a odoo_test.log
-
-          docker run --rm --network=host \
+          # `docker compose run --rm` shares the compose network, so the db
+          # hostname resolves natively. Output flows to the job stdout AND
+          # tee'd into odoo_test.log for the artifact + step summary.
+          docker compose run --rm --no-deps \
             -e PYTHONUNBUFFERED=1 \
-            -e PGPASSWORD=odoo \
-            -v "$(pwd)/addons:/mnt/extra-addons:ro" \
-            wms/odoo:${{ matrix.odoo_version }}-ci \
+            odoo \
             odoo --stop-after-init \
                  -d wms_ci \
-                 --db_host=127.0.0.1 --db_port=5432 \
-                 --db_user=odoo --db_password=odoo \
+                 --db_host=db --db_user=odoo --db_password=odoo_ci_password \
                  --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons \
                  -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
                  --without-demo=all \
@@ -227,13 +188,13 @@ jobs:
                  --test-tags wms \
                  --log-level=info \
                  --logfile=/dev/stdout \
-                 2>&1 | tee -a odoo_test.log
+            2>&1 | tee odoo_test.log
           rc=${PIPESTATUS[0]}
-          echo "=== docker exit code: $rc ===" | tee -a odoo_test.log
-          echo "log size: $(wc -c < odoo_test.log) bytes" | tee -a odoo_test.log
+          echo "=== docker compose run exit code: $rc ==="
+          echo "log size: $(wc -c < odoo_test.log) bytes"
 
-          # Echo the WHOLE log into the publicly-visible step summary so we
-          # can see it even without an auth token to download artifacts.
+          # Publish the log to the step summary so failures are visible
+          # without needing an auth token to fetch the artifact.
           {
             echo "## odoo_tests step output"
             echo ''
@@ -242,24 +203,23 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          # Hard fail if docker itself errored.
           if [ "$rc" -ne 0 ]; then
-            echo "::error::docker run exited with $rc"
+            echo "::error::docker compose run exited with $rc"
             exit "$rc"
           fi
-
-          # Hard fail if Odoo logged a test failure.
           if grep -qE "ERROR wms_ci odoo\.tests\.result:.*(failed|error)" odoo_test.log; then
             echo "::error::WMS test failures detected"
             exit 1
           fi
-
-          # Hard fail if no WMS tests ran (e.g. discovery off).
           if ! grep -qE "odoo\.addons\.wms_.*tests" odoo_test.log; then
             echo "::error::No WMS tests ran — check @tagged('wms') decorators."
             exit 1
           fi
           echo "✔ WMS test suite passed."
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
 
       - uses: actions/upload-artifact@v4
         if: always()
