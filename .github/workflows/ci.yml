@@ -201,14 +201,19 @@ jobs:
         shell: bash --noprofile --norc {0}
         run: |
           set +e
-          # Critical: our baked-in odoo.conf sets `logfile=/var/log/odoo/odoo.log`,
-          # which redirects all Odoo output to a file INSIDE the container — so
-          # docker stdout gets nothing and `tee` captures nothing. We force
-          # stdout logging by:
-          #   - passing `--logfile=/dev/stdout` explicitly to override the conf
-          #   - setting PYTHONUNBUFFERED so Python's stdio isn't block-buffered
+          echo "=== pre-flight ===" | tee odoo_test.log
+          echo "pwd = $(pwd)" | tee -a odoo_test.log
+          echo "docker images:" | tee -a odoo_test.log
+          docker images wms/odoo --format '{{.Repository}}:{{.Tag}} {{.Size}}' | tee -a odoo_test.log
+          echo "postgres reachable check:" | tee -a odoo_test.log
+          docker run --rm --network=host postgres:16-alpine \
+            psql -h 127.0.0.1 -U odoo -d postgres -c '\l' 2>&1 \
+            | tee -a odoo_test.log || true
+          echo "=== launching odoo ===" | tee -a odoo_test.log
+
           docker run --rm --network=host \
             -e PYTHONUNBUFFERED=1 \
+            -e PGPASSWORD=odoo \
             -v "$(pwd)/addons:/mnt/extra-addons:ro" \
             wms/odoo:${{ matrix.odoo_version }}-ci \
             odoo --stop-after-init \
@@ -222,14 +227,20 @@ jobs:
                  --test-tags wms \
                  --log-level=info \
                  --logfile=/dev/stdout \
-                 2>&1 | tee odoo_test.log
-          # PIPESTATUS preserves the docker exit code through the pipe.
+                 2>&1 | tee -a odoo_test.log
           rc=${PIPESTATUS[0]}
-          echo "::group::Diagnostic summary"
-          echo "docker exit code : $rc"
-          echo "log size         : $(wc -c < odoo_test.log) bytes"
-          echo "log line count   : $(wc -l < odoo_test.log) lines"
-          echo "::endgroup::"
+          echo "=== docker exit code: $rc ===" | tee -a odoo_test.log
+          echo "log size: $(wc -c < odoo_test.log) bytes" | tee -a odoo_test.log
+
+          # Echo the WHOLE log into the publicly-visible step summary so we
+          # can see it even without an auth token to download artifacts.
+          {
+            echo "## odoo_tests step output"
+            echo ''
+            echo '```'
+            tail -c 60000 odoo_test.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
           # Hard fail if docker itself errored.
           if [ "$rc" -ne 0 ]; then
