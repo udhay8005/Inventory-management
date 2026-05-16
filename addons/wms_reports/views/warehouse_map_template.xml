@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            /wms/warehouse/map — top-level layout overview.
+            One card per Zone, listing its racks and floor zones with
+            colour-coded fill bars.
+
+            All numeric labels are pre-formatted in the controller
+            (`pct_label`, `on_hand_label`, …) so we don't have to use
+            Python `%`-formatting inside QWeb — Odoo's XML parser
+            collapses `%%` to `%`, breaking the format string.
+        -->
+        <template id="warehouse_map_page" name="WMS Warehouse Map">
+            <t t-call="web.html_container">
+                <head>
+                    <title>WMS — Warehouse Map</title>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <t t-call-assets="web.assets_frontend_minimal"
+                       t-css="true" t-js="false"/>
+                </head>
+                <body>
+                    <div class="container-fluid my-3">
+
+                        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+                            <div>
+                                <h2 class="mb-0">Warehouse Map</h2>
+                                <small>
+                                    <span t-esc="len(groups)"/> zone(s) ·
+                                    <span t-esc="wh_racks"/> rack(s) ·
+                                    <span t-esc="wh_floors"/> floor zone(s) ·
+                                    <strong t-esc="wh_total_label"/> units on hand
+                                </small>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-light text-muted px-2 py-1">Empty</span>
+                                <span class="badge bg-info text-white px-2 py-1">Some stock</span>
+                                <span class="badge bg-success text-white px-2 py-1">Low</span>
+                                <span class="badge bg-warning text-dark px-2 py-1">Most full</span>
+                                <span class="badge bg-danger text-white px-2 py-1">Full / Over</span>
+                            </div>
+                        </div>
+
+                        <div t-if="not groups" class="alert alert-warning">
+                            No zones or racks/floors yet. Use
+                            <em>WMS → Configuration → Generate Zone</em> to start.
+                        </div>
+
+                        <t t-foreach="groups" t-as="g">
+                            <div class="card mb-3 shadow-sm">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong t-esc="g['label']"/>
+                                        <small class="text-muted ms-2">
+                                            <span t-esc="len(g['racks'])"/> rack(s),
+                                            <span t-esc="len(g['floors'])"/> floor zone(s)
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <strong t-esc="g['total_on_hand_label']"/>
+                                        <small> units on hand</small>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+
+                                    <div t-if="g['racks']" class="mb-3">
+                                        <h6 class="text-muted text-uppercase" style="font-size:11px;">
+                                            Racks
+                                        </h6>
+                                        <div class="row g-2">
+                                            <t t-foreach="g['racks']" t-as="r">
+                                                <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+                                                    <a t-att-href="'/wms/rack/' + str(r['rec'].id) + '/grid'"
+                                                       t-att-class="'d-block text-decoration-none p-2 rounded ' + r['color']"
+                                                       style="font-size:11px;">
+                                                        <div class="d-flex justify-content-between">
+                                                            <strong t-esc="r['rec'].wms_rack_code"/>
+                                                            <span t-esc="r['pct_label']"/>
+                                                        </div>
+                                                        <div>
+                                                            <small t-esc="r['slots_occupied']"/>/<small t-esc="r['slots_total']"/> slots ·
+                                                            <small t-esc="r['on_hand_label']"/> u
+                                                        </div>
+                                                    </a>
+                                                </div>
+                                            </t>
+                                        </div>
+                                    </div>
+
+                                    <div t-if="g['floors']">
+                                        <h6 class="text-muted text-uppercase" style="font-size:11px;">
+                                            Floor zones
+                                        </h6>
+                                        <div class="row g-2">
+                                            <t t-foreach="g['floors']" t-as="f">
+                                                <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+                                                    <div t-att-class="'p-2 rounded ' + f['color']"
+                                                         style="font-size:11px;">
+                                                        <div class="d-flex justify-content-between">
+                                                            <strong t-esc="f['rec'].name"/>
+                                                            <span t-esc="f['on_hand_label']"/>
+                                                        </div>
+                                                        <div t-if="f['products']" class="text-truncate"
+                                                             style="max-width: 100%;">
+                                                            <t t-foreach="f['products']" t-as="p">
+                                                                <small t-esc="p.default_code or p.name"/>
+                                                                <t t-if="not p_last">, </t>
+                                                            </t>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </t>
+                                        </div>
+                                    </div>
+
+                                    <div t-if="not g['racks'] and not g['floors']" class="text-muted">
+                                        <small>Empty zone — no racks or floor zones yet.</small>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </t>
+
+                    </div>
+                </body>
+            </t>
+        </template>
+
+        <record id="action_warehouse_map" model="ir.actions.act_url">
+            <field name="name">Warehouse Map</field>
+            <field name="url">/wms/warehouse/map</field>
+            <field name="target">new</field>
+        </record>
+    </data>
+</odoo>

@@ -6,6 +6,12 @@
                   parent="wms_location.menu_wms_root"
                   sequence="70"/>
 
+        <menuitem id="menu_wms_warehouse_map"
+                  name="Warehouse Map"
+                  parent="menu_wms_reports_root"
+                  action="action_warehouse_map"
+                  sequence="1"/>
+
         <menuitem id="menu_wms_product_stock"
                   name="Where is product X?"
                   parent="menu_wms_reports_root"
@@ -23,6 +29,12 @@
                   parent="menu_wms_reports_root"
                   action="action_wms_occupancy"
                   sequence="20"/>
+
+        <menuitem id="menu_wms_cycle_count_due"
+                  name="Cycle Count Due"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_cycle_count_due"
+                  sequence="25"/>
 
         <menuitem id="menu_wms_movement_history"
                   name="Movement history"

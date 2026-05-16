@@ -1,4 +1,4 @@
-from odoo import api, fields, models
+from odoo import fields, models
 
 
 class WmsForecast(models.Model):
@@ -8,7 +8,10 @@ class WmsForecast(models.Model):
     _rec_name = "product_id"
 
     product_id = fields.Many2one(
-        "product.product", required=True, ondelete="cascade", index=True,
+        "product.product",
+        required=True,
+        ondelete="cascade",
+        index=True,
     )
     horizon_days = fields.Integer(default=30, required=True)
     predicted_qty = fields.Float(readonly=True)
@@ -48,21 +51,32 @@ class WmsForecast(models.Model):
             return {
                 "type": "ir.actions.client",
                 "tag": "display_notification",
-                "params": {"type": "warning", "title": "No vendor",
-                           "message": "Configure a vendor on the product first."},
+                "params": {
+                    "type": "warning",
+                    "title": "No vendor",
+                    "message": "Configure a vendor on the product first.",
+                },
             }
         # Odoo 19 renamed purchase.order.line.product_uom → product_uom_id.
-        po = self.env["purchase.order"].create({
-            "partner_id": supplier.partner_id.id,
-            "order_line": [(0, 0, {
-                "product_id": self.product_id.id,
-                "product_qty": self.reorder_qty,
-                "name": self.product_id.display_name,
-                "date_planned": fields.Date.context_today(self),
-                "product_uom_id": self.product_id.uom_id.id,
-                "price_unit": supplier.price or 0.0,
-            })],
-        })
+        po = self.env["purchase.order"].create(
+            {
+                "partner_id": supplier.partner_id.id,
+                "order_line": [
+                    (
+                        0,
+                        0,
+                        {
+                            "product_id": self.product_id.id,
+                            "product_qty": self.reorder_qty,
+                            "name": self.product_id.display_name,
+                            "date_planned": fields.Date.context_today(self),
+                            "product_uom_id": self.product_id.uom_id.id,
+                            "price_unit": supplier.price or 0.0,
+                        },
+                    )
+                ],
+            }
+        )
         return {
             "type": "ir.actions.act_window",
             "res_model": "purchase.order",

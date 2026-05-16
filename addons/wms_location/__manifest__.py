@@ -25,6 +25,8 @@ Key features:
         "security/ir.model.access.csv",
         "views/stock_location_views.xml",
         "views/wms_rack_generator_views.xml",
+        "views/wms_floor_zone_generator_views.xml",
+        "views/wms_zone_generator_views.xml",
         "views/menus.xml",
         "data/wms_data.xml",
     ],

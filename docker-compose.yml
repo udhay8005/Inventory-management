@@ -54,6 +54,38 @@ services:
       --db_password=${DB_PASSWORD:-odoo}
       --logfile=/var/log/odoo/odoo.log
 
+  # Cloudflare Tunnel — gives the WMS a permanent HTTPS URL reachable from
+  # any phone on mobile data, without opening ports on your router.
+  #
+  # Two run modes (pick one):
+  #
+  #  A. QUICK tunnel — random *.trycloudflare.com URL, no account needed.
+  #     Good for demos. URL changes each restart.
+  #     Bring up with:    docker compose --profile tunnel up -d cloudflared_quick
+  #     Find the URL in:  docker compose logs cloudflared_quick
+  #
+  #  B. NAMED tunnel — fixed URL on your own domain (e.g. wms.example.com).
+  #     Requires a free Cloudflare account + creating a tunnel + token.
+  #     Set CLOUDFLARE_TUNNEL_TOKEN in .env then:
+  #         docker compose --profile tunnel up -d cloudflared_named
+  cloudflared_quick:
+    image: cloudflare/cloudflared:latest
+    container_name: wms_cf_quick
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://odoo:8069
+    depends_on: [odoo]
+    networks: [wms_net]
+    profiles: ["tunnel"]
+
+  cloudflared_named:
+    image: cloudflare/cloudflared:latest
+    container_name: wms_cf_named
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on: [odoo]
+    networks: [wms_net]
+    profiles: ["tunnel-named"]
+
   # Optional out-of-process AI worker — only enable on small VPS / Pi when
   # in-process cron isn't enough. Trains forecasts and writes back via XML-RPC.
   ai_worker:

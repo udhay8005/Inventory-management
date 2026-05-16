@@ -8,14 +8,18 @@ class WmsBarcodeAlias(models.Model):
     'Coke 350ml' with units_per_scan=24. The unit barcode on
     product.product.barcode is still respected.
     """
+
     _name = "wms.barcode.alias"
     _description = "Carton/box barcode alias"
     _rec_name = "barcode"
 
     barcode = fields.Char(required=True, index=True)
     product_id = fields.Many2one("product.product", required=True, ondelete="cascade")
-    units_per_scan = fields.Float(default=1.0, required=True,
-                                  help="How many product units one scan of this barcode represents.")
+    units_per_scan = fields.Float(
+        default=1.0,
+        required=True,
+        help="How many product units one scan of this barcode represents.",
+    )
     note = fields.Char()
 
     _barcode_unique = models.Constraint(
@@ -38,24 +42,24 @@ class WmsBarcodeAlias(models.Model):
             return {"kind": None}
         barcode = barcode.strip()
 
-        product = self.env["product.product"].search(
-            [("barcode", "=", barcode)], limit=1
-        )
+        product = self.env["product.product"].search([("barcode", "=", barcode)], limit=1)
         if product:
             return {"kind": "product", "product": product, "units": 1.0}
 
         alias = self.search([("barcode", "=", barcode)], limit=1)
         if alias:
-            return {"kind": "alias", "product": alias.product_id,
-                    "units": alias.units_per_scan, "alias": alias}
+            return {
+                "kind": "alias",
+                "product": alias.product_id,
+                "units": alias.units_per_scan,
+                "alias": alias,
+            }
 
         lot = self.env["stock.lot"].search([("name", "=", barcode)], limit=1)
         if lot:
             return {"kind": "lot", "lot": lot, "product": lot.product_id, "units": 1.0}
 
-        loc = self.env["stock.location"].search(
-            [("barcode", "=", barcode)], limit=1
-        )
+        loc = self.env["stock.location"].search([("barcode", "=", barcode)], limit=1)
         if loc:
             return {"kind": "location", "location": loc}
 

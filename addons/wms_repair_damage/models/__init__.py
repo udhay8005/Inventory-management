@@ -1,3 +1,1 @@
-from . import stock_location
-from . import wms_damage
-from . import wms_repair_order
+from . import stock_location, wms_damage, wms_repair_order

@@ -61,6 +61,20 @@ The most important docs:
 - [`docs/10-testing.md`](docs/10-testing.md) — test strategy
 - [`docs/11-maintenance.md`](docs/11-maintenance.md) — upgrades, tuning, FAQ
 
+## Mobile access (phones / tablets / off-site)
+
+Three options — pick whichever fits. Full setup in
+[docs/12-mobile-access.md](docs/12-mobile-access.md):
+
+- **Same-WiFi**: `http://<host-IP>:8169` after `New-NetFirewallRule -DisplayName "WMS Odoo 8169" -Direction Inbound -LocalPort 8169 -Protocol TCP -Action Allow`.
+- **Cloudflare quick tunnel** (HTTPS, no account, random URL):
+  `docker compose --profile tunnel up -d cloudflared_quick`
+- **Cloudflare named tunnel** (permanent HTTPS URL on your domain):
+  `CLOUDFLARE_TUNNEL_TOKEN=… docker compose --profile tunnel-named up -d cloudflared_named`
+
+The scan wizards are mobile-responsive and open the device camera for the
+optional item photo (required for liquid / weight / volume items).
+
 ## Hardware
 
 USB / Bluetooth HID barcode scanners "just work" — they keyboard-type into the
@@ -83,8 +97,33 @@ docker compose run --rm odoo \
 # Restore: see docs/07-deployment.md
 ```
 
+## CI / CD
+
+GitHub Actions pipeline on every push and PR — see [docs/17-ci-cd.md](docs/17-ci-cd.md).
+
+```bash
+make help            # show every dev command
+make lint            # same checks CI runs (black, isort, flake8, xml)
+make test            # full Odoo test suite (slow)
+make test-fast MOD=wms_location   # one module
+make ci              # lint + test, exactly what CI runs
+make format          # auto-fix style
+```
+
+Pre-commit hooks mirror CI locally:
+
+```bash
+pip install pre-commit && pre-commit install
+```
+
+## Firewall setpup
+```bash
+# Right-click PowerShell → Run as Administrator, then:
+New-NetFirewallRule -DisplayName "WMS Odoo" -Direction Inbound -LocalPort 8169 -Protocol TCP -Action Allow
+```
+
 ## License
 
 LGPL-3 (matches Odoo CE).
 
-# Inventory-management
+## Inventory-management

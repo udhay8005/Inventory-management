@@ -10,12 +10,12 @@ asks Odoo to retrain. The heavy math still happens on whichever side has the
 library installed — so the worker is just an orchestrator unless you import the
 algorithm here too.
 """
+
 from __future__ import annotations
 
 import os
 import time
 import xmlrpc.client
-
 
 URL = os.environ["ODOO_URL"]
 DB = os.environ["ODOO_DB"]
@@ -35,8 +35,12 @@ def connect() -> tuple[int, xmlrpc.client.ServerProxy]:
 
 def trigger_forecast(uid: int, models: xmlrpc.client.ServerProxy) -> None:
     models.execute_kw(
-        DB, uid, PASSWORD,
-        "wms.forecast.engine", "run_all_forecasts", [],
+        DB,
+        uid,
+        PASSWORD,
+        "wms.forecast.engine",
+        "run_all_forecasts",
+        [],
     )
 
 

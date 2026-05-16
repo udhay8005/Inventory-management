@@ -13,12 +13,14 @@ class WmsScanIssue(models.TransientModel):
     Inherits `barcodes.barcode_events_mixin` so any wireless/USB HID scanner
     fires `on_barcode_scanned` automatically.
     """
+
     _name = "wms.scan.issue"
     _description = "Scan-based issue (FIFO)"
     _inherit = ["barcodes.barcode_events_mixin"]
 
     warehouse_id = fields.Many2one(
-        "stock.warehouse", required=True,
+        "stock.warehouse",
+        required=True,
         default=lambda s: s.env["stock.warehouse"].search([], limit=1),
     )
     destination_id = fields.Many2one(
@@ -32,8 +34,39 @@ class WmsScanIssue(models.TransientModel):
     feedback = fields.Char(readonly=True)
 
     plan_line_ids = fields.One2many("wms.scan.issue.plan", "wizard_id")
-    short_qty = fields.Float(readonly=True,
-                             help="Shortfall — what we couldn't allocate.")
+    short_qty = fields.Float(readonly=True, help="Shortfall — what we couldn't allocate.")
+
+    # Photo capture. Binary + widget="image" gives mobile browsers an
+    # <input type="file" accept="image/*" capture="environment"> which
+    # opens the camera directly (and is dismissed automatically once the
+    # user shoots or cancels). Required when a non-piece UoM is detected.
+    photo = fields.Binary(
+        string="Item photo",
+        attachment=True,
+        help="Snap a photo of the item being issued. Required for bulk / "
+        "liquid items. Stored against the resulting stock.picking "
+        "for audit.",
+    )
+    photo_required = fields.Boolean(
+        compute="_compute_photo_required",
+        help="True when the planned product is in a non-unit UoM "
+        "(liters, kg, m³, …) — operator must attach proof.",
+    )
+
+    @api.depends("plan_line_ids.product_id")
+    def _compute_photo_required(self):
+        # UoM whose category != 'Units' (i.e. measured, not counted).
+        unit_cat = self.env.ref("uom.product_uom_categ_unit", raise_if_not_found=False)
+        for wiz in self:
+            wiz.photo_required = (
+                any(
+                    ln.product_id.uom_id.category_id != unit_cat
+                    for ln in wiz.plan_line_ids
+                    if ln.product_id
+                )
+                if unit_cat
+                else False
+            )
 
     def on_barcode_scanned(self, barcode):
         """Auto-plan FIFO deduction when a scan is detected.
@@ -55,27 +88,31 @@ class WmsScanIssue(models.TransientModel):
         qty = self.requested_qty * info.get("units", 1.0)
 
         plan, missing = self.env["stock.location"].find_oldest_quants_for_product(
-            product.id, qty,
+            product.id,
+            qty,
             parent_location_id=self.warehouse_id.lot_stock_id.id,
         )
 
         # Clear previous plan
         self.plan_line_ids.unlink()
         for quant, take in plan:
-            self.env["wms.scan.issue.plan"].create({
-                "wizard_id": self.id,
-                "product_id": product.id,
-                "quant_id": quant.id,
-                "location_id": quant.location_id.id,
-                "in_date": quant.in_date,
-                "available": quant.quantity - quant.reserved_quantity,
-                "take": take,
-            })
+            self.env["wms.scan.issue.plan"].create(
+                {
+                    "wizard_id": self.id,
+                    "product_id": product.id,
+                    "quant_id": quant.id,
+                    "location_id": quant.location_id.id,
+                    "in_date": quant.in_date,
+                    "available": quant.quantity - quant.reserved_quantity,
+                    "take": take,
+                }
+            )
         self.short_qty = missing
-        self.feedback = (
-            "Planned %s × %s across %d slot(s)%s"
-            % (qty, product.display_name, len(plan),
-               f"; short by {missing}" if missing else "")
+        self.feedback = "Planned %s × %s across %d slot(s)%s" % (
+            qty,
+            product.display_name,
+            len(plan),
+            f"; short by {missing}" if missing else "",
         )
         return self._reopen()
 
@@ -85,6 +122,11 @@ class WmsScanIssue(models.TransientModel):
             raise UserError("Nothing planned yet.")
         if self.short_qty:
             raise UserError("Cannot validate: short by %s." % self.short_qty)
+        if self.photo_required and not self.photo:
+            raise UserError(
+                "This item is measured (liters / kg / etc.). "
+                "Please attach a photo of what's being issued before validating."
+            )
 
         # Pick a picking type via warehouse-level m2o so we don't get bitten
         # by Odoo 19 archiving the internal type for 1-step warehouses.
@@ -100,22 +142,26 @@ class WmsScanIssue(models.TransientModel):
             picking_type.sudo().active = True
 
         # Group plan lines by source so we make one move per (product, source).
-        picking = self.env["stock.picking"].create({
-            "picking_type_id": picking_type.id,
-            "location_id": self.warehouse_id.lot_stock_id.id,
-            "location_dest_id": self.destination_id.id,
-            "origin": "Barcode FIFO issue",
-        })
-        for line in self.plan_line_ids:
-            move = self.env["stock.move"].create({
-                "description_picking": line.product_id.display_name,
-                "product_id": line.product_id.id,
-                "product_uom_qty": line.take,
-                "product_uom": line.product_id.uom_id.id,
-                "picking_id": picking.id,
-                "location_id": line.location_id.id,
+        picking = self.env["stock.picking"].create(
+            {
+                "picking_type_id": picking_type.id,
+                "location_id": self.warehouse_id.lot_stock_id.id,
                 "location_dest_id": self.destination_id.id,
-            })
+                "origin": "Barcode FIFO issue",
+            }
+        )
+        for line in self.plan_line_ids:
+            move = self.env["stock.move"].create(
+                {
+                    "description_picking": line.product_id.display_name,
+                    "product_id": line.product_id.id,
+                    "product_uom_qty": line.take,
+                    "product_uom": line.product_id.uom_id.id,
+                    "picking_id": picking.id,
+                    "location_id": line.location_id.id,
+                    "location_dest_id": self.destination_id.id,
+                }
+            )
             move._action_confirm()
         picking.action_assign()
         for move in picking.move_ids:
@@ -123,6 +169,33 @@ class WmsScanIssue(models.TransientModel):
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
+
+        # Attach the photo (if any) so it's visible from the picking's
+        # chatter and survives in the audit trail. We always store it
+        # when present, not only when photo_required is True — operators
+        # may want proof even for unit items.
+        if self.photo:
+            self.env["ir.attachment"].create(
+                {
+                    "name": "issue-photo-%s.jpg" % picking.name,
+                    "datas": self.photo,
+                    "res_model": "stock.picking",
+                    "res_id": picking.id,
+                    "mimetype": "image/jpeg",
+                }
+            )
+            picking.message_post(
+                body="Operator photo attached at issue.",
+                attachment_ids=self.env["ir.attachment"]
+                .search(
+                    [
+                        ("res_model", "=", "stock.picking"),
+                        ("res_id", "=", picking.id),
+                        ("name", "=", "issue-photo-%s.jpg" % picking.name),
+                    ]
+                )
+                .ids,
+            )
 
         return {
             "type": "ir.actions.act_window",

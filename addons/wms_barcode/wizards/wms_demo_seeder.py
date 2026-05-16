@@ -2,7 +2,7 @@ import logging
 import random
 from datetime import datetime, timedelta
 
-from odoo import api, fields, models
+from odoo import fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -15,11 +15,11 @@ DEMO_PRODUCTS = [
     # (name, default_code, unit_barcode, list_price, is_bulk, carton_qty, carton_barcode)
     # All are storable so stock.quant can hold them; `is_bulk` only drives
     # whether we seed a carton barcode + larger qty.
-    ("Screw M4×20mm",   "SCRW-M4-20",  "8901111000001", 0.05,  True,  1000, "CTN-SCRW-M4-20-1000"),
-    ("Hex Nut M4",      "NUT-M4",      "8901111000002", 0.03,  True,  500,  "CTN-NUT-M4-500"),
-    ("Cable Tie 200mm", "TIE-200",     "8901111000003", 0.12,  True,  100,  "CTN-TIE-200-100"),
-    ("Power Drill 18V", "DRILL-18V",   "8901111000004", 4500,  False, 0,    None),
-    ("Safety Helmet",   "HELMET-01",   "8901111000005", 320,   False, 0,    None),
+    ("Screw M4×20mm", "SCRW-M4-20", "8901111000001", 0.05, True, 1000, "CTN-SCRW-M4-20-1000"),
+    ("Hex Nut M4", "NUT-M4", "8901111000002", 0.03, True, 500, "CTN-NUT-M4-500"),
+    ("Cable Tie 200mm", "TIE-200", "8901111000003", 0.12, True, 100, "CTN-TIE-200-100"),
+    ("Power Drill 18V", "DRILL-18V", "8901111000004", 4500, False, 0, None),
+    ("Safety Helmet", "HELMET-01", "8901111000005", 320, False, 0, None),
 ]
 
 
@@ -28,6 +28,7 @@ class WmsDemoSeeder(models.TransientModel):
     of an existing rack. Idempotent on barcode: re-running won't duplicate
     products, only top up stock if `add_stock` is set.
     """
+
     _name = "wms.demo.seeder"
     _description = "Seed demo products, barcodes and stock"
 
@@ -36,7 +37,8 @@ class WmsDemoSeeder(models.TransientModel):
         domain=[("wms_location_type", "=", "rack")],
         required=True,
         default=lambda self: self.env["stock.location"].search(
-            [("wms_location_type", "=", "rack")], limit=1,
+            [("wms_location_type", "=", "rack")],
+            limit=1,
         ),
     )
     add_stock = fields.Boolean(
@@ -53,10 +55,12 @@ class WmsDemoSeeder(models.TransientModel):
         Alias = self.env["wms.barcode.alias"]
         Quant = self.env["stock.quant"]
 
-        slots = self.env["stock.location"].search([
-            ("id", "child_of", self.rack_id.id),
-            ("wms_location_type", "=", "slot"),
-        ])
+        slots = self.env["stock.location"].search(
+            [
+                ("id", "child_of", self.rack_id.id),
+                ("wms_location_type", "=", "slot"),
+            ]
+        )
         if not slots:
             raise UserError("Rack %s has no slots." % self.rack_id.display_name)
 
@@ -66,24 +70,28 @@ class WmsDemoSeeder(models.TransientModel):
         for name, code, barcode, price, is_bulk, ctn_qty, ctn_barcode in DEMO_PRODUCTS:
             product = Product.search([("barcode", "=", barcode)], limit=1)
             if not product:
-                product = Product.create({
-                    "name": name,
-                    "default_code": code,
-                    "barcode": barcode,
-                    "list_price": price,
-                    # Odoo 19: storable = consu + is_storable
-                    "type": "consu",
-                    "is_storable": True,
-                })
+                product = Product.create(
+                    {
+                        "name": name,
+                        "default_code": code,
+                        "barcode": barcode,
+                        "list_price": price,
+                        # Odoo 19: storable = consu + is_storable
+                        "type": "consu",
+                        "is_storable": True,
+                    }
+                )
                 created_products += 1
 
             if ctn_barcode and not Alias.search([("barcode", "=", ctn_barcode)], limit=1):
-                Alias.create({
-                    "barcode": ctn_barcode,
-                    "product_id": product.id,
-                    "units_per_scan": ctn_qty,
-                    "note": "Auto-seeded carton barcode for %s" % name,
-                })
+                Alias.create(
+                    {
+                        "barcode": ctn_barcode,
+                        "product_id": product.id,
+                        "units_per_scan": ctn_qty,
+                        "note": "Auto-seeded carton barcode for %s" % name,
+                    }
+                )
 
             if not self.add_stock:
                 continue
@@ -94,16 +102,17 @@ class WmsDemoSeeder(models.TransientModel):
             base_date = datetime.utcnow() - timedelta(days=random.randint(5, 60))
             for i, slot in enumerate(chosen):
                 qty = float(random.randint(20, 400)) if is_bulk else float(random.randint(1, 5))
-                Quant.create({
-                    "product_id": product.id,
-                    "location_id": slot.id,
-                    "quantity": qty,
-                    "in_date": base_date + timedelta(days=i * 3),
-                })
+                Quant.create(
+                    {
+                        "product_id": product.id,
+                        "location_id": slot.id,
+                        "quantity": qty,
+                        "in_date": base_date + timedelta(days=i * 3),
+                    }
+                )
                 created_quants += 1
 
-        _logger.info("wms_demo_seeder: %d products, %d quants",
-                     created_products, created_quants)
+        _logger.info("wms_demo_seeder: %d products, %d quants", created_products, created_quants)
         return {
             "type": "ir.actions.client",
             "tag": "display_notification",
@@ -113,7 +122,8 @@ class WmsDemoSeeder(models.TransientModel):
                 "message": (
                     "Created %d products and %d slot-level quants in rack %s. "
                     "Open Scan Receipt or Scan Issue to try it out."
-                ) % (created_products, created_quants, self.rack_id.display_name),
+                )
+                % (created_products, created_quants, self.rack_id.display_name),
                 "sticky": False,
             },
         }

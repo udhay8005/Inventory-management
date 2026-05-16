@@ -12,6 +12,7 @@
                     <field name="available_quantity"/>
                     <field name="reserved_quantity" optional="hide"/>
                     <field name="location_id"/>
+                    <field name="location_kind"/>
                     <field name="divider_id" optional="show"/>
                     <field name="level_id" optional="show"/>
                     <field name="rack_id" optional="show"/>

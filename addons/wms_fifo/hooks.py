@@ -1,4 +1,3 @@
-from odoo import SUPERUSER_ID, api
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -13,7 +12,9 @@ def post_init_hook(env):
     if fifo:
         for wh in env["stock.warehouse"].search([]):
             wh.lot_stock_id.removal_strategy_id = fifo.id
-        _logger.info("wms_fifo: FIFO applied to %d warehouses", len(env["stock.warehouse"].search([])))
+        _logger.info(
+            "wms_fifo: FIFO applied to %d warehouses", len(env["stock.warehouse"].search([]))
+        )
 
     # Fast FIFO scan: partial index limited to live quants.
     env.cr.execute(

@@ -1,0 +1,27 @@
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | docs
+  | backups
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = [
+    "wms_location", "wms_fifo", "wms_barcode",
+    "wms_repair_damage", "wms_ai_forecast", "wms_reports",
+]
+known_third_party = ["odoo", "psycopg2", "numpy", "pandas", "statsmodels"]
+skip = ["docs", "backups", ".venv"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "docs", "backups", ".venv"]
+# B101 = assert_used (Odoo tests use assert heavily — false positive there)
+skips = ["B101"]

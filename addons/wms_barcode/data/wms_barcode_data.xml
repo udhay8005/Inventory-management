@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Default value threshold above which a WMS Manager must approve
+            a Scan Receipt. Tune via Settings → Technical → Parameters →
+            System Parameters, key `wms_barcode.receipt_approval_threshold`.
+            Currency = company currency.
+        -->
+        <record id="param_receipt_approval_threshold" model="ir.config_parameter">
+            <field name="key">wms_barcode.receipt_approval_threshold</field>
+            <field name="value">10000</field>
+        </record>
+    </data>
+</odoo>

@@ -11,6 +11,7 @@ class WmsRepairOrder(models.Model):
 
     Scrap path uses Odoo's native stock.scrap from Repair-Out.
     """
+
     _name = "wms.repair.order"
     _description = "Repair order"
     _inherit = ["mail.thread", "mail.activity.mixin"]
@@ -18,10 +19,15 @@ class WmsRepairOrder(models.Model):
 
     name = fields.Char(default="New", readonly=True, copy=False)
     state = fields.Selection(
-        [("draft", "Draft"), ("in_repair", "In repair"),
-         ("done", "Done"), ("scrapped", "Scrapped"),
-         ("cancelled", "Cancelled")],
-        default="draft", tracking=True,
+        [
+            ("draft", "Draft"),
+            ("in_repair", "In repair"),
+            ("done", "Done"),
+            ("scrapped", "Scrapped"),
+            ("cancelled", "Cancelled"),
+        ],
+        default="draft",
+        tracking=True,
     )
     damage_id = fields.Many2one("wms.damage")
     product_id = fields.Many2one("product.product", required=True)
@@ -38,7 +44,8 @@ class WmsRepairOrder(models.Model):
     )
     warehouse_id = fields.Many2one(
         "stock.warehouse",
-        compute="_compute_warehouse", store=True,
+        compute="_compute_warehouse",
+        store=True,
     )
     technician_id = fields.Many2one("res.users")
     start_picking_id = fields.Many2one("stock.picking", readonly=True)
@@ -61,10 +68,13 @@ class WmsRepairOrder(models.Model):
         return super().create(vals_list)
 
     def _find_location(self, flag):
-        return self.env["stock.location"].search([
-            (flag, "=", True),
-            ("id", "child_of", self.warehouse_id.view_location_id.id),
-        ], limit=1)
+        return self.env["stock.location"].search(
+            [
+                (flag, "=", True),
+                ("id", "child_of", self.warehouse_id.view_location_id.id),
+            ],
+            limit=1,
+        )
 
     def _internal_picking_type(self):
         """Returns the warehouse's Internal Transfers picking type.
@@ -86,22 +96,28 @@ class WmsRepairOrder(models.Model):
             damage_loc = rec._find_location("wms_is_damage")
             repair_loc = rec._find_location("wms_is_repair")
             if not (damage_loc and repair_loc):
-                raise UserError("Damage / Repair locations missing for %s." % rec.warehouse_id.display_name)
-            picking = self.env["stock.picking"].create({
-                "picking_type_id": rec._internal_picking_type().id,
-                "location_id": damage_loc.id,
-                "location_dest_id": repair_loc.id,
-                "origin": rec.name,
-            })
-            self.env["stock.move"].create({
-                "description_picking": "Send to repair: %s" % rec.product_id.display_name,
-                "product_id": rec.product_id.id,
-                "product_uom_qty": rec.quantity,
-                "product_uom": rec.product_id.uom_id.id,
-                "picking_id": picking.id,
-                "location_id": damage_loc.id,
-                "location_dest_id": repair_loc.id,
-            })
+                raise UserError(
+                    "Damage / Repair locations missing for %s." % rec.warehouse_id.display_name
+                )
+            picking = self.env["stock.picking"].create(
+                {
+                    "picking_type_id": rec._internal_picking_type().id,
+                    "location_id": damage_loc.id,
+                    "location_dest_id": repair_loc.id,
+                    "origin": rec.name,
+                }
+            )
+            self.env["stock.move"].create(
+                {
+                    "description_picking": "Send to repair: %s" % rec.product_id.display_name,
+                    "product_id": rec.product_id.id,
+                    "product_uom_qty": rec.quantity,
+                    "product_uom": rec.product_id.uom_id.id,
+                    "picking_id": picking.id,
+                    "location_id": damage_loc.id,
+                    "location_dest_id": repair_loc.id,
+                }
+            )
             picking.action_confirm()
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
@@ -118,21 +134,25 @@ class WmsRepairOrder(models.Model):
             dest = rec.return_slot_id or rec.original_slot_id
             if not dest:
                 raise UserError("No destination slot.")
-            picking = self.env["stock.picking"].create({
-                "picking_type_id": rec._internal_picking_type().id,
-                "location_id": repair_loc.id,
-                "location_dest_id": dest.id,
-                "origin": rec.name,
-            })
-            self.env["stock.move"].create({
-                "description_picking": "Return from repair: %s" % rec.product_id.display_name,
-                "product_id": rec.product_id.id,
-                "product_uom_qty": rec.quantity,
-                "product_uom": rec.product_id.uom_id.id,
-                "picking_id": picking.id,
-                "location_id": repair_loc.id,
-                "location_dest_id": dest.id,
-            })
+            picking = self.env["stock.picking"].create(
+                {
+                    "picking_type_id": rec._internal_picking_type().id,
+                    "location_id": repair_loc.id,
+                    "location_dest_id": dest.id,
+                    "origin": rec.name,
+                }
+            )
+            self.env["stock.move"].create(
+                {
+                    "description_picking": "Return from repair: %s" % rec.product_id.display_name,
+                    "product_id": rec.product_id.id,
+                    "product_uom_qty": rec.quantity,
+                    "product_uom": rec.product_id.uom_id.id,
+                    "picking_id": picking.id,
+                    "location_id": repair_loc.id,
+                    "location_dest_id": dest.id,
+                }
+            )
             picking.action_confirm()
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
@@ -146,12 +166,14 @@ class WmsRepairOrder(models.Model):
             if rec.state != "in_repair":
                 raise UserError("Only in-repair items can be scrapped.")
             repair_loc = rec._find_location("wms_is_repair")
-            scrap = self.env["stock.scrap"].create({
-                "product_id": rec.product_id.id,
-                "scrap_qty": rec.quantity,
-                "location_id": repair_loc.id,
-                "product_uom_id": rec.product_id.uom_id.id,
-                "origin": rec.name,
-            })
+            scrap = self.env["stock.scrap"].create(
+                {
+                    "product_id": rec.product_id.id,
+                    "scrap_qty": rec.quantity,
+                    "location_id": repair_loc.id,
+                    "product_uom_id": rec.product_id.uom_id.id,
+                    "origin": rec.name,
+                }
+            )
             scrap.action_validate()
             rec.state = "scrapped"

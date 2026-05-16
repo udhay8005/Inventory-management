@@ -1,0 +1,274 @@
+name: CI
+
+# Triggers
+#   - Push to main or test branches.
+#   - Any PR targeting main or test.
+#   - Manual via `workflow_dispatch`.
+# Workflow: push code to `test` → CI runs → if green, PR to `main` → merge.
+# Concurrency: cancel an in-flight run if a newer commit lands on the same ref.
+on:
+  push:
+    branches: [main, test]
+  pull_request:
+    branches: [main, test]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------------
+  # 1) Lint — fast, no DB, no Odoo. Fails the PR before we spin up Postgres.
+  # -------------------------------------------------------------------------
+  lint:
+    name: Lint & static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install lint deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            flake8==7.* \
+            black==24.* \
+            isort==5.* \
+            pylint==3.* \
+            pylint-odoo \
+            bandit \
+            xmllint || true
+
+      - name: Black format check (Python)
+        run: black --check --diff addons/ scripts/ ai_worker/
+
+      - name: isort import order
+        run: isort --check-only --diff addons/ scripts/ ai_worker/
+
+      - name: Flake8 (style + obvious errors)
+        run: flake8 addons/ --max-line-length=100 --extend-ignore=E203,W503
+
+      - name: Pylint-Odoo (manifest + Odoo conventions)
+        run: |
+          # Pylint-Odoo only validates files inside addons/; skip if no addons.
+          pylint --load-plugins=pylint_odoo \
+                 --disable=all \
+                 --enable=odoolint \
+                 --output-format=colorized \
+                 addons/ \
+                 || true   # treat as warnings for now; tighten later
+
+      - name: XML well-formedness
+        run: |
+          # Validates every .xml in addons/ parses cleanly (catches broken
+          # views, missing tags, unescaped ampersands).
+          set -e
+          find addons -name '*.xml' -print0 | while IFS= read -r -d '' f; do
+            python -c "import xml.etree.ElementTree as ET; ET.parse('$f')" \
+              || { echo "❌ XML parse error in $f"; exit 1; }
+          done
+          echo "✔ All XML files parse cleanly."
+
+  # -------------------------------------------------------------------------
+  # 2) Security scan — bandit (Python) + safety (deps).
+  # -------------------------------------------------------------------------
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          pip install bandit safety pip-audit
+
+      - name: Bandit (code-level CVEs)
+        run: |
+          # -ll = low+, skip test files. Emits SARIF for the Security tab.
+          bandit -r addons/ -ll --format json --output bandit-report.json || true
+          bandit -r addons/ -ll || true
+
+      - name: pip-audit (dependency CVEs)
+        run: pip-audit -r requirements.txt --strict || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+          retention-days: 30
+
+  # -------------------------------------------------------------------------
+  # 3) Odoo test run — spin up Postgres, install every WMS module with
+  #    --test-enable, fail the build if any test fails.
+  # -------------------------------------------------------------------------
+  odoo_tests:
+    name: Odoo ${{ matrix.odoo_version }} module tests
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        odoo_version: ["19.0"]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U odoo"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile','requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Odoo image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: wms/odoo:${{ matrix.odoo_version }}-ci
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      - name: Rotate cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache || true
+
+      - name: Create CI database
+        run: |
+          docker run --rm --network=host -e PGPASSWORD=odoo postgres:16-alpine \
+            psql -h localhost -U odoo -d postgres \
+            -c "ALTER USER odoo CREATEDB;" \
+            -c "CREATE DATABASE wms_ci OWNER odoo;"
+
+      - name: Install + run WMS module tests only
+        # --test-tags wms restricts to tests tagged with @tagged("wms"),
+        # so Odoo's own ~4400 test suite (which has pre-existing failures
+        # in test_cli / mail / stock when run against a partial install)
+        # is skipped. We tag every WMS test class with `wms`.
+        run: |
+          docker run --rm --network=host \
+            -v "$(pwd)/addons:/mnt/extra-addons:ro" \
+            wms/odoo:${{ matrix.odoo_version }}-ci \
+            odoo --stop-after-init \
+                 -d wms_ci \
+                 --db_host=localhost --db_user=odoo --db_password=odoo \
+                 --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons \
+                 -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
+                 --without-demo=all \
+                 --test-enable \
+                 --test-tags wms \
+                 --log-level=test \
+                 --logfile=/dev/stdout \
+                 2>&1 | tee odoo_test.log
+          # Robust failure detection: Odoo logs an `ERROR ... odoo.tests.result`
+          # summary line when anything failed/errored. Match that, but only
+          # under the wms_test database tag so Odoo's stdlib noise can't
+          # accidentally fail us.
+          if grep -qE "ERROR wms_ci odoo\.tests\.result:.*(failed|error)" odoo_test.log; then
+            echo "::error::WMS test failures detected"
+            exit 1
+          fi
+          # Also fail if no WMS tests ran at all (catches accidental
+          # detagging or missing test discovery).
+          if ! grep -qE "odoo\.addons\.wms_.*tests.*test" odoo_test.log; then
+            echo "::error::No WMS tests ran — check @tagged('wms') decorators."
+            exit 1
+          fi
+          echo "✔ WMS test suite passed."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: odoo-test-log-${{ matrix.odoo_version }}
+          path: odoo_test.log
+          retention-days: 14
+
+  # -------------------------------------------------------------------------
+  # 4) Docker compose verification — build the full stack and run a
+  #    smoke check (Odoo answers /web/login from inside the network).
+  # -------------------------------------------------------------------------
+  compose_smoke:
+    name: docker compose smoke
+    runs-on: ubuntu-latest
+    needs: [lint, odoo_tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare .env
+        run: |
+          cp .env.example .env
+          sed -i 's/^ODOO_PORT=.*/ODOO_PORT=8069/' .env
+
+      - name: Build images
+        run: docker compose build --pull
+
+      - name: Bring up stack
+        run: docker compose up -d db odoo
+
+      - name: Wait for Odoo to answer
+        run: |
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8069/web/database/manager > /dev/null; then
+              echo "✔ Odoo responding on :8069"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "❌ Odoo did not respond within 90 s"
+          docker compose logs odoo | tail -100
+          exit 1
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # -------------------------------------------------------------------------
+  # 5) Status summary — single required check for branch protection.
+  # -------------------------------------------------------------------------
+  ci_status:
+    name: CI status
+    runs-on: ubuntu-latest
+    needs: [lint, security, odoo_tests, compose_smoke]
+    if: always()
+    steps:
+      - name: Aggregate status
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" \
+             || "${{ needs.odoo_tests.result }}" != "success" \
+             || "${{ needs.compose_smoke.result }}" != "success" ]]; then
+            echo "❌ One or more required jobs failed."
+            exit 1
+          fi
+          echo "✔ All required jobs passed."

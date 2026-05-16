@@ -6,6 +6,7 @@ class WmsOldestStockReport(models.Model):
     Joins up the parent chain so dashboards can group by rack/level/divider
     without writing complex domains.
     """
+
     _name = "wms.oldest.stock.report"
     _description = "Oldest stock first (FIFO view)"
     _auto = False
@@ -23,7 +24,8 @@ class WmsOldestStockReport(models.Model):
     @api.model
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
-        self.env.cr.execute("""
+        self.env.cr.execute(
+            """
             CREATE OR REPLACE VIEW wms_oldest_stock_report AS
               SELECT q.id AS id,
                      q.product_id,
@@ -41,4 +43,5 @@ class WmsOldestStockReport(models.Model):
                 JOIN stock_location l ON l.id = d.location_id
                 JOIN stock_location r ON r.id = l.location_id
                WHERE q.quantity > 0
-        """)
+        """
+        )

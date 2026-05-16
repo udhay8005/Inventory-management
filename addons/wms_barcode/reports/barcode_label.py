@@ -5,6 +5,7 @@ inside the PDF), so no extra image bytes need to be generated here. This
 module exists so the manifest's "depends" graph has a clear extension point;
 add custom label sizes / batched printing here.
 """
+
 from odoo import models
 
 

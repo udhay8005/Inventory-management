@@ -1,0 +1,39 @@
+# Dependabot keeps the project safe from known CVEs without manual work.
+# Three ecosystems are watched: pip (Python), docker (base images),
+# and github-actions (workflow versions themselves).
+
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "python"]
+    commit-message:
+      prefix: "deps(pip)"
+
+  - package-ecosystem: "pip"
+    directory: "/ai_worker"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "python", "ai-worker"]
+    commit-message:
+      prefix: "deps(ai_worker)"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "docker"]
+    commit-message:
+      prefix: "deps(docker)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "ci"

@@ -13,6 +13,7 @@ Approach:
       - Holt-Winters add.    for >= 24 obs (capable of yearly weekly seasonality)
   * Forecast `horizon_days` ahead and report total + RMSE + model name.
 """
+
 from __future__ import annotations
 
 import math
@@ -23,10 +24,8 @@ from typing import Iterable
 try:
     import numpy as np
     import pandas as pd
-    from statsmodels.tsa.holtwinters import (
-        ExponentialSmoothing,
-        SimpleExpSmoothing,
-    )
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing, SimpleExpSmoothing
+
     _HAS_STATSMODELS = True
 except Exception:  # noqa: BLE001
     _HAS_STATSMODELS = False
@@ -34,12 +33,12 @@ except Exception:  # noqa: BLE001
 
 @dataclass
 class ForecastResult:
-    predicted_qty: float           # total qty over horizon_days
+    predicted_qty: float  # total qty over horizon_days
     daily_avg: float
     monthly_avg: float
-    model_name: str                # "HoltWinters" / "SES" / "Naive30"
-    rmse: float                    # 0 for Naive
-    velocity_class: str            # fast / normal / slow / dead
+    model_name: str  # "HoltWinters" / "SES" / "Naive30"
+    rmse: float  # 0 for Naive
+    velocity_class: str  # fast / normal / slow / dead
 
     @property
     def is_zero(self) -> bool:
@@ -72,8 +71,9 @@ def _to_weekly(observations: Iterable[tuple[datetime, float]]):
     return weekly
 
 
-def forecast(observations: Iterable[tuple[datetime, float]],
-             horizon_days: int = 30) -> ForecastResult:
+def forecast(
+    observations: Iterable[tuple[datetime, float]], horizon_days: int = 30
+) -> ForecastResult:
     """Return a ForecastResult for the given list of (date, outflow_qty)."""
     if not _HAS_STATSMODELS:
         # Graceful degradation: a 30-day average computed in pure Python.
@@ -94,7 +94,10 @@ def forecast(observations: Iterable[tuple[datetime, float]],
     try:
         if n >= 24:
             model = ExponentialSmoothing(
-                train, trend="add", seasonal="add", seasonal_periods=4,
+                train,
+                trend="add",
+                seasonal="add",
+                seasonal_periods=4,
                 initialization_method="estimated",
             ).fit(optimized=True, use_brute=False)
             model_name = "HoltWinters"
@@ -111,7 +114,7 @@ def forecast(observations: Iterable[tuple[datetime, float]],
         try:
             yhat = model.forecast(len(test))
             errs = np.array(test.values) - np.array(yhat.values)
-            rmse = float(math.sqrt(np.mean(errs ** 2)))
+            rmse = float(math.sqrt(np.mean(errs**2)))
         except Exception:
             rmse = 0.0
 
@@ -134,8 +137,9 @@ def forecast(observations: Iterable[tuple[datetime, float]],
     )
 
 
-def _naive_fallback(observations: Iterable[tuple[datetime, float]],
-                    horizon_days: int) -> ForecastResult:
+def _naive_fallback(
+    observations: Iterable[tuple[datetime, float]], horizon_days: int
+) -> ForecastResult:
     obs = list(observations)
     if not obs:
         return ForecastResult(0.0, 0.0, 0.0, "Naive30", 0.0, "dead")

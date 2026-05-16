@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_cycle_count_due_list" model="ir.ui.view">
+            <field name="name">wms.cycle.count.due.list</field>
+            <field name="model">wms.cycle.count.due</field>
+            <field name="arch" type="xml">
+                <list decoration-danger="days_since_count &gt; 90"
+                      decoration-warning="days_since_count &gt; 60"
+                      decoration-info="days_since_count &gt; 30">
+                    <field name="location_id"/>
+                    <field name="rack_id"/>
+                    <field name="last_counted"/>
+                    <field name="days_since_count"/>
+                    <field name="on_hand"/>
+                    <field name="distinct_products"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_cycle_count_due" model="ir.actions.act_window">
+            <field name="name">Cycle Count Due</field>
+            <field name="res_model">wms.cycle.count.due</field>
+            <field name="view_mode">list</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">All slots counted within 30 days.</p>
+                <p>Stale slots will appear here, oldest first. Walk
+                through them with the <em>Cycle Count</em> wizard to
+                reconcile the system count with the physical count.</p>
+            </field>
+        </record>
+
+        <!-- Menu entry lives in views/menus.xml (loaded last) to avoid
+             a chicken-and-egg with menu_wms_reports_root. -->
+    </data>
+</odoo>
