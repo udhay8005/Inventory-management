@@ -201,7 +201,14 @@ jobs:
         shell: bash --noprofile --norc {0}
         run: |
           set +e
+          # Critical: our baked-in odoo.conf sets `logfile=/var/log/odoo/odoo.log`,
+          # which redirects all Odoo output to a file INSIDE the container — so
+          # docker stdout gets nothing and `tee` captures nothing. We force
+          # stdout logging by:
+          #   - passing `--logfile=/dev/stdout` explicitly to override the conf
+          #   - setting PYTHONUNBUFFERED so Python's stdio isn't block-buffered
           docker run --rm --network=host \
+            -e PYTHONUNBUFFERED=1 \
             -v "$(pwd)/addons:/mnt/extra-addons:ro" \
             wms/odoo:${{ matrix.odoo_version }}-ci \
             odoo --stop-after-init \
@@ -213,7 +220,8 @@ jobs:
                  --without-demo=all \
                  --test-enable \
                  --test-tags wms \
-                 --log-level=test \
+                 --log-level=info \
+                 --logfile=/dev/stdout \
                  2>&1 | tee odoo_test.log
           # PIPESTATUS preserves the docker exit code through the pipe.
           rc=${PIPESTATUS[0]}
