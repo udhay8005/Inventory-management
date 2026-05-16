@@ -190,13 +190,19 @@ jobs:
         # so Odoo's own ~4400 test suite (which has pre-existing failures
         # in test_cli / mail / stock when run against a partial install)
         # is skipped. We tag every WMS test class with `wms`.
+        #
+        # We capture stdout *and* the docker exit code separately, then
+        # decide pass/fail from BOTH the exit code and a log scan — so a
+        # crashing image (no log) is treated as a hard failure too.
         run: |
+          set +e   # we'll inspect exit code manually
           docker run --rm --network=host \
             -v "$(pwd)/addons:/mnt/extra-addons:ro" \
             wms/odoo:${{ matrix.odoo_version }}-ci \
             odoo --stop-after-init \
                  -d wms_ci \
-                 --db_host=localhost --db_user=odoo --db_password=odoo \
+                 --db_host=127.0.0.1 --db_port=5432 \
+                 --db_user=odoo --db_password=odoo \
                  --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons \
                  -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
                  --without-demo=all \
@@ -204,18 +210,27 @@ jobs:
                  --test-tags wms \
                  --log-level=test \
                  --logfile=/dev/stdout \
-                 2>&1 | tee odoo_test.log
-          # Robust failure detection: Odoo logs an `ERROR ... odoo.tests.result`
-          # summary line when anything failed/errored. Match that, but only
-          # under the wms_test database tag so Odoo's stdlib noise can't
-          # accidentally fail us.
+            > odoo_test.log 2>&1
+          rc=$?
+          echo "--- docker exit code: $rc ---"
+          echo "--- log size: $(wc -c < odoo_test.log) bytes ---"
+          echo "--- last 80 lines of log ---"
+          tail -80 odoo_test.log
+
+          # Hard fail if docker itself errored.
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::docker run exited with $rc"
+            exit "$rc"
+          fi
+
+          # Hard fail if Odoo logged a test failure.
           if grep -qE "ERROR wms_ci odoo\.tests\.result:.*(failed|error)" odoo_test.log; then
             echo "::error::WMS test failures detected"
             exit 1
           fi
-          # Also fail if no WMS tests ran at all (catches accidental
-          # detagging or missing test discovery).
-          if ! grep -qE "odoo\.addons\.wms_.*tests.*test" odoo_test.log; then
+
+          # Hard fail if no WMS tests ran (e.g. discovery off).
+          if ! grep -qE "odoo\.addons\.wms_.*tests" odoo_test.log; then
             echo "::error::No WMS tests ran — check @tagged('wms') decorators."
             exit 1
           fi
