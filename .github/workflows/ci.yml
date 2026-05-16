@@ -194,8 +194,13 @@ jobs:
         # We capture stdout *and* the docker exit code separately, then
         # decide pass/fail from BOTH the exit code and a log scan — so a
         # crashing image (no log) is treated as a hard failure too.
+        # Disable pipefail so `| tee` doesn't mask the docker exit code.
+        # Also stream the output to the job log live (via tee) AND save
+        # it to a file for artifact upload — the previous version with
+        # `> odoo_test.log 2>&1` lost stdout entirely on the GH runner.
+        shell: bash --noprofile --norc {0}
         run: |
-          set +e   # we'll inspect exit code manually
+          set +e
           docker run --rm --network=host \
             -v "$(pwd)/addons:/mnt/extra-addons:ro" \
             wms/odoo:${{ matrix.odoo_version }}-ci \
@@ -209,13 +214,14 @@ jobs:
                  --test-enable \
                  --test-tags wms \
                  --log-level=test \
-                 --logfile=/dev/stdout \
-            > odoo_test.log 2>&1
-          rc=$?
-          echo "--- docker exit code: $rc ---"
-          echo "--- log size: $(wc -c < odoo_test.log) bytes ---"
-          echo "--- last 80 lines of log ---"
-          tail -80 odoo_test.log
+                 2>&1 | tee odoo_test.log
+          # PIPESTATUS preserves the docker exit code through the pipe.
+          rc=${PIPESTATUS[0]}
+          echo "::group::Diagnostic summary"
+          echo "docker exit code : $rc"
+          echo "log size         : $(wc -c < odoo_test.log) bytes"
+          echo "log line count   : $(wc -l < odoo_test.log) lines"
+          echo "::endgroup::"
 
           # Hard fail if docker itself errored.
           if [ "$rc" -ne 0 ]; then
