@@ -38,7 +38,7 @@ class WmsRackGridController(http.Controller):
         Location = request.env["stock.location"].sudo()
         compartments = Location.search(
             [("location_id", "=", rack.id), ("wms_location_type", "=", "compartment")],
-            order="wms_shelf_top asc, wms_column_index asc",
+            order="wms_shelf_top asc, wms_column_left asc",
         )
 
         # Build a list of grid cells. Each cell carries its CSS grid span
@@ -74,13 +74,13 @@ class WmsRackGridController(http.Controller):
                     "pct_label": "%.0f%%" % pct,
                     "products": c.wms_product_ids,
                     "color": _slot_color(pct, on_hand),
-                    # CSS grid-row uses `start / end`. We render shelf 1
-                    # at the top, so for span (top=1, bottom=3) the CSS
-                    # span is grid-row: 1 / 4.
+                    # CSS grid-row/grid-column use `start / end`. A 2D
+                    # span (top=1, bottom=3, left=1, right=2) becomes
+                    # grid-row: 1 / 4; grid-column: 1 / 3.
                     "row_start": c.wms_shelf_top or 1,
                     "row_end": (c.wms_shelf_bottom or c.wms_shelf_top or 1) + 1,
-                    "col_start": c.wms_column_index or 1,
-                    "col_end": (c.wms_column_index or 1) + 1,
+                    "col_start": c.wms_column_left or 1,
+                    "col_end": (c.wms_column_right or c.wms_column_left or 1) + 1,
                 }
             )
 

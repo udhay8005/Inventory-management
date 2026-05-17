@@ -18,15 +18,22 @@ class StockLocation(models.Model):
     """Rack hierarchy is intentionally 3 levels deep in stock.location:
 
         Rack (view)
-        └── Compartment (view)         ← spans 1..N shelves in the visual grid
+        └── Compartment (view)         ← 2D rectangle on the visual grid
             └── Slot (internal)        ← holds stock; 1+ slots per compartment
 
-    'Shelf' is a *grid coordinate*, not a separate stock.location. Each
-    rack carries shelf_count + column_count; each compartment carries the
-    grid rectangle (shelf_top..shelf_bottom × column_index) it occupies.
-    This lets one compartment span multiple shelves (e.g. a tall column
-    for bottles covering shelves 1-3) without breaking Odoo's location
-    tree, and lets every rack have its own shape with no hard cap.
+    'Shelf' and 'Column' are *grid coordinates*, not separate stock.location
+    rows. Each rack carries shelf_count + column_count; each compartment
+    carries the 2D rectangle (shelf_top..shelf_bottom × column_left..
+    column_right) it occupies on that grid.
+
+    The rectangle can span multiple shelves (a tall column for bottles),
+    multiple columns (a wide drawer), or both (a corner-cabinet
+    compartment). The display name and barcode encode the range:
+
+        SH01    C01         → 1×1 cell
+        SH01-03 C01         → 3 shelves tall, 1 column wide
+        SH01    C01-03      → 1 shelf tall, 3 columns wide
+        SH01-03 C01-03      → 3×3 block (full corner)
     """
 
     _inherit = "stock.location"
@@ -51,7 +58,7 @@ class StockLocation(models.Model):
         help="Total vertical columns in this rack (visual grid columns).",
     )
 
-    # ---- Compartment-level grid coordinates -------------------------------
+    # ---- Compartment 2D-rectangle coordinates -----------------------------
     wms_shelf_top = fields.Integer(
         string="Shelf top",
         help="1-based topmost shelf this compartment occupies.",
@@ -59,12 +66,18 @@ class StockLocation(models.Model):
     wms_shelf_bottom = fields.Integer(
         string="Shelf bottom",
         help="1-based bottommost shelf this compartment occupies. "
-        "Equal to shelf_top for a normal compartment; higher for a "
-        "compartment that spans several shelves.",
+        "Equal to shelf_top for a normal compartment; higher when it "
+        "spans several shelves vertically.",
     )
-    wms_column_index = fields.Integer(
-        string="Column",
-        help="1-based column position within the rack.",
+    wms_column_left = fields.Integer(
+        string="Column left",
+        help="1-based leftmost column this compartment occupies.",
+    )
+    wms_column_right = fields.Integer(
+        string="Column right",
+        help="1-based rightmost column this compartment occupies. "
+        "Equal to column_left for a normal compartment; higher when it "
+        "spans several columns horizontally (a wide drawer).",
     )
     wms_slot_count = fields.Integer(
         string="Slots",
@@ -114,6 +127,11 @@ class StockLocation(models.Model):
         "OR wms_shelf_bottom >= wms_shelf_top)",
         "Compartment shelf_bottom must be >= shelf_top.",
     )
+    _wms_column_range_valid = models.Constraint(
+        "CHECK (wms_column_left IS NULL OR wms_column_right IS NULL "
+        "OR wms_column_right >= wms_column_left)",
+        "Compartment column_right must be >= column_left.",
+    )
     _wms_slot_count_positive = models.Constraint(
         "CHECK (wms_slot_count IS NULL OR wms_slot_count >= 1)",
         "A compartment must have at least 1 slot.",
@@ -126,7 +144,8 @@ class StockLocation(models.Model):
         "wms_location_type",
         "wms_shelf_top",
         "wms_shelf_bottom",
-        "wms_column_index",
+        "wms_column_left",
+        "wms_column_right",
         "wms_slot_number",
         "location_id.name",
         "location_id.wms_location_type",
@@ -136,7 +155,9 @@ class StockLocation(models.Model):
 
         A bare `C01` is ambiguous on a list view spanning several racks,
         so we prefix with the rack code. For compartments that span more
-        than one shelf the display reads e.g. `R12 / SH01-03 / C01`.
+        than one shelf the display reads e.g. `R12 / SH01-03 / C01`; for
+        wide compartments `R12 / SH01 / C01-03`; for 2D blocks
+        `R12 / SH01-03 / C01-03`.
         """
         wms_recs = self.filtered(lambda r: r.wms_location_type in ("compartment", "slot"))
         for loc in wms_recs:
@@ -144,7 +165,7 @@ class StockLocation(models.Model):
                 rack = loc.location_id
                 rack_code = rack.wms_rack_code if rack else (loc.location_id.name or "")
                 shelf_label = _shelf_label(loc.wms_shelf_top, loc.wms_shelf_bottom)
-                column_label = "C%02d" % (loc.wms_column_index or 0)
+                column_label = _column_label(loc.wms_column_left, loc.wms_column_right)
                 loc.display_name = "%s / %s / %s" % (rack_code, shelf_label, column_label)
             else:  # slot
                 comp = loc.location_id
@@ -153,7 +174,9 @@ class StockLocation(models.Model):
                 shelf_label = (
                     _shelf_label(comp.wms_shelf_top, comp.wms_shelf_bottom) if comp else ""
                 )
-                column_label = "C%02d" % (comp.wms_column_index or 0) if comp else ""
+                column_label = (
+                    _column_label(comp.wms_column_left, comp.wms_column_right) if comp else ""
+                )
                 slot_label = "SL%02d" % (loc.wms_slot_number or 0)
                 loc.display_name = "%s / %s / %s / %s" % (
                     rack_code,
@@ -180,7 +203,8 @@ class StockLocation(models.Model):
         "location_id",
         "wms_shelf_top",
         "wms_shelf_bottom",
-        "wms_column_index",
+        "wms_column_left",
+        "wms_column_right",
     )
     def _check_hierarchy(self):
         for loc in self:
@@ -192,7 +216,6 @@ class StockLocation(models.Model):
                         "A compartment's parent must be a Rack (got %s)."
                         % (parent.wms_location_type if parent else "<none>")
                     )
-                # Range sanity vs the rack's declared grid.
                 shelves = parent.wms_shelf_count or 0
                 columns = parent.wms_column_count or 0
                 if loc.wms_shelf_top and (loc.wms_shelf_top < 1 or loc.wms_shelf_top > shelves):
@@ -207,12 +230,19 @@ class StockLocation(models.Model):
                         "shelf_bottom=%d is outside the rack's 1..%d shelf range."
                         % (loc.wms_shelf_bottom, shelves)
                     )
-                if loc.wms_column_index and (
-                    loc.wms_column_index < 1 or loc.wms_column_index > columns
+                if loc.wms_column_left and (
+                    loc.wms_column_left < 1 or loc.wms_column_left > columns
                 ):
                     raise ValidationError(
-                        "column=%d is outside the rack's 1..%d column range."
-                        % (loc.wms_column_index, columns)
+                        "column_left=%d is outside the rack's 1..%d column range."
+                        % (loc.wms_column_left, columns)
+                    )
+                if loc.wms_column_right and (
+                    loc.wms_column_right < 1 or loc.wms_column_right > columns
+                ):
+                    raise ValidationError(
+                        "column_right=%d is outside the rack's 1..%d column range."
+                        % (loc.wms_column_right, columns)
                     )
             elif t == "slot":
                 if not parent or parent.wms_location_type != "compartment":
@@ -256,3 +286,12 @@ def _shelf_label(top, bottom):
     if not bottom or bottom == top:
         return "SH%02d" % top
     return "SH%02d-%02d" % (top, bottom)
+
+
+def _column_label(left, right):
+    """Format a column coordinate range as C01 or C01-03."""
+    if not left:
+        return "C??"
+    if not right or right == left:
+        return "C%02d" % left
+    return "C%02d-%02d" % (left, right)

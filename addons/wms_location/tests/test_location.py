@@ -2,8 +2,10 @@
 
 Tagged with `wms` so CI can run only our tests via `--test-tags wms`.
 
-The model is now: Rack → Compartment (can span multiple shelves) → Slot.
-Shelves are grid coordinates on Compartment, not a separate location.
+The model is: Rack → Compartment (a 2D rectangle on the grid) → Slot.
+Shelves and columns are grid coordinates carried on the Compartment, not
+separate stock.location rows. A compartment can span multiple shelves,
+multiple columns, or both (corner-cabinet shape).
 """
 
 import json
@@ -56,67 +58,159 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(rack.wms_column_count, 3)
         self.assertEqual(len(compartments), 6 * 3, "6×3 = 18 compartments")
         self.assertEqual(len(slots), 6 * 3, "1 slot per compartment by default")
+        # Quick-grid compartments are all single-cell: shelf_top==shelf_bottom
+        # and column_left==column_right.
+        for c in compartments:
+            self.assertEqual(c.wms_shelf_top, c.wms_shelf_bottom)
+            self.assertEqual(c.wms_column_left, c.wms_column_right)
 
-    def test_custom_layout_with_spanning_compartment(self):
+    def test_layout_with_vertical_span(self):
         """Layout JSON: 6×3 grid where column 1 has one tall compartment
         covering shelves 1-3, the rest stay single-shelf."""
         compartments = []
         # Column 1: shelves 1-3 merged into one tall compartment (3 slots)
-        compartments.append({"shelf_top": 1, "shelf_bottom": 3, "column_index": 1, "slot_count": 3})
-        # Column 1: shelves 4-6 stay single
+        compartments.append(
+            {
+                "shelf_top": 1,
+                "shelf_bottom": 3,
+                "column_left": 1,
+                "column_right": 1,
+                "slot_count": 3,
+            }
+        )
         for s in (4, 5, 6):
             compartments.append(
-                {"shelf_top": s, "shelf_bottom": s, "column_index": 1, "slot_count": 1}
+                {
+                    "shelf_top": s,
+                    "shelf_bottom": s,
+                    "column_left": 1,
+                    "column_right": 1,
+                    "slot_count": 1,
+                }
             )
-        # Columns 2 + 3: all single-shelf
         for s in range(1, 7):
             for c in (2, 3):
                 compartments.append(
-                    {"shelf_top": s, "shelf_bottom": s, "column_index": c, "slot_count": 1}
+                    {
+                        "shelf_top": s,
+                        "shelf_bottom": s,
+                        "column_left": c,
+                        "column_right": c,
+                        "slot_count": 1,
+                    }
                 )
         spec = {"shelves": 6, "columns": 3, "compartments": compartments}
 
         gen = self.env["wms.rack.generator"].create(
             {
-                "rack_code": "R-SPAN",
+                "rack_code": "R-VSPAN",
                 "parent_location_id": self.parent.id,
                 "layout_json": json.dumps(spec),
             }
         )
         gen.action_generate()
 
-        rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-SPAN")], limit=1)
+        rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-VSPAN")], limit=1)
         tall = self.env["stock.location"].search(
             [
                 ("location_id", "=", rack.id),
                 ("wms_location_type", "=", "compartment"),
-                ("wms_column_index", "=", 1),
+                ("wms_column_left", "=", 1),
                 ("wms_shelf_top", "=", 1),
             ],
             limit=1,
         )
         self.assertEqual(tall.wms_shelf_bottom, 3, "tall compartment spans shelves 1-3")
-        self.assertEqual(tall.wms_slot_count, 3, "tall compartment has 3 slots")
-        # Total compartments: 1 tall + 3 single (col 1) + 12 single (cols 2-3) = 16
+        self.assertEqual(tall.wms_column_right, 1, "tall compartment is 1 column wide")
+        self.assertEqual(tall.wms_slot_count, 3)
+
+    def test_layout_with_2d_span(self):
+        """Layout JSON: 4×4 grid with one corner-cabinet 2x2 block at
+        shelves 1-2 × columns 1-2, rest single cells."""
+        compartments = [
+            # 2x2 corner block
+            {
+                "shelf_top": 1,
+                "shelf_bottom": 2,
+                "column_left": 1,
+                "column_right": 2,
+                "slot_count": 4,
+            }
+        ]
+        # Fill the rest with single cells, skipping the 2x2 region
+        for s in range(1, 5):
+            for c in range(1, 5):
+                if s <= 2 and c <= 2:
+                    continue
+                compartments.append(
+                    {
+                        "shelf_top": s,
+                        "shelf_bottom": s,
+                        "column_left": c,
+                        "column_right": c,
+                        "slot_count": 1,
+                    }
+                )
+        spec = {"shelves": 4, "columns": 4, "compartments": compartments}
+        gen = self.env["wms.rack.generator"].create(
+            {
+                "rack_code": "R-2D",
+                "parent_location_id": self.parent.id,
+                "layout_json": json.dumps(spec),
+            }
+        )
+        gen.action_generate()
+
+        rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-2D")], limit=1)
+        corner = self.env["stock.location"].search(
+            [
+                ("location_id", "=", rack.id),
+                ("wms_location_type", "=", "compartment"),
+                ("wms_shelf_top", "=", 1),
+                ("wms_column_left", "=", 1),
+            ],
+            limit=1,
+        )
+        self.assertEqual(corner.wms_shelf_bottom, 2)
+        self.assertEqual(corner.wms_column_right, 2)
+        self.assertEqual(corner.wms_slot_count, 4)
+        # The corner block's barcode should encode both ranges.
+        self.assertEqual(corner.barcode, "R-2D-SH01-02-C01-02")
+        # Display name should show both ranges.
+        self.assertIn("SH01-02", corner.display_name)
+        self.assertIn("C01-02", corner.display_name)
+        # Total compartments: 1 corner block + 12 single cells = 13.
         total = self.env["stock.location"].search_count(
             [
                 ("location_id", "=", rack.id),
                 ("wms_location_type", "=", "compartment"),
             ]
         )
-        self.assertEqual(total, 16)
+        self.assertEqual(total, 13)
 
     def test_overlapping_compartments_rejected(self):
-        """Layout JSON with two compartments covering the same cell is rejected."""
+        """Layout JSON with two compartments covering the same cell is
+        rejected — including 2D overlaps."""
         spec = {
             "shelves": 2,
             "columns": 2,
             "compartments": [
-                {"shelf_top": 1, "shelf_bottom": 2, "column_index": 1, "slot_count": 1},
-                # This one overlaps with the above on (shelf 1, col 1):
-                {"shelf_top": 1, "shelf_bottom": 1, "column_index": 1, "slot_count": 1},
-                {"shelf_top": 1, "shelf_bottom": 1, "column_index": 2, "slot_count": 1},
-                {"shelf_top": 2, "shelf_bottom": 2, "column_index": 2, "slot_count": 1},
+                # 2x2 corner block
+                {
+                    "shelf_top": 1,
+                    "shelf_bottom": 2,
+                    "column_left": 1,
+                    "column_right": 2,
+                    "slot_count": 1,
+                },
+                # Single cell that overlaps with the block above
+                {
+                    "shelf_top": 1,
+                    "shelf_bottom": 1,
+                    "column_left": 1,
+                    "column_right": 1,
+                    "slot_count": 1,
+                },
             ],
         }
         gen = self.env["wms.rack.generator"].create(
@@ -129,11 +223,40 @@ class TestWmsLocation(TransactionCase):
         with self.assertRaises(UserError):
             gen.action_generate()
 
+    def test_legacy_column_index_backward_compat(self):
+        """Older clients can still post a spec using the legacy
+        column_index key — the wizard normalises it to
+        column_left/column_right."""
+        spec = {
+            "shelves": 2,
+            "columns": 2,
+            "compartments": [
+                {"shelf_top": 1, "shelf_bottom": 1, "column_index": 1, "slot_count": 1},
+                {"shelf_top": 1, "shelf_bottom": 1, "column_index": 2, "slot_count": 1},
+                {"shelf_top": 2, "shelf_bottom": 2, "column_index": 1, "slot_count": 1},
+                {"shelf_top": 2, "shelf_bottom": 2, "column_index": 2, "slot_count": 1},
+            ],
+        }
+        gen = self.env["wms.rack.generator"].create(
+            {
+                "rack_code": "R-LEG",
+                "parent_location_id": self.parent.id,
+                "layout_json": json.dumps(spec),
+            }
+        )
+        gen.action_generate()
+        rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-LEG")], limit=1)
+        comps = self.env["stock.location"].search(
+            [("location_id", "=", rack.id), ("wms_location_type", "=", "compartment")]
+        )
+        self.assertEqual(len(comps), 4)
+        for c in comps:
+            self.assertEqual(c.wms_column_left, c.wms_column_right)
+
     def test_compartment_must_have_rack_parent(self):
         """A compartment whose parent isn't a rack is rejected."""
         self._gen_rack("R-T2")
         rack = self.env["stock.location"].search([("wms_rack_code", "=", "R-T2")], limit=1)
-        # Find a compartment under that rack
         comp = self.env["stock.location"].search(
             [("location_id", "=", rack.id), ("wms_location_type", "=", "compartment")],
             limit=1,
@@ -147,7 +270,8 @@ class TestWmsLocation(TransactionCase):
                     "wms_location_type": "compartment",
                     "wms_shelf_top": 1,
                     "wms_shelf_bottom": 1,
-                    "wms_column_index": 1,
+                    "wms_column_left": 1,
+                    "wms_column_right": 1,
                     "company_id": rack.company_id.id,
                 }
             )
@@ -163,7 +287,6 @@ class TestWmsLocation(TransactionCase):
             limit=3,
         )
         self.assertEqual(len(slots), 3)
-        # Odoo 19: storable products are type='consu' with is_storable=True.
         product = self.env["product.product"].create(
             {
                 "name": "Demo Widget",

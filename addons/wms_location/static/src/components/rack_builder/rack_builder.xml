@@ -36,7 +36,7 @@
                     <t t-foreach="state.compartments" t-as="comp" t-key="comp.id">
                         <div
                             class="o_wms_rack_builder__cell"
-                            t-att-class="{ 'o_wms_rack_builder__cell--selected': state.selectedId === comp.id, 'o_wms_rack_builder__cell--span': comp.shelf_bottom > comp.shelf_top }"
+                            t-att-class="{ 'o_wms_rack_builder__cell--selected': state.selectedId === comp.id, 'o_wms_rack_builder__cell--span': isSpan(comp) }"
                             t-att-style="cellStyle(comp)"
                             t-on-click="() => this.selectCompartment(comp.id)">
                             <div class="o_wms_rack_builder__cell-label" t-esc="cellLabel(comp)"/>
@@ -54,22 +54,29 @@
                         </div>
 
                         <div class="o_wms_rack_builder__panel-section">
-                            <div class="o_wms_rack_builder__panel-label">Span</div>
-                            <button class="btn btn-sm btn-outline-primary me-1"
-                                    t-att-disabled="!canMergeUp()"
-                                    t-on-click="() => this.mergeUp()">
-                                Merge ↑
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary me-1"
-                                    t-att-disabled="!canMergeDown()"
-                                    t-on-click="() => this.mergeDown()">
-                                Merge ↓
-                            </button>
-                            <button class="btn btn-sm btn-outline-warning"
-                                    t-att-disabled="!canSplit()"
-                                    t-on-click="() => this.split()">
-                                Split
-                            </button>
+                            <div class="o_wms_rack_builder__panel-label">Merge with neighbour</div>
+                            <div class="o_wms_rack_builder__dpad">
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-up"
+                                        t-att-disabled="!canMergeUp()"
+                                        t-on-click="() => this.mergeUp()"
+                                        title="Merge with the compartment above">↑</button>
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-left"
+                                        t-att-disabled="!canMergeLeft()"
+                                        t-on-click="() => this.mergeLeft()"
+                                        title="Merge with the compartment to the left">←</button>
+                                <button class="btn btn-sm btn-outline-warning o_wms_rack_builder__dpad-center"
+                                        t-att-disabled="!canSplit()"
+                                        t-on-click="() => this.split()"
+                                        title="Split this compartment back into single cells">Split</button>
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-right"
+                                        t-att-disabled="!canMergeRight()"
+                                        t-on-click="() => this.mergeRight()"
+                                        title="Merge with the compartment to the right">→</button>
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-down"
+                                        t-att-disabled="!canMergeDown()"
+                                        t-on-click="() => this.mergeDown()"
+                                        title="Merge with the compartment below">↓</button>
+                            </div>
                         </div>
 
                         <div class="o_wms_rack_builder__panel-section">
@@ -87,8 +94,10 @@
                     <t t-else="">
                         <p class="text-muted">Click a compartment in the grid to edit it.</p>
                         <ul class="text-muted small">
-                            <li><b>Merge ↑/↓</b> combines this cell with the one above or below in the same column — creates a multi-shelf compartment for tall items.</li>
-                            <li><b>Split</b> breaks a spanning compartment back into single-shelf cells.</li>
+                            <li><b>Merge ↑/↓</b> combines this cell vertically — creates a tall compartment.</li>
+                            <li><b>Merge ←/→</b> combines this cell horizontally — creates a wide compartment.</li>
+                            <li>Merging in both directions builds a 2D block (e.g. a corner cabinet).</li>
+                            <li><b>Split</b> breaks a spanning compartment back into single-shelf, single-column cells.</li>
                             <li><b>Slots</b> sub-divides the compartment into N storable positions.</li>
                         </ul>
                     </t>

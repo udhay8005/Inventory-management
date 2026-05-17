@@ -13,15 +13,19 @@ class WmsRackGenerator(models.TransientModel):
 
     2. **Custom layout** — the visual Rack Builder writes a JSON layout
        spec into ``layout_json`` describing each compartment (including
-       multi-shelf spans). When present, ``layout_json`` overrides quick
-       grid mode.
+       multi-shelf and multi-column 2D rectangles). When present,
+       ``layout_json`` overrides quick grid mode.
 
     Either mode produces the same canonical hierarchy:
         Rack (view) → Compartment (view) → Slot (internal)
 
     Slots get auto-generated barcodes in the form
-    ``<rack_code>-SH<top>[-<bottom>]-C<col>-SL<slot>`` matching the user's
-    requested format (zero-padded to 2 digits).
+    ``<rack_code>-SH<top>[-<bottom>]-C<left>[-<right>]-SL<slot>``
+    (zero-padded to 2 digits per segment). Examples:
+        R01-SH01-C01-SL01          ← single cell
+        R01-SH01-03-C01-SL01       ← spans 3 shelves
+        R01-SH01-C01-03-SL01       ← spans 3 columns
+        R01-SH01-03-C01-03-SL01    ← 3x3 block
     """
 
     _name = "wms.rack.generator"
@@ -77,8 +81,8 @@ class WmsRackGenerator(models.TransientModel):
         help="When set, overrides shelf_count/column_count and creates "
         "compartments exactly as described. Schema: "
         '{"shelves": N, "columns": M, "compartments": [{"shelf_top": int, '
-        '"shelf_bottom": int, "column_index": int, "slot_count": int, '
-        '"label": str (optional)}, ...]}',
+        '"shelf_bottom": int, "column_left": int, "column_right": int, '
+        '"slot_count": int, "label": str (optional)}, ...]}',
     )
 
     @api.model
@@ -125,7 +129,8 @@ class WmsRackGenerator(models.TransientModel):
                     {
                         "shelf_top": s,
                         "shelf_bottom": s,
-                        "column_index": c,
+                        "column_left": c,
+                        "column_right": c,
                         "slot_count": self.default_slot_count,
                     }
                 )
@@ -139,6 +144,8 @@ class WmsRackGenerator(models.TransientModel):
         }
 
     def _validate_spec(self, spec):
+        """Validate the spec and normalise legacy `column_index` to the new
+        column_left/column_right pair."""
         required = ("rack_code", "shelves", "columns", "compartments")
         for key in required:
             if key not in spec:
@@ -147,32 +154,45 @@ class WmsRackGenerator(models.TransientModel):
         columns = int(spec["columns"])
         if shelves < 1 or columns < 1:
             raise UserError("shelves and columns must both be >= 1.")
-        # Build a coverage matrix so we can flag overlaps.
+        # 2D coverage matrix indexed by (shelf, column) — every cell can
+        # only be owned by one compartment.
         occupied = {}
         for idx, comp in enumerate(spec["compartments"], start=1):
             top = int(comp["shelf_top"])
             bot = int(comp.get("shelf_bottom") or top)
-            col = int(comp["column_index"])
+            # Accept either the new column_left/column_right pair OR the
+            # legacy column_index (kept as backward-compat for any older
+            # JSON the user may have saved).
+            if "column_left" in comp:
+                left = int(comp["column_left"])
+                right = int(comp.get("column_right") or left)
+            else:
+                left = int(comp["column_index"])
+                right = int(comp.get("column_index"))
             if not (1 <= top <= shelves and 1 <= bot <= shelves and bot >= top):
                 raise UserError(
                     "Compartment #%d shelf range %d..%d is invalid (rack has %d shelves)."
                     % (idx, top, bot, shelves)
                 )
-            if not 1 <= col <= columns:
+            if not (1 <= left <= columns and 1 <= right <= columns and right >= left):
                 raise UserError(
-                    "Compartment #%d column %d is outside the rack's 1..%d range."
-                    % (idx, col, columns)
+                    "Compartment #%d column range %d..%d is invalid (rack has %d columns)."
+                    % (idx, left, right, columns)
                 )
             for row in range(top, bot + 1):
-                key = (row, col)
-                if key in occupied:
-                    raise UserError(
-                        "Cell (shelf %d, column %d) is covered by two compartments "
-                        "(#%d and #%d). Compartments cannot overlap."
-                        % (row, col, occupied[key], idx)
-                    )
-                occupied[key] = idx
+                for col in range(left, right + 1):
+                    key = (row, col)
+                    if key in occupied:
+                        raise UserError(
+                            "Cell (shelf %d, column %d) is covered by two compartments "
+                            "(#%d and #%d). Compartments cannot overlap."
+                            % (row, col, occupied[key], idx)
+                        )
+                    occupied[key] = idx
             comp["shelf_bottom"] = bot
+            comp["column_left"] = left
+            comp["column_right"] = right
+            comp.pop("column_index", None)
             comp["slot_count"] = max(1, int(comp.get("slot_count") or 1))
         return spec
 
@@ -215,10 +235,11 @@ class WmsRackGenerator(models.TransientModel):
         for comp_spec in spec["compartments"]:
             top = int(comp_spec["shelf_top"])
             bot = int(comp_spec["shelf_bottom"])
-            col = int(comp_spec["column_index"])
+            left = int(comp_spec["column_left"])
+            right = int(comp_spec["column_right"])
             slot_count = int(comp_spec.get("slot_count") or 1)
             shelf_label = _shelf_label(top, bot)
-            column_label = "C%02d" % col
+            column_label = _column_label(left, right)
             comp_name = comp_spec.get("label") or ("%s-%s" % (shelf_label, column_label))
             compartment = Location.create(
                 {
@@ -229,7 +250,8 @@ class WmsRackGenerator(models.TransientModel):
                     "wms_location_type": "compartment",
                     "wms_shelf_top": top,
                     "wms_shelf_bottom": bot,
-                    "wms_column_index": col,
+                    "wms_column_left": left,
+                    "wms_column_right": right,
                     "wms_slot_count": slot_count,
                     "barcode": "%s-%s-%s" % (rack_code, shelf_label, column_label),
                 }
@@ -260,3 +282,11 @@ def _shelf_label(top, bottom):
     if not bottom or bottom == top:
         return "SH%02d" % top
     return "SH%02d-%02d" % (top, bottom)
+
+
+def _column_label(left, right):
+    if not left:
+        return "C??"
+    if not right or right == left:
+        return "C%02d" % left
+    return "C%02d-%02d" % (left, right)

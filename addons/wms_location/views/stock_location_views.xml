@@ -21,7 +21,9 @@
                                invisible="wms_location_type != 'compartment'"/>
                         <field name="wms_shelf_bottom"
                                invisible="wms_location_type != 'compartment'"/>
-                        <field name="wms_column_index"
+                        <field name="wms_column_left"
+                               invisible="wms_location_type != 'compartment'"/>
+                        <field name="wms_column_right"
                                invisible="wms_location_type != 'compartment'"/>
                         <field name="wms_slot_count"
                                invisible="wms_location_type != 'compartment'"/>

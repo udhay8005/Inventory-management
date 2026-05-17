@@ -103,8 +103,30 @@
         font-weight: 600;
         text-transform: uppercase;
         color: #6a737d;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
     }
+
+    /* D-pad: 3x3 grid with the 4 merge arrows on cardinals and Split in
+       the middle. Empty corner cells keep the cross shape clean. */
+    &__dpad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, auto);
+        gap: 4px;
+        max-width: 200px;
+
+        button {
+            min-width: 0;
+            padding: 4px 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+    }
+    &__dpad-up      { grid-row: 1; grid-column: 2; }
+    &__dpad-left    { grid-row: 2; grid-column: 1; }
+    &__dpad-center  { grid-row: 2; grid-column: 2; font-size: 12px !important; }
+    &__dpad-right   { grid-row: 2; grid-column: 3; }
+    &__dpad-down    { grid-row: 3; grid-column: 2; }
 
     &__slot-controls {
         display: flex;
