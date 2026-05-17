@@ -147,105 +147,149 @@ export class WmsRackBuilder extends Component {
     }
 
     /**
-     * A merge is valid only when the candidate neighbour has the **same
-     * extent** along the perpendicular axis. e.g. to merge UP, the cell
-     * directly above must occupy exactly the same column range as the
-     * selected cell. Otherwise the result wouldn't be a rectangle.
+     * Smart-merge helpers. A single Merge click extends the selected
+     * compartment by one row/column, consuming **every** compartment in
+     * that adjacent strip — but only if those compartments together
+     * tile the strip exactly. The strip is
+     *
+     *   above:  one row at shelf=(shelf_top - 1), columns
+     *           column_left..column_right
+     *   below:  one row at shelf=(shelf_bottom + 1)
+     *   left:   one column at column=(column_left - 1), shelves
+     *           shelf_top..shelf_bottom
+     *   right:  one column at column=(column_right + 1)
+     *
+     * Candidates must lie **entirely** within that strip (no overhang
+     * into other rows/columns) so the result stays rectangular. Returns
+     * an array of compartments to consume, or null when the merge isn't
+     * possible.
      */
-    _findAbove(c) {
-        return this.state.compartments.find(
+    _stripAbove(c) {
+        const targetShelf = c.shelf_top - 1;
+        if (targetShelf < 1) return null;
+        const candidates = this.state.compartments.filter(
             (x) =>
-                x.shelf_bottom === c.shelf_top - 1 &&
-                x.column_left === c.column_left &&
-                x.column_right === c.column_right,
+                x.shelf_top === targetShelf &&
+                x.shelf_bottom === targetShelf &&
+                x.column_left >= c.column_left &&
+                x.column_right <= c.column_right,
         );
+        return this._tilesRange(candidates, "column_left", "column_right", c.column_left, c.column_right);
     }
 
-    _findBelow(c) {
-        return this.state.compartments.find(
+    _stripBelow(c) {
+        const targetShelf = c.shelf_bottom + 1;
+        if (targetShelf > this.state.shelves) return null;
+        const candidates = this.state.compartments.filter(
             (x) =>
-                x.shelf_top === c.shelf_bottom + 1 &&
-                x.column_left === c.column_left &&
-                x.column_right === c.column_right,
+                x.shelf_top === targetShelf &&
+                x.shelf_bottom === targetShelf &&
+                x.column_left >= c.column_left &&
+                x.column_right <= c.column_right,
         );
+        return this._tilesRange(candidates, "column_left", "column_right", c.column_left, c.column_right);
     }
 
-    _findLeft(c) {
-        return this.state.compartments.find(
+    _stripLeft(c) {
+        const targetCol = c.column_left - 1;
+        if (targetCol < 1) return null;
+        const candidates = this.state.compartments.filter(
             (x) =>
-                x.column_right === c.column_left - 1 &&
-                x.shelf_top === c.shelf_top &&
-                x.shelf_bottom === c.shelf_bottom,
+                x.column_left === targetCol &&
+                x.column_right === targetCol &&
+                x.shelf_top >= c.shelf_top &&
+                x.shelf_bottom <= c.shelf_bottom,
         );
+        return this._tilesRange(candidates, "shelf_top", "shelf_bottom", c.shelf_top, c.shelf_bottom);
     }
 
-    _findRight(c) {
-        return this.state.compartments.find(
+    _stripRight(c) {
+        const targetCol = c.column_right + 1;
+        if (targetCol > this.state.columns) return null;
+        const candidates = this.state.compartments.filter(
             (x) =>
-                x.column_left === c.column_right + 1 &&
-                x.shelf_top === c.shelf_top &&
-                x.shelf_bottom === c.shelf_bottom,
+                x.column_left === targetCol &&
+                x.column_right === targetCol &&
+                x.shelf_top >= c.shelf_top &&
+                x.shelf_bottom <= c.shelf_bottom,
         );
+        return this._tilesRange(candidates, "shelf_top", "shelf_bottom", c.shelf_top, c.shelf_bottom);
+    }
+
+    /**
+     * Given a list of non-overlapping candidates and a required range
+     * [rangeStart, rangeEnd], return them sorted ASC if they tile the
+     * range exactly (no gaps), else null. lowKey / highKey are the
+     * property names that hold each candidate's range on this axis.
+     */
+    _tilesRange(candidates, lowKey, highKey, rangeStart, rangeEnd) {
+        if (candidates.length === 0) return null;
+        const sorted = [...candidates].sort((a, b) => a[lowKey] - b[lowKey]);
+        let cursor = rangeStart;
+        for (const x of sorted) {
+            if (x[lowKey] !== cursor) return null;
+            cursor = x[highKey] + 1;
+        }
+        return cursor - 1 === rangeEnd ? sorted : null;
     }
 
     canMergeUp() {
         const c = this.selectedCompartment;
-        return !!(c && c.shelf_top > 1 && this._findAbove(c));
+        return !!(c && this._stripAbove(c));
     }
     canMergeDown() {
         const c = this.selectedCompartment;
-        return !!(c && c.shelf_bottom < this.state.shelves && this._findBelow(c));
+        return !!(c && this._stripBelow(c));
     }
     canMergeLeft() {
         const c = this.selectedCompartment;
-        return !!(c && c.column_left > 1 && this._findLeft(c));
+        return !!(c && this._stripLeft(c));
     }
     canMergeRight() {
         const c = this.selectedCompartment;
-        return !!(c && c.column_right < this.state.columns && this._findRight(c));
+        return !!(c && this._stripRight(c));
     }
     canSplit() {
         const c = this.selectedCompartment;
         return !!(c && (c.shelf_bottom > c.shelf_top || c.column_right > c.column_left));
     }
 
+    _consume(c, strip, extentField, newValue) {
+        c[extentField] = newValue;
+        c.slot_count = strip.reduce((m, x) => Math.max(m, x.slot_count), c.slot_count);
+        const ids = new Set(strip.map((x) => x.id));
+        this.state.compartments = this.state.compartments.filter((x) => !ids.has(x.id));
+    }
+
     async mergeUp() {
         const c = this.selectedCompartment;
-        if (!this.canMergeUp()) return;
-        const above = this._findAbove(c);
-        c.shelf_top = above.shelf_top;
-        c.slot_count = Math.max(c.slot_count, above.slot_count);
-        this.state.compartments = this.state.compartments.filter((x) => x.id !== above.id);
+        const strip = c && this._stripAbove(c);
+        if (!strip) return;
+        this._consume(c, strip, "shelf_top", strip[0].shelf_top);
         await this._commit();
     }
 
     async mergeDown() {
         const c = this.selectedCompartment;
-        if (!this.canMergeDown()) return;
-        const below = this._findBelow(c);
-        c.shelf_bottom = below.shelf_bottom;
-        c.slot_count = Math.max(c.slot_count, below.slot_count);
-        this.state.compartments = this.state.compartments.filter((x) => x.id !== below.id);
+        const strip = c && this._stripBelow(c);
+        if (!strip) return;
+        this._consume(c, strip, "shelf_bottom", strip[0].shelf_bottom);
         await this._commit();
     }
 
     async mergeLeft() {
         const c = this.selectedCompartment;
-        if (!this.canMergeLeft()) return;
-        const left = this._findLeft(c);
-        c.column_left = left.column_left;
-        c.slot_count = Math.max(c.slot_count, left.slot_count);
-        this.state.compartments = this.state.compartments.filter((x) => x.id !== left.id);
+        const strip = c && this._stripLeft(c);
+        if (!strip) return;
+        this._consume(c, strip, "column_left", strip[0].column_left);
         await this._commit();
     }
 
     async mergeRight() {
         const c = this.selectedCompartment;
-        if (!this.canMergeRight()) return;
-        const right = this._findRight(c);
-        c.column_right = right.column_right;
-        c.slot_count = Math.max(c.slot_count, right.slot_count);
-        this.state.compartments = this.state.compartments.filter((x) => x.id !== right.id);
+        const strip = c && this._stripRight(c);
+        if (!strip) return;
+        this._consume(c, strip, "column_right", strip[strip.length - 1].column_right);
         await this._commit();
     }
 

@@ -59,11 +59,11 @@
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-up"
                                         t-att-disabled="!canMergeUp()"
                                         t-on-click="() => this.mergeUp()"
-                                        title="Merge with the compartment above">↑</button>
+                                        title="Extend up — consumes every cell on the row above that lies within this compartment's column range">↑</button>
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-left"
                                         t-att-disabled="!canMergeLeft()"
                                         t-on-click="() => this.mergeLeft()"
-                                        title="Merge with the compartment to the left">←</button>
+                                        title="Extend left — consumes every cell on the column to the left that lies within this compartment's shelf range">←</button>
                                 <button class="btn btn-sm btn-outline-warning o_wms_rack_builder__dpad-center"
                                         t-att-disabled="!canSplit()"
                                         t-on-click="() => this.split()"
@@ -71,11 +71,11 @@
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-right"
                                         t-att-disabled="!canMergeRight()"
                                         t-on-click="() => this.mergeRight()"
-                                        title="Merge with the compartment to the right">→</button>
+                                        title="Extend right — consumes every cell on the column to the right that lies within this compartment's shelf range">→</button>
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-down"
                                         t-att-disabled="!canMergeDown()"
                                         t-on-click="() => this.mergeDown()"
-                                        title="Merge with the compartment below">↓</button>
+                                        title="Extend down — consumes every cell on the row below that lies within this compartment's column range">↓</button>
                             </div>
                         </div>
 
