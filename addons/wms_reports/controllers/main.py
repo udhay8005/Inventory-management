@@ -1,11 +1,13 @@
 """HTTP controllers for the rack visual grid + warehouse map.
 
 Two pages:
-  /wms/rack/<id>/grid     - one rack's 6×N×3 slot heat-map
+  /wms/rack/<id>/grid     - one rack's shelves × columns grid heat-map
   /wms/warehouse/map      - whole-warehouse summary: zones, racks, floors
 
 Plain QWeb + Bootstrap so they work inside Odoo's web client and on
-mobile browsers with no JS framework deps.
+mobile browsers with no JS framework deps. The rack grid template uses
+CSS Grid with `grid-row` / `grid-column` spans so multi-shelf
+compartments render at their natural height.
 """
 
 from odoo import http
@@ -33,52 +35,65 @@ class WmsRackGridController(http.Controller):
         if not rack or rack.wms_location_type != "rack":
             return request.not_found()
 
-        # Build matrix[level_idx][divider_idx] = list of slot dicts
-        # Levels go top→bottom (L-6 at top so it matches physical view).
         Location = request.env["stock.location"].sudo()
-        levels = Location.search(
-            [("location_id", "=", rack.id), ("wms_location_type", "=", "level")],
-            order="wms_level_number desc",
+        compartments = Location.search(
+            [("location_id", "=", rack.id), ("wms_location_type", "=", "compartment")],
+            order="wms_shelf_top asc, wms_column_index asc",
         )
-        matrix = []
+
+        # Build a list of grid cells. Each cell carries its CSS grid span
+        # coords (1-based) plus the aggregated occupancy of all slots
+        # inside the compartment.
+        #
+        # The QWeb template inverts the row index so shelf 1 appears at
+        # the *top* of the grid (matches the physical view: top shelf
+        # is shelf 1, bottom shelf is shelf N).
+        cells = []
         rack_on_hand = 0.0
         total_slots = 0
-        for level in levels:
-            dividers = Location.search(
-                [("location_id", "=", level.id), ("wms_location_type", "=", "divider")],
-                order="wms_divider_number asc",
+        shelves = rack.wms_shelf_count or 1
+        columns = rack.wms_column_count or 1
+        for c in compartments:
+            slots = Location.search(
+                [("location_id", "=", c.id), ("wms_location_type", "=", "slot")],
+                order="wms_slot_number asc",
             )
-            level_row = {"level": level, "dividers": []}
-            for divider in dividers:
-                slots = Location.search(
-                    [("location_id", "=", divider.id), ("wms_location_type", "=", "slot")],
-                    order="wms_slot_number asc",
-                )
-                cells = []
-                for slot in slots:
-                    on_hand = slot.wms_current_qty
-                    pct = slot.wms_occupancy_pct
-                    cells.append(
-                        {
-                            "slot": slot,
-                            "on_hand": on_hand,
-                            "occupancy_pct": pct,
-                            "products": slot.wms_product_ids,
-                            "color": _slot_color(pct, on_hand),
-                        }
-                    )
-                    rack_on_hand += on_hand
-                    total_slots += 1
-                level_row["dividers"].append({"divider": divider, "slots": cells})
-            matrix.append(level_row)
+            on_hand = sum(slots.mapped("wms_current_qty"))
+            total_slots += len(slots)
+            rack_on_hand += on_hand
+            # Aggregate occupancy = filled slots / total slots.
+            occupied = sum(1 for s in slots if s.wms_current_qty > 0)
+            pct = (occupied / len(slots) * 100.0) if slots else 0.0
+            cells.append(
+                {
+                    "compartment": c,
+                    "slots": slots,
+                    "on_hand": on_hand,
+                    "on_hand_label": "%.0f" % on_hand,
+                    "occupancy_pct": pct,
+                    "pct_label": "%.0f%%" % pct,
+                    "products": c.wms_product_ids,
+                    "color": _slot_color(pct, on_hand),
+                    # CSS grid-row uses `start / end`. We render shelf 1
+                    # at the top, so for span (top=1, bottom=3) the CSS
+                    # span is grid-row: 1 / 4.
+                    "row_start": c.wms_shelf_top or 1,
+                    "row_end": (c.wms_shelf_bottom or c.wms_shelf_top or 1) + 1,
+                    "col_start": c.wms_column_index or 1,
+                    "col_end": (c.wms_column_index or 1) + 1,
+                }
+            )
 
         return request.render(
             "wms_reports.rack_grid_page",
             {
                 "rack": rack,
-                "matrix": matrix,
+                "cells": cells,
+                "shelves": shelves,
+                "columns": columns,
                 "rack_on_hand": rack_on_hand,
                 "total_slots": total_slots,
+                "rack_on_hand_label": "%.0f" % rack_on_hand,
             },
         )
 
@@ -88,9 +103,6 @@ class WmsRackGridController(http.Controller):
         colour-coded by % full. Single page, mobile-friendly.
         """
         Location = request.env["stock.location"].sudo()
-        # Find every zone. If a warehouse has racks/floors directly under
-        # WH/Stock with no Zone wrapper, also surface them under a
-        # synthetic "Unzoned" group.
         zones = Location.search([("wms_location_type", "=", "zone")], order="complete_name")
 
         def _build_group(parent_loc, label):
@@ -111,7 +123,6 @@ class WmsRackGridController(http.Controller):
             )
             rack_items = []
             for r in racks:
-                # Aggregate the rack's slots
                 slots = Location.search(
                     [
                         ("id", "child_of", r.id),
@@ -128,9 +139,6 @@ class WmsRackGridController(http.Controller):
                         "slots_total": len(slots),
                         "slots_occupied": occupied,
                         "pct": pct,
-                        # Pre-format on the Python side so the QWeb template
-                        # doesn't have to use '%%' (which Odoo's XML parser
-                        # collapses to '%' and breaks Python formatting).
                         "pct_label": "%.0f%%" % pct,
                         "on_hand_label": "%.0f" % on_hand,
                         "color": _slot_color(pct, on_hand),
@@ -163,7 +171,6 @@ class WmsRackGridController(http.Controller):
 
         groups = [_build_group(z, z.name) for z in zones]
 
-        # Unzoned: items still living directly under any WH/Stock (no zone wrapper)
         warehouses = request.env["stock.warehouse"].sudo().search([])
         for wh in warehouses:
             unzoned = _build_group(wh.lot_stock_id, f"{wh.display_name} / Unzoned")

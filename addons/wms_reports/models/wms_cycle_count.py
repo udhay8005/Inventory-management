@@ -87,12 +87,10 @@ class WmsCycleCountDue(models.Model):
                      COALESCE(SUM(q.quantity), 0) AS on_hand,
                      COUNT(DISTINCT q.product_id) AS distinct_products
                 FROM stock_location s
-                LEFT JOIN stock_location d
-                  ON d.id = s.location_id AND d.wms_location_type = 'divider'
-                LEFT JOIN stock_location l
-                  ON l.id = d.location_id AND l.wms_location_type = 'level'
+                LEFT JOIN stock_location c
+                  ON c.id = s.location_id AND c.wms_location_type = 'compartment'
                 LEFT JOIN stock_location r
-                  ON r.id = l.location_id AND r.wms_location_type = 'rack'
+                  ON r.id = c.location_id AND r.wms_location_type = 'rack'
                 LEFT JOIN stock_quant q
                   ON q.location_id = s.id AND q.quantity > 0
                WHERE s.wms_location_type IN ('slot', 'floor')

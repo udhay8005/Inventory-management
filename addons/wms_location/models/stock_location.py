@@ -5,38 +5,81 @@ LOCATION_TYPES = [
     ("warehouse_view", "Warehouse view"),
     ("zone", "Zone (building / floor / area)"),
     ("rack", "Rack"),
-    ("level", "Level"),
-    ("divider", "Divider"),
+    ("compartment", "Compartment"),
     ("slot", "Slot"),
     # Non-rack storage: pallet area, floor stack, single-shelf slab,
     # outside yard bay, etc. usage='internal' so quants can land here
-    # directly, no Level/Divider needed.
+    # directly, no compartment/slot needed.
     ("floor", "Floor / Open area"),
 ]
 
-# Physical constraints from the warehouse layout:
-#   one rack    has exactly 6 levels (shelves)
-#   one level   has a variable number of dividers (configurable per rack)
-#   one divider has exactly 3 slots
-MAX_LEVELS = 6
-MAX_SLOTS = 3
-
 
 class StockLocation(models.Model):
+    """Rack hierarchy is intentionally 3 levels deep in stock.location:
+
+        Rack (view)
+        └── Compartment (view)         ← spans 1..N shelves in the visual grid
+            └── Slot (internal)        ← holds stock; 1+ slots per compartment
+
+    'Shelf' is a *grid coordinate*, not a separate stock.location. Each
+    rack carries shelf_count + column_count; each compartment carries the
+    grid rectangle (shelf_top..shelf_bottom × column_index) it occupies.
+    This lets one compartment span multiple shelves (e.g. a tall column
+    for bottles covering shelves 1-3) without breaking Odoo's location
+    tree, and lets every rack have its own shape with no hard cap.
+    """
+
     _inherit = "stock.location"
 
     wms_location_type = fields.Selection(
         LOCATION_TYPES,
         string="WMS Type",
         index=True,
-        help="Marks this location as part of the rack→level→divider→slot hierarchy.",
+        help="Marks this location as part of the rack → compartment → slot hierarchy.",
     )
-    wms_rack_code = fields.Char(string="Rack code", help="e.g. R-01")
-    wms_level_number = fields.Integer(string="Level #", help="1..6 within parent rack")
-    wms_divider_number = fields.Integer(
-        string="Divider #", help="position of divider within its level"
+    wms_rack_code = fields.Char(string="Rack code", help="e.g. R01, PHARM01")
+
+    # ---- Rack-level layout ------------------------------------------------
+    wms_shelf_count = fields.Integer(
+        string="Shelves",
+        default=6,
+        help="Total horizontal shelves in this rack (visual grid rows).",
     )
-    wms_slot_number = fields.Integer(string="Slot #", help="1..3 within parent divider")
+    wms_column_count = fields.Integer(
+        string="Columns",
+        default=3,
+        help="Total vertical columns in this rack (visual grid columns).",
+    )
+
+    # ---- Compartment-level grid coordinates -------------------------------
+    wms_shelf_top = fields.Integer(
+        string="Shelf top",
+        help="1-based topmost shelf this compartment occupies.",
+    )
+    wms_shelf_bottom = fields.Integer(
+        string="Shelf bottom",
+        help="1-based bottommost shelf this compartment occupies. "
+        "Equal to shelf_top for a normal compartment; higher for a "
+        "compartment that spans several shelves.",
+    )
+    wms_column_index = fields.Integer(
+        string="Column",
+        help="1-based column position within the rack.",
+    )
+    wms_slot_count = fields.Integer(
+        string="Slots",
+        default=1,
+        help="Sub-divisions within this compartment. 1 means the "
+        "compartment is itself the storable unit.",
+    )
+
+    # ---- Slot-level identity ---------------------------------------------
+    wms_slot_number = fields.Integer(
+        string="Slot #",
+        help="1-based slot index within its parent compartment.",
+    )
+
+    # ---- Occupancy / search helpers --------------------------------------
     wms_capacity_units = fields.Float(
         string="Capacity (units)",
         default=0.0,
@@ -57,52 +100,62 @@ class StockLocation(models.Model):
         compute="_compute_wms_current_qty",
     )
 
-    # Odoo 19 declarative API (replaces _sql_constraints which is deprecated).
-    _wms_level_range = models.Constraint(
-        "CHECK (wms_level_number IS NULL OR (wms_level_number BETWEEN 1 AND 6))",
-        "Level number must be between 1 and 6.",
+    # ---- Declarative DB constraints (Odoo 19) ----------------------------
+    _wms_shelf_count_positive = models.Constraint(
+        "CHECK (wms_shelf_count IS NULL OR wms_shelf_count >= 1)",
+        "A rack must have at least 1 shelf.",
     )
-    _wms_slot_range = models.Constraint(
-        "CHECK (wms_slot_number IS NULL OR (wms_slot_number BETWEEN 1 AND 3))",
-        "Slot number must be between 1 and 3.",
+    _wms_column_count_positive = models.Constraint(
+        "CHECK (wms_column_count IS NULL OR wms_column_count >= 1)",
+        "A rack must have at least 1 column.",
+    )
+    _wms_shelf_range_valid = models.Constraint(
+        "CHECK (wms_shelf_top IS NULL OR wms_shelf_bottom IS NULL "
+        "OR wms_shelf_bottom >= wms_shelf_top)",
+        "Compartment shelf_bottom must be >= shelf_top.",
+    )
+    _wms_slot_count_positive = models.Constraint(
+        "CHECK (wms_slot_count IS NULL OR wms_slot_count >= 1)",
+        "A compartment must have at least 1 slot.",
     )
 
+    # ---- Display name overrides ------------------------------------------
     @api.depends(
         "name",
         "location_id",
         "wms_location_type",
+        "wms_shelf_top",
+        "wms_shelf_bottom",
+        "wms_column_index",
+        "wms_slot_number",
         "location_id.name",
         "location_id.wms_location_type",
     )
     def _compute_display_name(self):
-        """Make divider / slot display names self-contained.
+        """Make compartment / slot display names self-contained.
 
-        Default Odoo display_name for stock.location is just `name`, which
-        gives `D-1` for the first divider on every level — operators can't
-        tell levels apart in a group-by view. We prefix with the parent
-        level (and rack for slots) so headers read like `L-2/D-3` /
-        `L-2/D-3/S-1`. Other location types fall back to default behaviour.
+        A bare `C01` is ambiguous on a list view spanning several racks,
+        so we prefix with the rack code. For compartments that span more
+        than one shelf the display reads e.g. `R12 / SH01-03 / C01`.
         """
-        wms_recs = self.filtered(lambda r: r.wms_location_type in ("divider", "slot"))
+        wms_recs = self.filtered(lambda r: r.wms_location_type in ("compartment", "slot"))
         for loc in wms_recs:
-            parent = loc.location_id
-            if (
-                loc.wms_location_type == "divider"
-                and parent
-                and parent.wms_location_type == "level"
-            ):
-                loc.display_name = "%s/%s" % (parent.name, loc.name)
-            elif (
-                loc.wms_location_type == "slot" and parent and parent.wms_location_type == "divider"
-            ):
-                grandparent = parent.location_id
-                if grandparent and grandparent.wms_location_type == "level":
-                    loc.display_name = "%s/%s/%s" % (grandparent.name, parent.name, loc.name)
-                else:
-                    loc.display_name = "%s/%s" % (parent.name, loc.name)
-            else:
-                loc.display_name = loc.name or ""
-        # All other locations use Odoo's default compute
+            if loc.wms_location_type == "compartment":
+                rack = loc.location_id
+                rack_code = rack.wms_rack_code if rack else (loc.location_id.name or "")
+                shelf_label = _shelf_label(loc.wms_shelf_top, loc.wms_shelf_bottom)
+                column_label = "C%02d" % (loc.wms_column_index or 0)
+                loc.display_name = "%s / %s / %s" % (rack_code, shelf_label, column_label)
+            else:  # slot
+                comp = loc.location_id
+                rack = comp.location_id if comp else False
+                rack_code = rack.wms_rack_code if rack else ""
+                shelf_label = _shelf_label(comp.wms_shelf_top, comp.wms_shelf_bottom) if comp else ""
+                column_label = "C%02d" % (comp.wms_column_index or 0) if comp else ""
+                slot_label = "SL%02d" % (loc.wms_slot_number or 0)
+                loc.display_name = "%s / %s / %s / %s" % (
+                    rack_code, shelf_label, column_label, slot_label,
+                )
         super(StockLocation, self - wms_recs)._compute_display_name()
 
     @api.depends("quant_ids.quantity", "quant_ids.product_id")
@@ -116,55 +169,54 @@ class StockLocation(models.Model):
                 (total / loc.wms_capacity_units * 100.0) if loc.wms_capacity_units else 0.0
             )
 
-    @api.constrains("wms_location_type", "location_id")
+    # ---- Hierarchy guards -------------------------------------------------
+    @api.constrains(
+        "wms_location_type",
+        "location_id",
+        "wms_shelf_top",
+        "wms_shelf_bottom",
+        "wms_column_index",
+    )
     def _check_hierarchy(self):
         for loc in self:
             t = loc.wms_location_type
             parent = loc.location_id
-            if t == "level":
+            if t == "compartment":
                 if not parent or parent.wms_location_type != "rack":
                     raise ValidationError(
-                        "A level's parent must be a Rack (got %s)."
+                        "A compartment's parent must be a Rack (got %s)."
                         % (parent.wms_location_type if parent else "<none>")
                     )
-                siblings = self.search_count(
-                    [
-                        ("location_id", "=", parent.id),
-                        ("wms_location_type", "=", "level"),
-                        ("id", "!=", loc.id),
-                    ]
-                )
-                if siblings >= MAX_LEVELS:
+                # Range sanity vs the rack's declared grid.
+                shelves = parent.wms_shelf_count or 0
+                columns = parent.wms_column_count or 0
+                if loc.wms_shelf_top and (loc.wms_shelf_top < 1 or loc.wms_shelf_top > shelves):
                     raise ValidationError(
-                        "Rack %s already has %d levels (max %d)."
-                        % (parent.display_name, siblings, MAX_LEVELS)
+                        "shelf_top=%d is outside the rack's 1..%d shelf range."
+                        % (loc.wms_shelf_top, shelves)
                     )
-            elif t == "divider":
-                if not parent or parent.wms_location_type != "level":
+                if loc.wms_shelf_bottom and (
+                    loc.wms_shelf_bottom < 1 or loc.wms_shelf_bottom > shelves
+                ):
                     raise ValidationError(
-                        "A divider's parent must be a Level (got %s)."
-                        % (parent.wms_location_type if parent else "<none>")
+                        "shelf_bottom=%d is outside the rack's 1..%d shelf range."
+                        % (loc.wms_shelf_bottom, shelves)
                     )
-                # Number of dividers per level is variable — no upper bound.
+                if loc.wms_column_index and (
+                    loc.wms_column_index < 1 or loc.wms_column_index > columns
+                ):
+                    raise ValidationError(
+                        "column=%d is outside the rack's 1..%d column range."
+                        % (loc.wms_column_index, columns)
+                    )
             elif t == "slot":
-                if not parent or parent.wms_location_type != "divider":
+                if not parent or parent.wms_location_type != "compartment":
                     raise ValidationError(
-                        "A slot's parent must be a Divider (got %s)."
+                        "A slot's parent must be a Compartment (got %s)."
                         % (parent.wms_location_type if parent else "<none>")
-                    )
-                siblings = self.search_count(
-                    [
-                        ("location_id", "=", parent.id),
-                        ("wms_location_type", "=", "slot"),
-                        ("id", "!=", loc.id),
-                    ]
-                )
-                if siblings >= MAX_SLOTS:
-                    raise ValidationError(
-                        "Divider %s already has %d slots (max %d)."
-                        % (parent.display_name, siblings, MAX_SLOTS)
                     )
 
+    # ---- FIFO helper (unchanged contract) ---------------------------------
     @api.model
     def find_oldest_quants_for_product(self, product_id, qty_needed, parent_location_id=None):
         """FIFO helper: returns (plan, missing) where `plan` is an ordered
@@ -190,3 +242,12 @@ class StockLocation(models.Model):
             plan.append((q, take))
             remaining -= take
         return plan, remaining
+
+
+def _shelf_label(top, bottom):
+    """Format a shelf coordinate range as SH01 or SH01-03."""
+    if not top:
+        return "SH??"
+    if not bottom or bottom == top:
+        return "SH%02d" % top
+    return "SH%02d-%02d" % (top, bottom)

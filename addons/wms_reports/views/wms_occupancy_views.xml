@@ -10,8 +10,7 @@
                       decoration-muted="on_hand == 0">
                     <field name="location_id"/>
                     <field name="location_kind"/>
-                    <field name="divider_id" optional="show"/>
-                    <field name="level_id" optional="show"/>
+                    <field name="compartment_id" optional="show"/>
                     <field name="rack_id" optional="show"/>
                     <field name="capacity"/>
                     <field name="on_hand"/>
