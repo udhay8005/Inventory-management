@@ -195,8 +195,7 @@ class WmsRackGenerator(models.TransientModel):
             ]
         ):
             raise UserError(
-                "A rack with code %s already exists under %s."
-                % (rack_code, parent.display_name)
+                "A rack with code %s already exists under %s." % (rack_code, parent.display_name)
             )
 
         rack = Location.create(

@@ -150,11 +150,16 @@ class StockLocation(models.Model):
                 comp = loc.location_id
                 rack = comp.location_id if comp else False
                 rack_code = rack.wms_rack_code if rack else ""
-                shelf_label = _shelf_label(comp.wms_shelf_top, comp.wms_shelf_bottom) if comp else ""
+                shelf_label = (
+                    _shelf_label(comp.wms_shelf_top, comp.wms_shelf_bottom) if comp else ""
+                )
                 column_label = "C%02d" % (comp.wms_column_index or 0) if comp else ""
                 slot_label = "SL%02d" % (loc.wms_slot_number or 0)
                 loc.display_name = "%s / %s / %s / %s" % (
-                    rack_code, shelf_label, column_label, slot_label,
+                    rack_code,
+                    shelf_label,
+                    column_label,
+                    slot_label,
                 )
         super(StockLocation, self - wms_recs)._compute_display_name()
 

@@ -53,15 +53,18 @@ class WmsZoneGenerator(models.TransientModel):
         help="Rack code prefix. R → R01, R02, …",
     )
     rack_shelf_count = fields.Integer(
-        default=6, string="Shelves per rack",
+        default=6,
+        string="Shelves per rack",
         help="Number of horizontal shelves in each generated rack.",
     )
     rack_column_count = fields.Integer(
-        default=3, string="Columns per rack",
+        default=3,
+        string="Columns per rack",
         help="Number of vertical compartments per shelf in each generated rack.",
     )
     rack_slot_count = fields.Integer(
-        default=1, string="Slots per compartment",
+        default=1,
+        string="Slots per compartment",
         help="Sub-divisions inside each compartment.",
     )
     rack_capacity_per_slot = fields.Float(default=0.0)

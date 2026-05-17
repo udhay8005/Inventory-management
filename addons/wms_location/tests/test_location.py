@@ -8,7 +8,7 @@ Shelves are grid coordinates on Compartment, not a separate location.
 
 import json
 
-from odoo.exceptions import ValidationError, UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests.common import TransactionCase, tagged
 
 
@@ -65,11 +65,15 @@ class TestWmsLocation(TransactionCase):
         compartments.append({"shelf_top": 1, "shelf_bottom": 3, "column_index": 1, "slot_count": 3})
         # Column 1: shelves 4-6 stay single
         for s in (4, 5, 6):
-            compartments.append({"shelf_top": s, "shelf_bottom": s, "column_index": 1, "slot_count": 1})
+            compartments.append(
+                {"shelf_top": s, "shelf_bottom": s, "column_index": 1, "slot_count": 1}
+            )
         # Columns 2 + 3: all single-shelf
         for s in range(1, 7):
             for c in (2, 3):
-                compartments.append({"shelf_top": s, "shelf_bottom": s, "column_index": c, "slot_count": 1})
+                compartments.append(
+                    {"shelf_top": s, "shelf_bottom": s, "column_index": c, "slot_count": 1}
+                )
         spec = {"shelves": 6, "columns": 3, "compartments": compartments}
 
         gen = self.env["wms.rack.generator"].create(
