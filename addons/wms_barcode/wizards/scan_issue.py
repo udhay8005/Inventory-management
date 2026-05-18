@@ -105,20 +105,49 @@ class WmsScanIssue(models.TransientModel):
                 }
             )
         self.short_qty = missing
-        self.feedback = "Planned %s × %s across %d slot(s)%s" % (
-            qty,
-            product.display_name,
-            len(plan),
-            f"; short by {missing}" if missing else "",
-        )
+
+        # Build a clear feedback line. When the warehouse can't satisfy
+        # the requested quantity, surface a STOCK OUT message so the
+        # operator knows immediately to wait for a return or alert the
+        # Admin — not a cryptic "short by 5".
+        if not plan and missing:
+            self.feedback = (
+                "⚠ STOCK OUT — no %s available anywhere in the warehouse. "
+                "This product can only come back through Scan Return, or "
+                "an Administrator needs to add stock via Scan Receipt."
+            ) % product.display_name
+        elif missing:
+            self.feedback = (
+                "⚠ Only %s × %s on hand — that's %s less than you asked for. "
+                "Reduce the quantity, or wait for the rest to come back via "
+                "Scan Return."
+            ) % (
+                qty - missing,
+                product.display_name,
+                missing,
+            )
+        else:
+            self.feedback = "Planned %s × %s across %d slot(s)." % (
+                qty,
+                product.display_name,
+                len(plan),
+            )
         return self._reopen()
 
     def action_validate(self):
         self.ensure_one()
         if not self.plan_line_ids:
-            raise UserError("Nothing planned yet.")
+            raise UserError(
+                "Nothing planned yet — scan a product first so the wizard "
+                "knows what you want to issue."
+            )
         if self.short_qty:
-            raise UserError("Cannot validate: short by %s." % self.short_qty)
+            raise UserError(
+                "Stock out. The warehouse is %s short of what you asked for, "
+                "so this issue can't go ahead. Wait for the missing units to "
+                "come back through Scan Return, or reduce the requested "
+                "quantity and try again." % self.short_qty
+            )
         if self.photo_required and not self.photo:
             raise UserError(
                 "This item is measured (liters / kg / etc.). "
