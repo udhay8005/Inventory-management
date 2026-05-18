@@ -52,6 +52,30 @@ class WmsRepairOrder(models.Model):
     finish_picking_id = fields.Many2one("stock.picking", readonly=True)
     repair_notes = fields.Text()
 
+    # ---- Audit trail (matches wms.damage and Scan Issue) ---------------
+    wms_reported_by = fields.Char(
+        string="Reported by",
+        index=True,
+        tracking=True,
+        help="Name of the person who flagged this item for repair. "
+        "Pre-filled from the linked damage event when applicable.",
+    )
+    wms_authorized_by = fields.Char(
+        string="Authorised by",
+        index=True,
+        tracking=True,
+        help="Name of the person who authorised the repair (Manager / "
+        "cow-care lead). Pre-filled from the damage event.",
+    )
+    wms_storekeeper_id = fields.Many2one(
+        "wms.storekeeper",
+        string="Store Keeper on duty",
+        index=True,
+        tracking=True,
+        domain=[("active", "=", True)],
+        help="The on-duty Store Keeper who logged this repair order.",
+    )
+
     @api.depends("original_slot_id")
     def _compute_warehouse(self):
         for rec in self:
@@ -64,7 +88,9 @@ class WmsRepairOrder(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("name", "New") == "New":
-                vals["name"] = self.env["ir.sequence"].next_by_code("wms.repair") or "REP/0001"
+                vals["name"] = (
+                    self.env["ir.sequence"].next_by_code("wms.repair") or "REP/0001"
+                )
         return super().create(vals_list)
 
     def _find_location(self, flag):
@@ -97,7 +123,8 @@ class WmsRepairOrder(models.Model):
             repair_loc = rec._find_location("wms_is_repair")
             if not (damage_loc and repair_loc):
                 raise UserError(
-                    "Damage / Repair locations missing for %s." % rec.warehouse_id.display_name
+                    "Damage / Repair locations missing for %s."
+                    % rec.warehouse_id.display_name
                 )
             picking = self.env["stock.picking"].create(
                 {
@@ -109,7 +136,8 @@ class WmsRepairOrder(models.Model):
             )
             self.env["stock.move"].create(
                 {
-                    "description_picking": "Send to repair: %s" % rec.product_id.display_name,
+                    "description_picking": "Send to repair: %s"
+                    % rec.product_id.display_name,
                     "product_id": rec.product_id.id,
                     "product_uom_qty": rec.quantity,
                     "product_uom": rec.product_id.uom_id.id,
@@ -122,7 +150,9 @@ class WmsRepairOrder(models.Model):
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
                 if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
+                    ml.quantity = (
+                        ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
+                    )
             picking.button_validate()
             rec.write({"state": "in_repair", "start_picking_id": picking.id})
 
@@ -144,7 +174,8 @@ class WmsRepairOrder(models.Model):
             )
             self.env["stock.move"].create(
                 {
-                    "description_picking": "Return from repair: %s" % rec.product_id.display_name,
+                    "description_picking": "Return from repair: %s"
+                    % rec.product_id.display_name,
                     "product_id": rec.product_id.id,
                     "product_uom_qty": rec.quantity,
                     "product_uom": rec.product_id.uom_id.id,
@@ -157,7 +188,9 @@ class WmsRepairOrder(models.Model):
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
                 if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
+                    ml.quantity = (
+                        ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
+                    )
             picking.button_validate()
             rec.write({"state": "done", "finish_picking_id": picking.id})
 

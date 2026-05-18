@@ -49,12 +49,24 @@
                         </field>
 
                         <div class="row mt-3 border-top pt-3">
-                            <div class="col-12">
+                            <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">
                                     Quality check
                                 </h6>
                                 <field name="qc_passed"/>
                                 <field name="qc_notes" placeholder="Anything unusual? (optional)"/>
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <h6 class="text-uppercase text-muted" style="font-size:11px;">
+                                    Audit trail
+                                </h6>
+                                <label for="storekeeper_id"/>
+                                <field name="storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="On-duty Store Keeper"/>
+                                <label for="delivered_by" class="mt-2"/>
+                                <field name="delivered_by"
+                                       placeholder="Driver / vendor / courier (optional)"/>
                             </div>
                         </div>
                     </sheet>

@@ -9,19 +9,47 @@
                     <header>
                         <button name="action_confirm" type="object" string="Confirm"
                                 class="btn-primary" invisible="state != 'draft'"/>
+                        <button name="action_create_repair_order" type="object"
+                                string="Create Repair Order"
+                                class="btn-warning"
+                                invisible="state != 'confirmed' or repair_order_id or recommended_action not in ('repair_returnable', 'repair_returnable_only')"/>
                         <button name="action_cancel" type="object" string="Cancel"
                                 invisible="state == 'cancelled'"/>
                         <field name="state" widget="statusbar"/>
                     </header>
                     <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_create_repair_order" type="object"
+                                    class="oe_stat_button" icon="fa-wrench"
+                                    invisible="not repair_order_id">
+                                <div class="o_field_widget o_stat_info">
+                                    <span class="o_stat_text">Repair</span>
+                                    <span class="o_stat_text">Order</span>
+                                </div>
+                            </button>
+                        </div>
                         <h1><field name="name" readonly="1"/></h1>
                         <group>
-                            <field name="product_id"/>
-                            <field name="quantity"/>
-                            <field name="source_slot_id"/>
-                            <field name="warehouse_id" readonly="1"/>
-                            <field name="reason"/>
-                            <field name="picking_id" readonly="1"/>
+                            <group string="What &amp; where">
+                                <field name="product_id"/>
+                                <field name="quantity"/>
+                                <field name="source_slot_id"/>
+                                <field name="warehouse_id" readonly="1"/>
+                                <field name="reason"/>
+                                <field name="picking_id" readonly="1"
+                                       invisible="not picking_id"/>
+                                <field name="repair_order_id" readonly="1"
+                                       invisible="not repair_order_id"/>
+                            </group>
+                            <group string="Who reported it">
+                                <field name="wms_reported_by"
+                                       placeholder="Worker who found / caused it"/>
+                                <field name="wms_authorized_by"
+                                       placeholder="Manager / cow-care lead"/>
+                                <field name="wms_storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="On-duty Store Keeper"/>
+                            </group>
                         </group>
 
                         <!--

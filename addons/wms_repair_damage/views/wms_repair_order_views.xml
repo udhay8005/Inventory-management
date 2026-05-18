@@ -21,18 +21,32 @@
                     <sheet>
                         <h1><field name="name" readonly="1"/></h1>
                         <group>
-                            <field name="product_id"/>
-                            <field name="quantity"/>
-                            <field name="original_slot_id"/>
-                            <field name="return_slot_id"
-                                   placeholder="Defaults to original slot"/>
-                            <field name="warehouse_id" readonly="1"/>
-                            <field name="technician_id"/>
-                            <field name="damage_id"/>
-                            <field name="start_picking_id" readonly="1"/>
-                            <field name="finish_picking_id" readonly="1"/>
+                            <group string="What &amp; where">
+                                <field name="product_id"/>
+                                <field name="quantity"/>
+                                <field name="original_slot_id"/>
+                                <field name="return_slot_id"
+                                       placeholder="Defaults to original slot"/>
+                                <field name="warehouse_id" readonly="1"/>
+                                <field name="technician_id"/>
+                                <field name="damage_id"
+                                       invisible="not damage_id"/>
+                                <field name="start_picking_id" readonly="1"
+                                       invisible="not start_picking_id"/>
+                                <field name="finish_picking_id" readonly="1"
+                                       invisible="not finish_picking_id"/>
+                            </group>
+                            <group string="Who reported it">
+                                <field name="wms_reported_by"
+                                       placeholder="Worker who flagged the item"/>
+                                <field name="wms_authorized_by"
+                                       placeholder="Manager / cow-care lead"/>
+                                <field name="wms_storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="On-duty Store Keeper"/>
+                            </group>
                         </group>
-                        <field name="repair_notes"/>
+                        <field name="repair_notes" placeholder="What was wrong, what was done, parts used..."/>
                     </sheet>
                     <chatter/>
                 </form>
@@ -49,6 +63,9 @@
                     <field name="quantity"/>
                     <field name="state"/>
                     <field name="technician_id"/>
+                    <field name="wms_storekeeper_id" optional="show"/>
+                    <field name="wms_reported_by" optional="hide"/>
+                    <field name="wms_authorized_by" optional="hide"/>
                     <field name="create_date"/>
                 </list>
             </field>

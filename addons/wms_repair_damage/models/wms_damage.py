@@ -44,6 +44,40 @@ class WmsDamage(models.Model):
         compute="_compute_warehouse",
         store=True,
     )
+    repair_order_id = fields.Many2one(
+        "wms.repair.order",
+        string="Linked repair order",
+        readonly=True,
+        copy=False,
+        help="Set when an Admin or Store Keeper clicks 'Create Repair Order' "
+        "from this damage event.",
+    )
+
+    # ---- Audit trail (matches Scan Issue) -------------------------------
+    wms_reported_by = fields.Char(
+        string="Reported by",
+        index=True,
+        tracking=True,
+        help="Name of the person who reported the damage (the worker who "
+        "found it, the operator who broke it, etc.). Plain text — not "
+        "every reporter has an Odoo account.",
+    )
+    wms_authorized_by = fields.Char(
+        string="Authorised by",
+        index=True,
+        tracking=True,
+        help="Name of the person who authorised filing this damage event "
+        "(the cow-care lead, the Manager). Plain text.",
+    )
+    wms_storekeeper_id = fields.Many2one(
+        "wms.storekeeper",
+        string="Store Keeper on duty",
+        index=True,
+        tracking=True,
+        domain=[("active", "=", True)],
+        help="The on-duty Store Keeper who filed this damage record. "
+        "Picked from the roster — same pattern as Scan Issue / Receipt.",
+    )
 
     @api.depends("source_slot_id")
     def _compute_warehouse(self):
@@ -170,8 +204,43 @@ class WmsDamage(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("name", "New") == "New":
-                vals["name"] = self.env["ir.sequence"].next_by_code("wms.damage") or "DMG/0001"
+                vals["name"] = (
+                    self.env["ir.sequence"].next_by_code("wms.damage") or "DMG/0001"
+                )
         return super().create(vals_list)
+
+    @api.constrains("product_id", "quantity", "source_slot_id", "state")
+    def _check_source_slot_stock(self):
+        """Refuse to file damage for more units than the slot actually
+        holds. Without this, an operator can type qty=10 on a slot that
+        only has 3, and Odoo will happily generate negative quants when
+        the picking validates."""
+        Quant = self.env["stock.quant"].sudo()
+        for rec in self:
+            if rec.state == "confirmed":
+                continue  # already posted, don't re-validate
+            if not (rec.product_id and rec.source_slot_id and rec.quantity):
+                continue
+            available = sum(
+                Quant.search(
+                    [
+                        ("product_id", "=", rec.product_id.id),
+                        ("location_id", "=", rec.source_slot_id.id),
+                    ]
+                ).mapped("quantity")
+            )
+            if rec.quantity > available + 0.0001:  # tiny float tolerance
+                raise UserError(
+                    "You're trying to file %g × %s as damaged at slot %s, but "
+                    "only %g unit(s) are actually there. Re-count the slot or "
+                    "fix the quantity before confirming."
+                    % (
+                        rec.quantity,
+                        rec.product_id.display_name,
+                        rec.source_slot_id.display_name,
+                        available,
+                    )
+                )
 
     def action_confirm(self):
         for rec in self:
@@ -186,7 +255,8 @@ class WmsDamage(models.Model):
             )
             if not damage_loc:
                 raise UserError(
-                    "No Damage location for warehouse %s." % rec.warehouse_id.display_name
+                    "No Damage location for warehouse %s."
+                    % rec.warehouse_id.display_name
                 )
 
             # Use the warehouse's int_type_id m2o directly.
@@ -225,9 +295,103 @@ class WmsDamage(models.Model):
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
                 if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
+                    ml.quantity = (
+                        ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
+                    )
             picking.button_validate()
             rec.write({"state": "confirmed", "picking_id": picking.id})
+
+            # Mirror the audit-trail summary into the chatter so the
+            # damage history stands on its own without cross-referencing
+            # the picking.
+            rec.message_post(
+                body=(
+                    "<p><b>Damage confirmed.</b> "
+                    "Reported by <b>%s</b>; authorised by <b>%s</b>; "
+                    "Store Keeper on duty: <b>%s</b>.</p>"
+                )
+                % (
+                    rec.wms_reported_by or "(unspecified)",
+                    rec.wms_authorized_by or "(unspecified)",
+                    rec.wms_storekeeper_id.name or "(unknown)",
+                ),
+                subject="Damage audit",
+                message_type="notification",
+            )
+
+            # URGENT BUY alert — ping every WMS Manager via Discuss so
+            # somebody actually sees it before the daily buying-rec
+            # cron rolls round.
+            if rec.recommended_action == "urgent_buy":
+                rec._notify_managers_urgent_buy()
+
+    def _notify_managers_urgent_buy(self):
+        """Post a Discuss notification to every WMS Manager when an
+        urgent-buy damage event lands. Idempotent — runs once per
+        confirm. Silently skips if no Managers are configured."""
+        self.ensure_one()
+        group = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
+        if not group or not group.users:
+            return
+        body = (
+            "<p><b>⚠ URGENT BUY required.</b></p>"
+            "<p>%(qty)g × <b>%(product)s</b> just got filed as damaged at "
+            "<b>%(slot)s</b>, and the trust has <b>zero spares</b> of this "
+            "product on hand anywhere.</p>"
+            "<p>Reported by <b>%(reporter)s</b>; authorised by "
+            "<b>%(auth)s</b>; Store Keeper on duty: "
+            "<b>%(keeper)s</b>.</p>"
+            "<p>Open <i>WMS → Reports → Buying Recommendations</i> — this "
+            "product will jump to Critical on the next refresh.</p>"
+        ) % {
+            "qty": self.quantity,
+            "product": self.product_id.display_name,
+            "slot": self.source_slot_id.display_name,
+            "reporter": self.wms_reported_by or "(unspecified)",
+            "auth": self.wms_authorized_by or "(unspecified)",
+            "keeper": (
+                self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"
+            ),
+        }
+        for user in group.users:
+            user.partner_id.message_post(
+                body=body,
+                subject="WMS — URGENT BUY: %s" % self.product_id.display_name,
+                message_type="notification",
+                subtype_xmlid="mail.mt_note",
+            )
+
+    def action_create_repair_order(self):
+        """Open a new wms.repair.order pre-filled from this damage event.
+        Used by the Create Repair Order button on the damage form."""
+        self.ensure_one()
+        if self.repair_order_id:
+            return {
+                "type": "ir.actions.act_window",
+                "res_model": "wms.repair.order",
+                "res_id": self.repair_order_id.id,
+                "view_mode": "form",
+            }
+        repair = self.env["wms.repair.order"].create(
+            {
+                "damage_id": self.id,
+                "product_id": self.product_id.id,
+                "quantity": self.quantity,
+                "original_slot_id": self.source_slot_id.id,
+                "return_slot_id": self.source_slot_id.id,
+                "wms_reported_by": self.wms_reported_by,
+                "wms_authorized_by": self.wms_authorized_by,
+                "wms_storekeeper_id": self.wms_storekeeper_id.id,
+            }
+        )
+        self.repair_order_id = repair.id
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Repair order for %s" % self.product_id.display_name,
+            "res_model": "wms.repair.order",
+            "res_id": repair.id,
+            "view_mode": "form",
+        }
 
     def action_cancel(self):
         for rec in self:

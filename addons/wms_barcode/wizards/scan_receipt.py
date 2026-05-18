@@ -49,6 +49,22 @@ class WmsScanReceipt(models.TransientModel):
     )
     qc_notes = fields.Text(string="QC notes")
 
+    # ---- Audit trail (matches Scan Issue / damage / repair) -------------
+    storekeeper_id = fields.Many2one(
+        "wms.storekeeper",
+        string="Store Keeper on duty",
+        required=True,
+        domain=[("active", "=", True)],
+        help="The on-duty Store Keeper who took the delivery. Picked from "
+        "the roster the Admin maintains under Configuration → Store Keepers.",
+    )
+    delivered_by = fields.Char(
+        string="Delivered by",
+        help="Name of the person / vendor who handed the goods over "
+        "(driver, vendor representative, internal courier). Optional but "
+        "helpful for the audit trail.",
+    )
+
     def on_barcode_scanned(self, barcode):
         """Called automatically by the JS barcode listener when a scan
         is detected. Drops into the same code path as the manual
@@ -73,12 +89,17 @@ class WmsScanReceipt(models.TransientModel):
                     "lot_id": info["lot"].id if kind == "lot" else False,
                 }
             )
-            self.feedback = "Added %s × %s" % (info.get("units", 1.0), info["product"].display_name)
+            self.feedback = "Added %s × %s" % (
+                info.get("units", 1.0),
+                info["product"].display_name,
+            )
         elif kind == "location":
             # Apply this slot to the most recent line that has no destination yet.
             target = self.line_ids.filtered(lambda ln: not ln.location_dest_id)[-1:]
             if not target:
-                self.feedback = "No pending line for slot %s" % info["location"].display_name
+                self.feedback = (
+                    "No pending line for slot %s" % info["location"].display_name
+                )
             else:
                 target.location_dest_id = info["location"].id
                 self.feedback = "Slot %s assigned" % info["location"].display_name
@@ -138,7 +159,9 @@ class WmsScanReceipt(models.TransientModel):
         # Auto-assign slot if operator didn't.
         for line in self.line_ids:
             if not line.location_dest_id:
-                line.location_dest_id = self._auto_assign_slot(line.product_id, line.quantity)
+                line.location_dest_id = self._auto_assign_slot(
+                    line.product_id, line.quantity
+                )
 
         # Use the warehouse-level m2o so we don't hit Odoo 19's archived
         # picking type problem for 1-step warehouses.
@@ -157,7 +180,11 @@ class WmsScanReceipt(models.TransientModel):
                 "picking_type_id": picking_type.id,
                 "location_id": picking_type.default_location_src_id.id,
                 "location_dest_id": self.warehouse_id.lot_stock_id.id,
-                "origin": "Barcode scan",
+                "origin": "Barcode scan" + (" (return)" if self.is_return else ""),
+                # Audit-trail fields — same shape as Scan Issue so reports
+                # can read both incoming and outgoing flows the same way.
+                "wms_taken_by": (self.delivered_by or "").strip(),
+                "wms_storekeeper_id": self.storekeeper_id.id,
             }
         )
         for line in self.line_ids:
@@ -183,6 +210,24 @@ class WmsScanReceipt(models.TransientModel):
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
+
+        # Audit-trail message — matches the Scan Issue chatter pattern.
+        picking.message_post(
+            body=(
+                "<p><b>%(kind)s.</b> "
+                "Delivered by <b>%(delivered)s</b>; "
+                "Store Keeper on duty: <b>%(keeper)s</b>; "
+                "logged in as: <b>%(login)s</b>.</p>"
+            )
+            % {
+                "kind": "Return received" if self.is_return else "Receipt received",
+                "delivered": picking.wms_taken_by or "(unspecified)",
+                "keeper": self.storekeeper_id.name or "(unknown)",
+                "login": self.env.user.display_name or "(system)",
+            },
+            subject="Receipt audit",
+            message_type="notification",
+        )
 
         return {
             "type": "ir.actions.act_window",
