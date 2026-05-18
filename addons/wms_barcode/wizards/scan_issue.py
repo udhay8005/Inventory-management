@@ -36,6 +36,33 @@ class WmsScanIssue(models.TransientModel):
     plan_line_ids = fields.One2many("wms.scan.issue.plan", "wizard_id")
     short_qty = fields.Float(readonly=True, help="Shortfall — what we couldn't allocate.")
 
+    # ---- Audit trail -----------------------------------------------------
+    # Captured at validate-time and copied onto the resulting picking, so
+    # every issue records WHO took the stock, WHO authorised it, and which
+    # keeper was running the store at that moment.
+    taken_by = fields.Char(
+        string="Taken by",
+        required=True,
+        help="Name of the person who is physically taking these items "
+        "(e.g. the worker, department lead, or visitor).",
+    )
+    ordered_by = fields.Char(
+        string="Ordered by",
+        required=True,
+        help="Name of the person who authorised this issue "
+        "(the Manager / cow-care lead / project owner).",
+    )
+    storekeeper_id = fields.Many2one(
+        "wms.storekeeper",
+        string="Store Keeper on duty",
+        required=True,
+        domain=[("active", "=", True)],
+        help="The actual human running the desk right now. Pick from the "
+        "roster the Admin maintains under Configuration → Store Keepers. "
+        "If the name you want isn't here, ask the Admin to add it before "
+        "validating.",
+    )
+
     # Photo capture. Binary + widget="image" gives mobile browsers an
     # <input type="file" accept="image/*" capture="environment"> which
     # opens the camera directly (and is dismissed automatically once the
@@ -147,6 +174,11 @@ class WmsScanIssue(models.TransientModel):
                 "location_id": self.warehouse_id.lot_stock_id.id,
                 "location_dest_id": self.destination_id.id,
                 "origin": "Barcode FIFO issue",
+                # Audit-trail fields — who took it, who authorised it,
+                # which keeper was on duty.
+                "wms_taken_by": (self.taken_by or "").strip(),
+                "wms_ordered_by": (self.ordered_by or "").strip(),
+                "wms_storekeeper_id": self.storekeeper_id.id,
             }
         )
         for line in self.plan_line_ids:
@@ -169,8 +201,29 @@ class WmsScanIssue(models.TransientModel):
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
 
+        # Audit-trail message. Goes into the picking's history so the
+        # Admin can scroll back through it later. Includes the Odoo
+        # login (env.user) too — the on-duty roster name covers the
+        # actual human; the login records which Odoo account was used.
+        picking.message_post(
+            body=(
+                "<p><b>Issued.</b> "
+                "Taken by <b>%s</b>; ordered by <b>%s</b>; "
+                "Store Keeper on duty: <b>%s</b>; "
+                "logged in as: <b>%s</b>.</p>"
+            )
+            % (
+                picking.wms_taken_by or "(unspecified)",
+                picking.wms_ordered_by or "(unspecified)",
+                picking.wms_storekeeper_id.name or "(unknown)",
+                self.env.user.display_name or "(system)",
+            ),
+            subject="Issue audit",
+            message_type="notification",
+        )
+
         # Attach the photo (if any) so it's visible from the picking's
-        # chatter and survives in the audit trail. We always store it
+        # history and survives in the audit trail. We always store it
         # when present, not only when photo_required is True — operators
         # may want proof even for unit items.
         if self.photo:
