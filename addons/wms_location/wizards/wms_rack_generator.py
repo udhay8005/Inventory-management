@@ -77,12 +77,10 @@ class WmsRackGenerator(models.TransientModel):
 
     # ---- Custom layout (driven by the Rack Builder OWL widget) -----------
     layout_json = fields.Text(
-        string="Custom layout (JSON)",
-        help="When set, overrides shelf_count/column_count and creates "
-        "compartments exactly as described. Schema: "
-        '{"shelves": N, "columns": M, "compartments": [{"shelf_top": int, '
-        '"shelf_bottom": int, "column_left": int, "column_right": int, '
-        '"slot_count": int, "label": str (optional)}, ...]}',
+        string="Custom layout",
+        help="Generated automatically by the Visual builder above — leave this "
+        "alone unless you really want to hand-craft a rack layout. When it has "
+        "a value, it takes priority over the Quick grid tab.",
     )
 
     @api.model
@@ -118,9 +116,9 @@ class WmsRackGenerator(models.TransientModel):
             return self._validate_spec(spec)
 
         if self.shelf_count < 1 or self.column_count < 1:
-            raise UserError("Shelves and columns must both be >= 1.")
+            raise UserError("Shelves and columns must both be at least 1.")
         if self.default_slot_count < 1:
-            raise UserError("Default slot count must be >= 1.")
+            raise UserError("Slots per compartment must be at least 1.")
 
         compartments = []
         for s in range(1, self.shelf_count + 1):
@@ -149,11 +147,14 @@ class WmsRackGenerator(models.TransientModel):
         required = ("rack_code", "shelves", "columns", "compartments")
         for key in required:
             if key not in spec:
-                raise UserError("Layout spec missing required key '%s'." % key)
+                raise UserError(
+                    "The custom rack layout is incomplete (missing %s). "
+                    "Re-open the Visual builder tab to regenerate it." % key
+                )
         shelves = int(spec["shelves"])
         columns = int(spec["columns"])
         if shelves < 1 or columns < 1:
-            raise UserError("shelves and columns must both be >= 1.")
+            raise UserError("Shelves and columns must both be at least 1.")
         # 2D coverage matrix indexed by (shelf, column) — every cell can
         # only be owned by one compartment.
         occupied = {}

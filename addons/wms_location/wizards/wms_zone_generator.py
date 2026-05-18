@@ -31,7 +31,7 @@ class WmsZoneGenerator(models.TransientModel):
         "stock.location",
         string="Parent location",
         required=True,
-        help="Where the new zone will live. Usually WH/Stock.",
+        help="Where the new zone will live. Usually the main warehouse stock location.",
         default=lambda s: s._default_parent(),
         domain=[("usage", "=", "view")],
     )

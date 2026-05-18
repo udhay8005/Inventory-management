@@ -24,15 +24,13 @@ class StockLocationCount(models.Model):
         compute="_compute_wms_count_age",
         store=True,
         index=True,
-        help="Most recent of: the slot's quants' last in_date OR last "
-        "inventory adjustment line landing here. Used to flag stale "
-        "slots needing a physical recount.",
+        help="Most recent date this slot was physically counted or had stock movement. Used to flag slots that are overdue for a recount.",
     )
     wms_days_since_count = fields.Integer(
         compute="_compute_wms_count_age",
         store=True,
-        help="Days since the slot was last touched by a movement or "
-        "inventory adjustment. 0 means counted today.",
+        help="Days since this slot was last counted or had stock movement. "
+        "0 means it was touched today.",
     )
 
     @api.depends("quant_ids.in_date", "quant_ids.last_count_date")

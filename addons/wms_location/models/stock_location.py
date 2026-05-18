@@ -61,35 +61,35 @@ class StockLocation(models.Model):
     # ---- Compartment 2D-rectangle coordinates -----------------------------
     wms_shelf_top = fields.Integer(
         string="Shelf top",
-        help="1-based topmost shelf this compartment occupies.",
+        help="The topmost shelf number this compartment occupies (1 = top of the rack).",
     )
     wms_shelf_bottom = fields.Integer(
         string="Shelf bottom",
-        help="1-based bottommost shelf this compartment occupies. "
-        "Equal to shelf_top for a normal compartment; higher when it "
-        "spans several shelves vertically.",
+        help="The bottommost shelf number this compartment occupies. "
+        "Same as Shelf top for a normal compartment; higher when the "
+        "compartment is tall and spans several shelves.",
     )
     wms_column_left = fields.Integer(
         string="Column left",
-        help="1-based leftmost column this compartment occupies.",
+        help="The leftmost column number this compartment occupies (1 = leftmost column).",
     )
     wms_column_right = fields.Integer(
         string="Column right",
-        help="1-based rightmost column this compartment occupies. "
-        "Equal to column_left for a normal compartment; higher when it "
-        "spans several columns horizontally (a wide drawer).",
+        help="The rightmost column number this compartment occupies. "
+        "Same as Column left for a normal compartment; higher when the "
+        "compartment is wide and spans several columns.",
     )
     wms_slot_count = fields.Integer(
         string="Slots",
         default=1,
-        help="Sub-divisions within this compartment. 1 means the "
-        "compartment is itself the storable unit.",
+        help="How many sub-divisions (slots) sit inside this compartment. "
+        "1 means the compartment itself is the storable unit.",
     )
 
     # ---- Slot-level identity ---------------------------------------------
     wms_slot_number = fields.Integer(
         string="Slot #",
-        help="1-based slot index within its parent compartment.",
+        help="Position of this slot inside its compartment (1 = first slot).",
     )
 
     # ---- Occupancy / search helpers --------------------------------------
@@ -101,7 +101,7 @@ class StockLocation(models.Model):
     wms_current_qty = fields.Float(
         string="On hand",
         compute="_compute_wms_current_qty",
-        help="Total of stock.quant.quantity at this location.",
+        help="Total quantity of all products currently on hand at this location.",
     )
     wms_occupancy_pct = fields.Float(
         string="Occupancy %",

@@ -31,9 +31,8 @@ class WmsFloorZoneGenerator(models.TransientModel):
         "stock.location",
         string="Parent area",
         required=True,
-        help="Where to place these floor zones. Usually the warehouse "
-        "stock location (WH/Stock) or a 'floor' / 'building' view "
-        "location underneath it.",
+        help="Where to place these floor zones. Usually the main warehouse "
+        "stock location, or a building / floor zone underneath it.",
         default=lambda self: self._default_parent_location(),
         domain=[("usage", "=", "view")],
     )
