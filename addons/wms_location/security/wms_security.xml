@@ -1,21 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <!--
+        Two-role security model
+        =======================
+          • WMS / Manager      (= Admin)        full control: add/edit/delete
+                                                products, locations, racks,
+                                                zones; runs cycle counts;
+                                                approves damage; everything.
+                                                The built-in `admin` user is
+                                                added to this group on first
+                                                install.
+          • WMS / Store Keeper (= operator)     scan-receipt / scan-issue /
+                                                damage-entry only. Cannot add,
+                                                edit, or delete products or
+                                                locations. Reads every report
+                                                (for weekly audits) but cannot
+                                                modify the underlying data.
+
+        Repair Tech and Buyer are optional sub-roles defined in the
+        wms_repair_damage and wms_ai_forecast addons. They start empty;
+        the Admin assigns users to them only if those workflows are needed.
+    -->
     <data noupdate="0">
 
         <record id="module_category_wms" model="ir.module.category">
             <field name="name">Warehouse Management</field>
-            <field name="description">Rack/Divider/Slot WMS</field>
+            <field name="description">Rack / Compartment / Slot WMS</field>
             <field name="sequence">20</field>
         </record>
 
+        <!--
+            "Store Keeper" is the every-day operator. XML id stays
+            group_wms_user to keep the dozens of CSV ACL references
+            elsewhere in the project working without churn.
+        -->
         <record id="group_wms_user" model="res.groups">
-            <field name="name">WMS / User</field>
+            <field name="name">WMS / Store Keeper</field>
             <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
         </record>
 
         <record id="group_wms_manager" model="res.groups">
             <field name="name">WMS / Manager</field>
-            <field name="implied_ids" eval="[(4, ref('stock.group_stock_manager')), (4, ref('group_wms_user'))]"/>
+            <field name="implied_ids"
+                   eval="[(4, ref('stock.group_stock_manager')), (4, ref('group_wms_user'))]"/>
             <field name="user_ids" eval="[(4, ref('base.user_admin'))]"/>
         </record>
 
