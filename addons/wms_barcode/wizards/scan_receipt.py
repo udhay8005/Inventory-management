@@ -1,4 +1,4 @@
-from odoo import api, fields, models
+from odoo import fields, models
 from odoo.exceptions import UserError
 
 
@@ -37,71 +37,17 @@ class WmsScanReceipt(models.TransientModel):
         "returnable (Fluids, Consumables) will be refused at validate.",
     )
 
-    # ---- Quality check + approval gate ----------------------------------
+    # ---- Quality check ---------------------------------------------------
+    # This trust runs internal stock — products aren't sold, no invoices
+    # are issued, no money changes hands. So there's no price-based
+    # approval gate. The QC checkbox stays: the Receiver still confirms
+    # the physical count and condition before the receipt is filed, which
+    # is the whole point of responsible tracking.
     qc_passed = fields.Boolean(
         string="Quality check passed",
-        help="Receiver confirms physical count + condition match what was ordered.",
+        help="Receiver confirms physical count and condition match what was expected.",
     )
     qc_notes = fields.Text(string="QC notes")
-    total_value = fields.Monetary(
-        compute="_compute_total_value",
-        currency_field="currency_id",
-        help="Total estimated value of this receipt, based on each product's sale price.",
-    )
-    currency_id = fields.Many2one(
-        "res.currency",
-        default=lambda s: s.env.company.currency_id,
-    )
-    approval_threshold = fields.Monetary(
-        compute="_compute_total_value",
-        currency_field="currency_id",
-        help="Receipts whose total value exceeds this amount require a Manager's approval before they can be validated. Administrators can adjust this threshold in the system settings.",
-    )
-    approval_required = fields.Boolean(
-        compute="_compute_total_value",
-        help="Indicates that this receipt's total value exceeds the approval threshold and a Manager must approve it.",
-    )
-    approved_by_id = fields.Many2one(
-        "res.users",
-        string="Approved by",
-        readonly=True,
-        help="Set when a WMS Manager approves a high-value receipt.",
-    )
-    is_manager = fields.Boolean(
-        compute="_compute_is_manager",
-        help="True if the current user is in the WMS Manager group.",
-    )
-
-    @api.depends("line_ids.product_id", "line_ids.quantity")
-    def _compute_total_value(self):
-        ICP = self.env["ir.config_parameter"].sudo()
-        threshold = float(
-            ICP.get_param(
-                "wms_barcode.receipt_approval_threshold",
-                "10000",
-            )
-        )
-        for wiz in self:
-            total = sum(
-                (line.product_id.list_price or 0.0) * line.quantity for line in wiz.line_ids
-            )
-            wiz.total_value = total
-            wiz.approval_threshold = threshold
-            wiz.approval_required = total > threshold
-
-    @api.depends_context("uid")
-    def _compute_is_manager(self):
-        is_mgr = self.env.user.has_group("wms_location.group_wms_manager")
-        for wiz in self:
-            wiz.is_manager = is_mgr
-
-    def action_approve(self):
-        """Manager-only: stamp approval. Validate becomes unblocked."""
-        self.ensure_one()
-        if not self.env.user.has_group("wms_location.group_wms_manager"):
-            raise UserError("Only WMS Managers can approve high-value receipts.")
-        self.approved_by_id = self.env.user.id
-        return self._reopen()
 
     def on_barcode_scanned(self, barcode):
         """Called automatically by the JS barcode listener when a scan
@@ -187,14 +133,6 @@ class WmsScanReceipt(models.TransientModel):
             raise UserError(
                 "Mark 'Quality check passed' first. This confirms you've "
                 "physically counted and inspected the delivery."
-            )
-
-        # Approval gate for high-value receipts.
-        if self.approval_required and not self.approved_by_id:
-            raise UserError(
-                "Total value %s exceeds the approval threshold of %s. "
-                "A WMS Manager must click 'Approve' before this receipt "
-                "can be validated." % (self.total_value, self.approval_threshold)
             )
 
         # Auto-assign slot if operator didn't.
