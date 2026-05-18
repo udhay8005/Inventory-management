@@ -1,6 +1,6 @@
 {
     "name": "WMS — Location (Rack / Compartment / Slot)",
-    "version": "19.0.2.1.0",
+    "version": "19.0.2.3.0",
     "summary": "Model warehouse storage as Rack → Compartment (multi-shelf-spannable) → Slot on top of stock.location",
     "description": """
 WMS Location
@@ -29,6 +29,7 @@ Key features:
         "security/wms_security.xml",
         "security/ir.model.access.csv",
         "views/stock_location_views.xml",
+        "views/product_product_views.xml",
         "views/wms_rack_generator_views.xml",
         "views/wms_floor_zone_generator_views.xml",
         "views/wms_zone_generator_views.xml",
