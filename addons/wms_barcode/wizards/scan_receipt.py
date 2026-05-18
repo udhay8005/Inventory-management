@@ -21,10 +21,21 @@ class WmsScanReceipt(models.TransientModel):
         default=lambda s: s.env["stock.warehouse"].search([], limit=1),
     )
     last_scan = fields.Char(
-        string="Scan here", help="Cursor stays here; HID barcode scanners emit ENTER."
+        string="Scan here",
+        help="Keep the cursor here and scan away — each barcode is processed automatically.",
     )
     feedback = fields.Char(readonly=True)
     line_ids = fields.One2many("wms.scan.receipt.line", "wizard_id")
+
+    # ---- Return-entry mode ----------------------------------------------
+    is_return = fields.Boolean(
+        string="Return entry",
+        default=lambda s: bool(s.env.context.get("default_is_return")),
+        help="Tick this when receiving stock that's coming back into the "
+        "warehouse — e.g. a tool returned from production, a spare "
+        "borrowed and brought back. Products whose WMS Kind is NOT "
+        "returnable (Fluids, Consumables) will be refused at validate.",
+    )
 
     # ---- Quality check + approval gate ----------------------------------
     qc_passed = fields.Boolean(
@@ -35,8 +46,7 @@ class WmsScanReceipt(models.TransientModel):
     total_value = fields.Monetary(
         compute="_compute_total_value",
         currency_field="currency_id",
-        help="Sum of qty × list_price across all lines. Used to decide "
-        "whether Manager approval is required.",
+        help="Total estimated value of this receipt, based on each product's sale price.",
     )
     currency_id = fields.Many2one(
         "res.currency",
@@ -45,12 +55,11 @@ class WmsScanReceipt(models.TransientModel):
     approval_threshold = fields.Monetary(
         compute="_compute_total_value",
         currency_field="currency_id",
-        help="Approval required when total_value exceeds this amount. "
-        "Configure via ir.config_parameter `wms_barcode.receipt_approval_threshold`.",
+        help="Receipts whose total value exceeds this amount require a Manager's approval before they can be validated. Administrators can adjust this threshold in the system settings.",
     )
     approval_required = fields.Boolean(
         compute="_compute_total_value",
-        help="True if total_value > approval_threshold.",
+        help="Indicates that this receipt's total value exceeds the approval threshold and a Manager must approve it.",
     )
     approved_by_id = fields.Many2one(
         "res.users",
@@ -138,6 +147,41 @@ class WmsScanReceipt(models.TransientModel):
         if not self.line_ids:
             raise UserError("No lines to receive.")
 
+        # Return-entry gate — reject products whose kind isn't returnable.
+        if self.is_return:
+            non_returnable = self.line_ids.filtered(
+                lambda ln: ln.product_id and not ln.product_id.wms_is_returnable
+            )
+            if non_returnable:
+                # Translate the Selection key to its human label via
+                # fields_get() — `_fields[...].selection` can be a callable
+                # in some Odoo flavours, so going through fields_get is
+                # the safe path.
+                kind_labels = dict(
+                    self.env["product.product"]
+                    .fields_get(["wms_product_kind"])
+                    .get("wms_product_kind", {})
+                    .get("selection", [])
+                )
+                rows = []
+                for ln in non_returnable:
+                    kind_key = ln.product_id.wms_product_kind
+                    rows.append(
+                        "  • %s (kind: %s)"
+                        % (
+                            ln.product_id.display_name,
+                            kind_labels.get(kind_key, "unclassified"),
+                        )
+                    )
+                raise UserError(
+                    "These products cannot be received as a return — they "
+                    "are flagged not-returnable on the product form "
+                    "(fluids, consumables, single-use items):\n%s\n\n"
+                    "Ask the Admin to either change the product's WMS Kind / "
+                    "Returnable flag, or scrap these items via the Damages "
+                    "workflow instead." % "\n".join(rows)
+                )
+
         # QC gate — receiver must tick the box.
         if not self.qc_passed:
             raise UserError(
@@ -163,7 +207,9 @@ class WmsScanReceipt(models.TransientModel):
         picking_type = self.warehouse_id.in_type_id
         if not picking_type:
             raise UserError(
-                "Warehouse %s has no Receipts picking type." % self.warehouse_id.display_name
+                "Warehouse %s isn't configured to receive incoming stock. "
+                "Ask an Administrator to enable Receipts in the Inventory settings."
+                % self.warehouse_id.display_name
             )
         if not picking_type.active:
             picking_type.sudo().active = True
@@ -298,9 +344,9 @@ class WmsScanReceipt(models.TransientModel):
             return any_floor.id
 
         raise UserError(
-            "No slots or floor zones configured in warehouse %s. "
-            "Use 'Generate Rack' or 'Generate Floor Zones' under "
-            "WMS / Configuration first." % self.warehouse_id.display_name
+            "No slots or floor zones are set up in warehouse %s yet. "
+            "Use Create Rack or Generate Floor Zones in the WMS Configuration "
+            "menu first." % self.warehouse_id.display_name
         )
 
     def _reopen(self):

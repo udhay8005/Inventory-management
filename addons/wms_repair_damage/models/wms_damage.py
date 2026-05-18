@@ -83,9 +83,9 @@ class WmsDamage(models.Model):
             picking_type = rec.warehouse_id.int_type_id
             if not picking_type:
                 raise UserError(
-                    "Warehouse %s has no Internal Transfer picking type. "
-                    "Enable multi-step routes in Inventory settings."
-                    % rec.warehouse_id.display_name
+                    "Warehouse %s is not configured for internal stock transfers. "
+                    "Ask an Administrator to enable internal transfers in the "
+                    "Inventory settings." % rec.warehouse_id.display_name
                 )
             if not picking_type.active:
                 picking_type.sudo().active = True  # auto-unarchive
@@ -119,5 +119,7 @@ class WmsDamage(models.Model):
     def action_cancel(self):
         for rec in self:
             if rec.state == "confirmed":
-                raise UserError("Cancel the underlying picking first.")
+                raise UserError(
+                    "Cancel the stock transfer that was created for this damage event before cancelling the record."
+                )
             rec.state = "cancelled"

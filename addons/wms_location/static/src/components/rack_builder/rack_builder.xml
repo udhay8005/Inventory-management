@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="wms_location.RackBuilder">
+        <div class="o_wms_rack_builder">
+
+            <div class="o_wms_rack_builder__controls">
+                <label class="me-1">Shelves:</label>
+                <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    class="form-control form-control-sm me-3"
+                    style="width: 70px;"
+                    t-att-value="state.shelves"
+                    t-on-change="(ev) => this.onShelvesChange(ev)"/>
+
+                <label class="me-1">Columns:</label>
+                <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    class="form-control form-control-sm me-3"
+                    style="width: 70px;"
+                    t-att-value="state.columns"
+                    t-on-change="(ev) => this.onColumnsChange(ev)"/>
+
+                <button class="btn btn-sm btn-outline-secondary" t-on-click="() => this.resetGrid()">
+                    Reset grid
+                </button>
+            </div>
+
+            <div class="o_wms_rack_builder__layout">
+
+                <div class="o_wms_rack_builder__grid" t-att-style="gridStyle()">
+                    <t t-foreach="state.compartments" t-as="comp" t-key="comp.id">
+                        <div
+                            class="o_wms_rack_builder__cell"
+                            t-att-class="{ 'o_wms_rack_builder__cell--selected': state.selectedId === comp.id, 'o_wms_rack_builder__cell--span': isSpan(comp) }"
+                            t-att-style="cellStyle(comp)"
+                            t-on-click="() => this.selectCompartment(comp.id)">
+                            <div class="o_wms_rack_builder__cell-label" t-esc="cellLabel(comp)"/>
+                            <div class="o_wms_rack_builder__cell-slots" t-if="comp.slot_count > 1">
+                                <t t-esc="comp.slot_count"/> slots
+                            </div>
+                        </div>
+                    </t>
+                </div>
+
+                <div class="o_wms_rack_builder__panel">
+                    <t t-if="selectedCompartment">
+                        <div class="o_wms_rack_builder__panel-title">
+                            Selected: <strong t-esc="cellLabel(selectedCompartment)"/>
+                        </div>
+
+                        <div class="o_wms_rack_builder__panel-section">
+                            <div class="o_wms_rack_builder__panel-label">Merge with neighbour</div>
+                            <div class="o_wms_rack_builder__dpad">
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-up"
+                                        t-att-disabled="!canMergeUp()"
+                                        t-on-click="() => this.mergeUp()"
+                                        title="Extend up — consumes every cell on the row above that lies within this compartment's column range">↑</button>
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-left"
+                                        t-att-disabled="!canMergeLeft()"
+                                        t-on-click="() => this.mergeLeft()"
+                                        title="Extend left — consumes every cell on the column to the left that lies within this compartment's shelf range">←</button>
+                                <button class="btn btn-sm btn-outline-warning o_wms_rack_builder__dpad-center"
+                                        t-att-disabled="!canSplit()"
+                                        t-on-click="() => this.split()"
+                                        title="Split this compartment back into single cells">Split</button>
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-right"
+                                        t-att-disabled="!canMergeRight()"
+                                        t-on-click="() => this.mergeRight()"
+                                        title="Extend right — consumes every cell on the column to the right that lies within this compartment's shelf range">→</button>
+                                <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-down"
+                                        t-att-disabled="!canMergeDown()"
+                                        t-on-click="() => this.mergeDown()"
+                                        title="Extend down — consumes every cell on the row below that lies within this compartment's column range">↓</button>
+                            </div>
+                        </div>
+
+                        <div class="o_wms_rack_builder__panel-section">
+                            <div class="o_wms_rack_builder__panel-label">Slots inside this compartment</div>
+                            <div class="o_wms_rack_builder__slot-controls">
+                                <button class="btn btn-sm btn-light"
+                                        t-att-disabled="selectedCompartment.slot_count &lt;= 1"
+                                        t-on-click="() => this.decrementSlots()">−</button>
+                                <span class="o_wms_rack_builder__slot-count" t-esc="selectedCompartment.slot_count"/>
+                                <button class="btn btn-sm btn-light"
+                                        t-on-click="() => this.incrementSlots()">+</button>
+                            </div>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <p class="text-muted">Click a compartment in the grid to edit it.</p>
+                        <ul class="text-muted small">
+                            <li><b>Merge ↑/↓</b> combines this cell vertically — creates a tall compartment.</li>
+                            <li><b>Merge ←/→</b> combines this cell horizontally — creates a wide compartment.</li>
+                            <li>Merging in both directions builds a 2D block (e.g. a corner cabinet).</li>
+                            <li><b>Split</b> breaks a spanning compartment back into single-shelf, single-column cells.</li>
+                            <li><b>Slots</b> sub-divides the compartment into N storable positions.</li>
+                        </ul>
+                    </t>
+                </div>
+
+            </div>
+        </div>
+    </t>
+
+</templates>

@@ -9,7 +9,7 @@ _logger = logging.getLogger(__name__)
 
 class WmsForecastEngine(models.AbstractModel):
     _name = "wms.forecast.engine"
-    _description = "Forecast trainer (cron-callable)"
+    _description = "Forecast trainer"
 
     @api.model
     def run_all_forecasts(self):

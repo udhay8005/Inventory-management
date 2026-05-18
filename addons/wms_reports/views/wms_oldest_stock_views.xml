@@ -11,8 +11,7 @@
                     <field name="product_id"/>
                     <field name="quantity"/>
                     <field name="location_id"/>
-                    <field name="divider_id"/>
-                    <field name="level_id"/>
+                    <field name="compartment_id"/>
                     <field name="rack_id"/>
                     <field name="in_date"/>
                     <field name="age_days"/>

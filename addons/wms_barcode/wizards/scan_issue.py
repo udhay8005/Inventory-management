@@ -43,14 +43,11 @@ class WmsScanIssue(models.TransientModel):
     photo = fields.Binary(
         string="Item photo",
         attachment=True,
-        help="Snap a photo of the item being issued. Required for bulk / "
-        "liquid items. Stored against the resulting stock.picking "
-        "for audit.",
+        help="Snap a photo of the item being issued. Required for bulk or liquid items. Attached to the resulting delivery record for audit purposes.",
     )
     photo_required = fields.Boolean(
         compute="_compute_photo_required",
-        help="True when the planned product is in a non-unit UoM "
-        "(liters, kg, m³, …) — operator must attach proof.",
+        help="Shown when the planned product is measured by weight or volume (liters, kg, m³, etc.) — a photo is required before the issue can be validated.",
     )
 
     @api.depends("plan_line_ids.product_id")
@@ -136,7 +133,9 @@ class WmsScanIssue(models.TransientModel):
             picking_type = self.warehouse_id.int_type_id
         if not picking_type:
             raise UserError(
-                "No matching picking type on warehouse %s." % self.warehouse_id.display_name
+                "Warehouse %s isn't configured for this kind of stock issue. "
+                "Ask an Administrator to enable the relevant operation type "
+                "in the Inventory settings." % self.warehouse_id.display_name
             )
         if not picking_type.active:
             picking_type.sudo().active = True
