@@ -53,6 +53,119 @@ class WmsDamage(models.Model):
                 loc = loc.location_id
             rec.warehouse_id = loc.warehouse_id if loc else False
 
+    # ---- Smart "what should we do about this?" recommendation ------------
+    remaining_on_hand = fields.Float(
+        string="Other units on hand",
+        compute="_compute_recommendation",
+        help="Total quantity of this same product still sitting in other "
+        "internal slots / floor zones (excludes the qty being damaged "
+        "here). Drives the recommended action below.",
+    )
+    recommended_action = fields.Selection(
+        [
+            ("ok", "No action needed"),
+            ("repair_returnable", "Schedule repair (returnable item, spare available)"),
+            ("repair_returnable_only", "Schedule repair (returnable item, no spare!)"),
+            ("repair_with_spare", "Repair if possible; spare unit covers the gap"),
+            ("urgent_buy", "Urgent buy — no stock left"),
+            ("note_only", "Note for future order (consumable, plenty of stock)"),
+        ],
+        compute="_compute_recommendation",
+        store=False,
+        help="Auto-derived from the product's WMS Kind and how much of it "
+        "is still on hand elsewhere when the damage is recorded.",
+    )
+    recommendation_message = fields.Text(
+        string="What to do",
+        compute="_compute_recommendation",
+        store=False,
+        help="Plain-English explanation of the recommended action — the "
+        "numbers behind it and what the Admin should kick off next.",
+    )
+
+    @api.depends("product_id", "quantity", "state")
+    def _compute_recommendation(self):
+        """Look at the product's WMS Kind + the leftover quantity sitting
+        on other slots, then suggest one of:
+          * urgent_buy — product is gone, no spare anywhere
+          * repair_returnable / repair_returnable_only — fix the broken
+            tool (returnable items can come back, with or without a
+            spare to cover the meantime)
+          * repair_with_spare — non-returnable but other units exist
+            (e.g. a partially damaged consumable batch that can be
+            sorted), so no rush
+          * note_only — plenty on the shelf, just log it
+          * ok — no product set yet, nothing to recommend
+        """
+        Quant = self.env["stock.quant"].sudo()
+        for rec in self:
+            if not rec.product_id:
+                rec.remaining_on_hand = 0.0
+                rec.recommended_action = "ok"
+                rec.recommendation_message = ""
+                continue
+
+            quants = Quant.search(
+                [
+                    ("product_id", "=", rec.product_id.id),
+                    ("location_id.usage", "=", "internal"),
+                    ("quantity", ">", 0),
+                ]
+            )
+            total = sum(q.quantity for q in quants)
+            # The damaged qty hasn't been moved yet for a draft record;
+            # for a confirmed one the picking already removed it from the
+            # source slot, so the leftover total already excludes it.
+            if rec.state == "draft":
+                remaining = max(0.0, total - (rec.quantity or 0.0))
+            else:
+                remaining = total
+            rec.remaining_on_hand = remaining
+
+            is_returnable = bool(rec.product_id.wms_is_returnable)
+            product_name = rec.product_id.display_name
+            qty = rec.quantity or 0.0
+            kind_label = dict(
+                rec.product_id._fields["wms_product_kind"].selection
+                if not callable(rec.product_id._fields["wms_product_kind"].selection)
+                else self.env["product.product"]
+                .fields_get(["wms_product_kind"])
+                .get("wms_product_kind", {})
+                .get("selection", [])
+            ).get(rec.product_id.wms_product_kind, "Unclassified")
+
+            if remaining <= 0 and is_returnable:
+                rec.recommended_action = "repair_returnable_only"
+                rec.recommendation_message = (
+                    "%g × %s is the only %s the trust owns and it's now "
+                    "damaged. Open a Repair Order so it comes back fixed. "
+                    "Until then, nobody can take this item — flag the Admin "
+                    "if it's needed urgently for ongoing work."
+                ) % (qty, product_name, kind_label)
+            elif remaining <= 0 and not is_returnable:
+                rec.recommended_action = "urgent_buy"
+                rec.recommendation_message = (
+                    "URGENT — %g × %s damaged and zero on hand elsewhere. "
+                    "This is a %s, so it can't be repaired. Buy a fresh "
+                    "batch immediately; this will show up under WMS → "
+                    "Reports → Buying Recommendations as Critical."
+                ) % (qty, product_name, kind_label)
+            elif is_returnable:
+                rec.recommended_action = "repair_returnable"
+                rec.recommendation_message = (
+                    "%g × %s damaged. %g other unit(s) still on hand, so "
+                    "work isn't blocked. Open a Repair Order to bring this "
+                    "one back into service."
+                ) % (qty, product_name, remaining)
+            else:
+                rec.recommended_action = "note_only"
+                rec.recommendation_message = (
+                    "%g × %s damaged. %g still on hand — no urgent action. "
+                    "The buying-recommendation report will factor this into "
+                    "the next refresh and bump the suggested order quantity "
+                    "if needed."
+                ) % (qty, product_name, remaining)
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:

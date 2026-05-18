@@ -23,6 +23,47 @@
                             <field name="reason"/>
                             <field name="picking_id" readonly="1"/>
                         </group>
+
+                        <!--
+                            Smart recommendation block — auto-derived from
+                            the product's WMS Kind plus how many other
+                            units are still on hand. Empty when no product
+                            is picked yet.
+                        -->
+                        <div class="alert alert-danger" role="alert"
+                             invisible="recommended_action != 'urgent_buy' or not product_id">
+                            <strong>⚠ URGENT BUY.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <div class="alert alert-warning" role="alert"
+                             invisible="recommended_action != 'repair_returnable_only' or not product_id">
+                            <strong>Only one — repair needed.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <div class="alert alert-info" role="alert"
+                             invisible="recommended_action != 'repair_returnable' or not product_id">
+                            <strong>Open a Repair Order.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <div class="alert alert-secondary" role="alert"
+                             invisible="recommended_action != 'note_only' or not product_id">
+                            <strong>Just a note.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <group string="Spare-stock check" invisible="not product_id">
+                            <field name="remaining_on_hand" readonly="1"/>
+                            <field name="recommended_action" widget="badge"
+                                   readonly="1"
+                                   decoration-danger="recommended_action == 'urgent_buy'"
+                                   decoration-warning="recommended_action == 'repair_returnable_only'"
+                                   decoration-info="recommended_action == 'repair_returnable'"
+                                   decoration-muted="recommended_action == 'note_only'"/>
+                        </group>
+
                         <field name="note" placeholder="Describe what happened..."/>
                     </sheet>
                     <chatter/>
@@ -34,11 +75,19 @@
             <field name="name">wms.damage.list</field>
             <field name="model">wms.damage</field>
             <field name="arch" type="xml">
-                <list>
+                <list decoration-danger="recommended_action == 'urgent_buy'"
+                      decoration-warning="recommended_action == 'repair_returnable_only'">
                     <field name="name"/>
                     <field name="product_id"/>
                     <field name="quantity"/>
                     <field name="source_slot_id"/>
+                    <field name="remaining_on_hand" optional="show"/>
+                    <field name="recommended_action" widget="badge"
+                           decoration-danger="recommended_action == 'urgent_buy'"
+                           decoration-warning="recommended_action == 'repair_returnable_only'"
+                           decoration-info="recommended_action == 'repair_returnable'"
+                           decoration-muted="recommended_action == 'note_only'"
+                           optional="show"/>
                     <field name="state"/>
                     <field name="create_date"/>
                 </list>

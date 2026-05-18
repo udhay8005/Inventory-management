@@ -78,6 +78,76 @@ class ProductTemplate(models.Model):
             if p.wms_product_kind:
                 p.wms_is_returnable = KIND_RETURNABLE_DEFAULTS.get(p.wms_product_kind, True)
 
+    # ---- "Where is it?" smart-button summary -----------------------------
+    wms_total_on_hand = fields.Float(
+        string="Total on hand (WMS)",
+        compute="_compute_wms_location_summary",
+        help="Sum of every quantity of this product currently sitting in "
+        "an internal slot or floor zone. Reflects scans the moment they "
+        "validate — no manual refresh needed.",
+    )
+    wms_location_count = fields.Integer(
+        string="In how many slots",
+        compute="_compute_wms_location_summary",
+        help="How many distinct slots or floor zones hold at least one "
+        "unit of this product right now.",
+    )
+
+    @api.depends(
+        "product_variant_ids",
+        "product_variant_ids.stock_quant_ids.quantity",
+        "product_variant_ids.stock_quant_ids.location_id.usage",
+    )
+    def _compute_wms_location_summary(self):
+        Quant = self.env["stock.quant"].sudo()
+        for tmpl in self:
+            variant_ids = tmpl.product_variant_ids.ids
+            if not variant_ids:
+                tmpl.wms_total_on_hand = 0.0
+                tmpl.wms_location_count = 0
+                continue
+            quants = Quant.search(
+                [
+                    ("product_id", "in", variant_ids),
+                    ("location_id.usage", "=", "internal"),
+                    ("quantity", ">", 0),
+                ]
+            )
+            tmpl.wms_total_on_hand = sum(q.quantity for q in quants)
+            tmpl.wms_location_count = len({q.location_id.id for q in quants})
+
+    def action_view_wms_locations(self):
+        """Open the per-slot breakdown for this product. Used by the
+        "Where is it?" smart button on the product form. Falls back to
+        the standard stock-quants screen if the wms.product.stock.report
+        view isn't installed yet."""
+        self.ensure_one()
+        variant_ids = self.product_variant_ids.ids
+        if not variant_ids:
+            variant_ids = [0]
+        action = self.env.ref("wms_reports.action_wms_product_stock", raise_if_not_found=False)
+        if action:
+            return {
+                "name": "Where is %s?" % self.display_name,
+                "type": "ir.actions.act_window",
+                "res_model": "wms.product.stock.report",
+                "view_mode": "list,pivot",
+                "domain": [("product_id", "in", variant_ids)],
+                "context": {"search_default_group_product": 0},
+            }
+        # Fall-back: standard stock.quant list filtered to this product.
+        return {
+            "name": "Where is %s?" % self.display_name,
+            "type": "ir.actions.act_window",
+            "res_model": "stock.quant",
+            "view_mode": "list,form",
+            "domain": [
+                ("product_id", "in", variant_ids),
+                ("location_id.usage", "=", "internal"),
+                ("quantity", ">", 0),
+            ],
+        }
+
 
 class ProductProduct(models.Model):
     """Expose template-level WMS classification on the variant model so
