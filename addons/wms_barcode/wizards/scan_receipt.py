@@ -27,6 +27,16 @@ class WmsScanReceipt(models.TransientModel):
     feedback = fields.Char(readonly=True)
     line_ids = fields.One2many("wms.scan.receipt.line", "wizard_id")
 
+    # ---- Return-entry mode ----------------------------------------------
+    is_return = fields.Boolean(
+        string="Return entry",
+        default=lambda s: bool(s.env.context.get("default_is_return")),
+        help="Tick this when receiving stock that's coming back into the "
+        "warehouse — e.g. a tool returned from production, a spare "
+        "borrowed and brought back. Products whose WMS Kind is NOT "
+        "returnable (Fluids, Consumables) will be refused at validate.",
+    )
+
     # ---- Quality check + approval gate ----------------------------------
     qc_passed = fields.Boolean(
         string="Quality check passed",
@@ -136,6 +146,41 @@ class WmsScanReceipt(models.TransientModel):
         self.ensure_one()
         if not self.line_ids:
             raise UserError("No lines to receive.")
+
+        # Return-entry gate — reject products whose kind isn't returnable.
+        if self.is_return:
+            non_returnable = self.line_ids.filtered(
+                lambda ln: ln.product_id and not ln.product_id.wms_is_returnable
+            )
+            if non_returnable:
+                # Translate the Selection key to its human label via
+                # fields_get() — `_fields[...].selection` can be a callable
+                # in some Odoo flavours, so going through fields_get is
+                # the safe path.
+                kind_labels = dict(
+                    self.env["product.product"]
+                    .fields_get(["wms_product_kind"])
+                    .get("wms_product_kind", {})
+                    .get("selection", [])
+                )
+                rows = []
+                for ln in non_returnable:
+                    kind_key = ln.product_id.wms_product_kind
+                    rows.append(
+                        "  • %s (kind: %s)"
+                        % (
+                            ln.product_id.display_name,
+                            kind_labels.get(kind_key, "unclassified"),
+                        )
+                    )
+                raise UserError(
+                    "These products cannot be received as a return — they "
+                    "are flagged not-returnable on the product form "
+                    "(fluids, consumables, single-use items):\n%s\n\n"
+                    "Ask the Admin to either change the product's WMS Kind / "
+                    "Returnable flag, or scrap these items via the Damages "
+                    "workflow instead." % "\n".join(rows)
+                )
 
         # QC gate — receiver must tick the box.
         if not self.qc_passed:

@@ -7,15 +7,25 @@
             <field name="arch" type="xml">
                 <form string="Scan Receipt">
                     <sheet>
-                        <div class="alert alert-info" role="alert">
+                        <div class="alert alert-info" role="alert" invisible="is_return">
                             <strong>Scanner ready.</strong>
                             Cursor stays in the scan field — each barcode is
                             processed automatically. Carton barcodes auto-fill
                             their unit count.
                         </div>
+                        <div class="alert alert-warning" role="alert" invisible="not is_return">
+                            <strong>Return entry mode.</strong>
+                            Stock is being received back from production / a customer /
+                            an internal location. Only products flagged as
+                            <b>Returnable</b> can be received this way; fluids and
+                            consumables will be refused at Validate.
+                        </div>
                         <div class="row">
                             <div class="col-12 col-md-4">
                                 <field name="warehouse_id"/>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <field name="is_return" widget="boolean_toggle"/>
                             </div>
                         </div>
                         <div class="row mt-2">
@@ -89,6 +99,20 @@
             <field name="res_model">wms.scan.receipt</field>
             <field name="view_mode">form</field>
             <field name="target">new</field>
+        </record>
+
+        <!--
+            Scan Return = same wizard, with the is_return toggle pre-set
+            via context. The Store Keeper opens this menu when receiving
+            a tool / spare coming back from production. Non-returnable
+            products (fluids, consumables) are rejected at Validate.
+        -->
+        <record id="action_wms_scan_return" model="ir.actions.act_window">
+            <field name="name">Scan Return</field>
+            <field name="res_model">wms.scan.receipt</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="context">{'default_is_return': True}</field>
         </record>
     </data>
 </odoo>
