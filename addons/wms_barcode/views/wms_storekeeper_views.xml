@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_wms_storekeeper_list" model="ir.ui.view">
+            <field name="name">wms.storekeeper.list</field>
+            <field name="model">wms.storekeeper</field>
+            <field name="arch" type="xml">
+                <list string="Store Keepers" editable="bottom">
+                    <field name="name"/>
+                    <field name="phone" optional="show"/>
+                    <field name="note" optional="hide"/>
+                    <field name="active" widget="boolean_toggle"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_storekeeper_form" model="ir.ui.view">
+            <field name="name">wms.storekeeper.form</field>
+            <field name="model">wms.storekeeper</field>
+            <field name="arch" type="xml">
+                <form string="Store Keeper">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" placeholder="e.g. Ramesh"/>
+                            </h1>
+                        </div>
+                        <group>
+                            <field name="phone"/>
+                            <field name="active"/>
+                        </group>
+                        <field name="note" placeholder="Optional notes (shift, role, etc.)"/>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_storekeeper" model="ir.actions.act_window">
+            <field name="name">Store Keepers</field>
+            <field name="res_model">wms.storekeeper</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No Store Keepers yet.</p>
+                <p>Add the names of the people who rotate on the store desk. Each
+                Scan Issue picks the on-duty Store Keeper from this list, so the
+                audit trail records the real human name — even when the Odoo
+                login is shared between multiple people.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_storekeeper"
+                  name="Store Keepers"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_storekeeper"
+                  sequence="35"/>
+
+    </data>
+</odoo>

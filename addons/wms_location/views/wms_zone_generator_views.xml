@@ -25,7 +25,11 @@
                                invisible="rack_count == 0"/>
                         <field name="rack_prefix"
                                invisible="rack_count == 0"/>
-                        <field name="dividers_per_level"
+                        <field name="rack_shelf_count"
+                               invisible="rack_count == 0"/>
+                        <field name="rack_column_count"
+                               invisible="rack_count == 0"/>
+                        <field name="rack_slot_count"
                                invisible="rack_count == 0"/>
                         <field name="rack_capacity_per_slot"
                                invisible="rack_count == 0"/>

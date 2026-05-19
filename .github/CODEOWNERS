@@ -1,18 +1,19 @@
 # Automatic reviewer assignment based on the path of changed files.
-# Replace @your-username with the real GitHub handles when you adopt this.
+# To re-enable Code Owners review: tick "Require review from Code Owners"
+# in the main-branch-protection ruleset.
 
 # Default owner — everything
-*                                       @your-username
+*                                       @udhay8005
 
 # Per-module ownership (uncomment as you grow the team)
-# addons/wms_location/                  @your-username
-# addons/wms_barcode/                   @your-username
-# addons/wms_ai_forecast/               @ml-lead-username
-# addons/wms_reports/                   @your-username
-# docs/                                 @your-username
+# addons/wms_location/                  @udhay8005
+# addons/wms_barcode/                   @udhay8005
+# addons/wms_ai_forecast/               @udhay8005
+# addons/wms_reports/                   @udhay8005
+# docs/                                 @udhay8005
 
 # Critical files — require an extra review
-.github/workflows/                      @your-username
-Dockerfile                              @your-username
-docker-compose.yml                      @your-username
-scripts/                                @your-username
+.github/workflows/                      @udhay8005
+Dockerfile                              @udhay8005
+docker-compose.yml                      @udhay8005
+scripts/                                @udhay8005

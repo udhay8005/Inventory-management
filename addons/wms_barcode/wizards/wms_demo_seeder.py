@@ -120,7 +120,7 @@ class WmsDemoSeeder(models.TransientModel):
                 "type": "success",
                 "title": "Demo data seeded",
                 "message": (
-                    "Created %d products and %d slot-level quants in rack %s. "
+                    "Created %d products and distributed stock across %d slot(s) in rack %s. "
                     "Open Scan Receipt or Scan Issue to try it out."
                 )
                 % (created_products, created_quants, self.rack_id.display_name),

@@ -20,7 +20,7 @@ class StockQuant(models.Model):
         `removal_strategy_id`. By the time this method is hit, Odoo has filtered
         the candidate quants to those under `location_id`. We simply re-sort the
         recordset by `in_date ASC` to guarantee oldest-first across multiple
-        slots/dividers/racks under the same parent.
+        slots/compartments/racks under the same parent.
         """
         quants = super()._gather(
             product_id,
