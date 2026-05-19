@@ -23,7 +23,11 @@ class WmsDamage(models.Model):
     quantity = fields.Float(required=True, default=1.0, tracking=True)
     source_slot_id = fields.Many2one(
         "stock.location",
-        domain=[("wms_location_type", "=", "slot")],
+        # Stock can live in slots (inside racks) OR floor zones (open
+        # storage areas) — both count as wms storage. Mirrors the
+        # STOCK_TYPES tuple in scan_receipt._auto_assign_slot so the
+        # damage form can target any place where stock physically sits.
+        domain=[("wms_location_type", "in", ("slot", "floor"))],
         required=True,
         tracking=True,
     )
@@ -144,17 +148,28 @@ class WmsDamage(models.Model):
                 rec.recommendation_message = ""
                 continue
 
+            # We want "what's still usable across the warehouse" — that
+            # means internal storage MINUS the damage/repair stations.
+            # Without this exclusion, the qty we just moved to the Damage
+            # location still gets counted as "on hand" after confirm,
+            # which makes the form claim 5000 still on hand right after
+            # damaging 1 unit out of 5000. Misleading.
             quants = Quant.search(
                 [
                     ("product_id", "=", rec.product_id.id),
                     ("location_id.usage", "=", "internal"),
+                    ("location_id.wms_is_damage", "=", False),
+                    ("location_id.wms_is_repair", "=", False),
                     ("quantity", ">", 0),
                 ]
             )
             total = sum(q.quantity for q in quants)
-            # The damaged qty hasn't been moved yet for a draft record;
-            # for a confirmed one the picking already removed it from the
-            # source slot, so the leftover total already excludes it.
+            # For a draft record the picking hasn't run yet, so subtract
+            # the qty we're about to damage to show the user how many will
+            # be left over once they confirm. For a confirmed record the
+            # picking already moved the qty out of the source slot to the
+            # Damage location — which the search above excludes — so the
+            # total already reflects "what's left usable".
             if rec.state == "draft":
                 remaining = max(0.0, total - (rec.quantity or 0.0))
             else:
