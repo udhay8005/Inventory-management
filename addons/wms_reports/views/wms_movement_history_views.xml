@@ -27,9 +27,9 @@
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">No alerts.</p>
                 <p>This dashboard lists products whose forecasted demand will
-                drop on-hand stock below the reorder point. Train the forecast
-                daily (via cron) or click <em>Retrain now</em> on a row to
-                refresh predictions.</p>
+                drop on-hand stock below the reorder point. The forecast is
+                retrained automatically every day, or click <em>Retrain now</em>
+                on a row to refresh predictions immediately.</p>
             </field>
         </record>
 

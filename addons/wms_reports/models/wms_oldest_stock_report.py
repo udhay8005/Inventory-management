@@ -3,7 +3,7 @@ from odoo import api, fields, models, tools
 
 class WmsOldestStockReport(models.Model):
     """Read-only SQL view: every live quant ordered by in_date (FIFO age).
-    Joins up the parent chain so dashboards can group by rack/level/divider
+    Joins up the parent chain so dashboards can group by rack/compartment
     without writing complex domains.
     """
 
@@ -14,8 +14,7 @@ class WmsOldestStockReport(models.Model):
 
     product_id = fields.Many2one("product.product", readonly=True)
     location_id = fields.Many2one("stock.location", readonly=True, string="Slot")
-    divider_id = fields.Many2one("stock.location", readonly=True)
-    level_id = fields.Many2one("stock.location", readonly=True)
+    compartment_id = fields.Many2one("stock.location", readonly=True)
     rack_id = fields.Many2one("stock.location", readonly=True)
     quantity = fields.Float(readonly=True)
     in_date = fields.Datetime(readonly=True)
@@ -30,8 +29,7 @@ class WmsOldestStockReport(models.Model):
               SELECT q.id AS id,
                      q.product_id,
                      q.location_id,
-                     d.id AS divider_id,
-                     l.id AS level_id,
+                     c.id AS compartment_id,
                      r.id AS rack_id,
                      q.quantity,
                      q.in_date,
@@ -39,9 +37,10 @@ class WmsOldestStockReport(models.Model):
                 FROM stock_quant q
                 JOIN stock_location s ON s.id = q.location_id
                                      AND s.wms_location_type = 'slot'
-                JOIN stock_location d ON d.id = s.location_id
-                JOIN stock_location l ON l.id = d.location_id
-                JOIN stock_location r ON r.id = l.location_id
+                JOIN stock_location c ON c.id = s.location_id
+                                     AND c.wms_location_type = 'compartment'
+                JOIN stock_location r ON r.id = c.location_id
+                                     AND r.wms_location_type = 'rack'
                WHERE q.quantity > 0
         """
         )

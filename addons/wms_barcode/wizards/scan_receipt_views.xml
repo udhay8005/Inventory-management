@@ -7,15 +7,25 @@
             <field name="arch" type="xml">
                 <form string="Scan Receipt">
                     <sheet>
-                        <div class="alert alert-info" role="alert">
+                        <div class="alert alert-info" role="alert" invisible="is_return">
                             <strong>Scanner ready.</strong>
                             Cursor stays in the scan field — each barcode is
                             processed automatically. Carton barcodes auto-fill
                             their unit count.
                         </div>
+                        <div class="alert alert-warning" role="alert" invisible="not is_return">
+                            <strong>Return entry mode.</strong>
+                            Stock is being received back from production / a customer /
+                            an internal location. Only products flagged as
+                            <b>Returnable</b> can be received this way; fluids and
+                            consumables will be refused at Validate.
+                        </div>
                         <div class="row">
                             <div class="col-12 col-md-4">
                                 <field name="warehouse_id"/>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <field name="is_return" widget="boolean_toggle"/>
                             </div>
                         </div>
                         <div class="row mt-2">
@@ -38,11 +48,6 @@
                             </list>
                         </field>
 
-                        <!-- Hidden helpers used by visibility expressions -->
-                        <field name="is_manager" invisible="1"/>
-                        <field name="approval_required" invisible="1"/>
-                        <field name="currency_id" invisible="1"/>
-
                         <div class="row mt-3 border-top pt-3">
                             <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">
@@ -53,23 +58,15 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">
-                                    Approval
+                                    Audit trail
                                 </h6>
-                                <group>
-                                    <field name="total_value" widget="monetary"/>
-                                    <field name="approval_threshold" widget="monetary"/>
-                                    <field name="approved_by_id" readonly="1"
-                                           invisible="not approval_required"/>
-                                </group>
-                                <div class="alert alert-warning"
-                                     invisible="not approval_required or approved_by_id"
-                                     role="alert">
-                                    Total exceeds approval threshold — a WMS
-                                    Manager must approve before Validate.
-                                </div>
-                                <button name="action_approve" type="object"
-                                        string="Approve receipt" class="btn-warning"
-                                        invisible="not approval_required or approved_by_id or not is_manager"/>
+                                <label for="storekeeper_id"/>
+                                <field name="storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="On-duty Store Keeper"/>
+                                <label for="delivered_by" class="mt-2"/>
+                                <field name="delivered_by"
+                                       placeholder="Driver / vendor / courier (optional)"/>
                             </div>
                         </div>
                     </sheet>
@@ -89,6 +86,20 @@
             <field name="res_model">wms.scan.receipt</field>
             <field name="view_mode">form</field>
             <field name="target">new</field>
+        </record>
+
+        <!--
+            Scan Return = same wizard, with the is_return toggle pre-set
+            via context. The Store Keeper opens this menu when receiving
+            a tool / spare coming back from production. Non-returnable
+            products (fluids, consumables) are rejected at Validate.
+        -->
+        <record id="action_wms_scan_return" model="ir.actions.act_window">
+            <field name="name">Scan Return</field>
+            <field name="res_model">wms.scan.receipt</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="context">{'default_is_return': True}</field>
         </record>
     </data>
 </odoo>

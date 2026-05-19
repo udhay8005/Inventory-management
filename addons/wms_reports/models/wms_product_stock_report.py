@@ -5,7 +5,7 @@ class WmsProductStockReport(models.Model):
     """One row per (product, stocking-location) for every quant on hand.
 
     Includes both rack slots AND floor zones (non-rack open storage).
-    For floor rows the divider/level/rack columns are NULL — UI shows
+    For floor rows the compartment/rack columns are NULL — UI shows
     them as a dash. FIFO `is_oldest` still works across the whole set.
     """
 
@@ -22,8 +22,7 @@ class WmsProductStockReport(models.Model):
         readonly=True,
         string="Kind",
     )
-    divider_id = fields.Many2one("stock.location", readonly=True)
-    level_id = fields.Many2one("stock.location", readonly=True)
+    compartment_id = fields.Many2one("stock.location", readonly=True)
     rack_id = fields.Many2one("stock.location", readonly=True)
     quantity = fields.Float(readonly=True)
     reserved_quantity = fields.Float(readonly=True)
@@ -32,7 +31,7 @@ class WmsProductStockReport(models.Model):
     age_days = fields.Integer(readonly=True)
     is_oldest = fields.Boolean(
         readonly=True,
-        help="Marks the next location FIFO picking will draw from for " "this product.",
+        help="Marks the next location FIFO picking will draw from for this product.",
     )
 
     @api.model
@@ -46,8 +45,7 @@ class WmsProductStockReport(models.Model):
                          q.product_id,
                          q.location_id,
                          s.wms_location_type AS location_kind,
-                         d.id AS divider_id,
-                         l.id AS level_id,
+                         c.id AS compartment_id,
                          r.id AS rack_id,
                          q.quantity,
                          q.reserved_quantity,
@@ -63,14 +61,11 @@ class WmsProductStockReport(models.Model):
                       ON s.id = q.location_id
                      AND s.wms_location_type IN ('slot', 'floor')
                     -- LEFT joins so floor rows survive (no rack chain).
-                    LEFT JOIN stock_location d
-                      ON d.id = s.location_id
-                     AND d.wms_location_type = 'divider'
-                    LEFT JOIN stock_location l
-                      ON l.id = d.location_id
-                     AND l.wms_location_type = 'level'
+                    LEFT JOIN stock_location c
+                      ON c.id = s.location_id
+                     AND c.wms_location_type = 'compartment'
                     LEFT JOIN stock_location r
-                      ON r.id = l.location_id
+                      ON r.id = c.location_id
                      AND r.wms_location_type = 'rack'
                    WHERE q.quantity > 0
               )
@@ -79,8 +74,7 @@ class WmsProductStockReport(models.Model):
                      pp.barcode AS product_barcode,
                      ranked.location_id,
                      ranked.location_kind,
-                     ranked.divider_id,
-                     ranked.level_id,
+                     ranked.compartment_id,
                      ranked.rack_id,
                      ranked.quantity,
                      ranked.reserved_quantity,

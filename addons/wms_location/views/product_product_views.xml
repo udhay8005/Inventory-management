@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Inject a WMS classification block onto the product form.
+            Visible to everyone (Store Keepers need to see at a glance
+            whether something is a tool or a fluid), but Odoo's product
+            ACL already restricts WRITE on product.product to
+            stock.group_stock_manager, so Store Keepers can't change
+            these values even if the form lets them click.
+        -->
+        <record id="view_product_template_form_wms_inherit" model="ir.ui.view">
+            <field name="name">product.template.form.wms.inherit</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <!--
+                    Smart button: "Where is it?" — opens the per-slot
+                    breakdown for this product in one click, from anywhere
+                    in the system that shows the product form.
+                -->
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="action_view_wms_locations"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-map-marker">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_value">
+                                <field name="wms_location_count"/>
+                            </span>
+                            <span class="o_stat_text">slot(s)</span>
+                            <span class="o_stat_text text-muted">
+                                <field name="wms_total_on_hand" widget="float"
+                                       options="{'human_readable': True}"/>
+                                on hand
+                            </span>
+                        </div>
+                    </button>
+                </xpath>
+                <xpath expr="//notebook" position="inside">
+                    <page string="WMS Classification" name="wms_classification">
+                        <group>
+                            <field name="wms_product_kind"
+                                   options="{'no_create': True, 'no_create_edit': True}"/>
+                            <field name="wms_is_returnable" widget="boolean_toggle"/>
+                        </group>
+                        <div class="alert alert-info" role="alert">
+                            <b>WMS Kind</b> drives the default returnability and is shown in
+                            audit reports. The Store Keeper sees these fields read-only.
+                            <ul class="mb-0 mt-2">
+                                <li><b>Tool / Spare / Raw Material / Packaging / WIP / Finished Good</b>
+                                    → default returnable.</li>
+                                <li><b>Fluid (petrol, oil, …) / Consumable (single-use)</b>
+                                    → default NOT returnable. The Scan Return wizard will refuse
+                                    these products.</li>
+                            </ul>
+                            Tick Returnable manually if you want to override the kind-derived
+                            default (e.g. a partially-used sealed paint can the supplier accepts back).
+                        </div>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!--
+            Show the kind on the product list view so the Admin can spot
+            unclassified products at a glance and the Store Keeper can
+            filter the catalogue by kind.
+        -->
+        <record id="view_product_template_list_wms_inherit" model="ir.ui.view">
+            <field name="name">product.template.list.wms.inherit</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_tree_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='default_code']" position="after">
+                    <field name="wms_product_kind" optional="show"/>
+                    <field name="wms_is_returnable" optional="hide" widget="boolean_toggle"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_product_template_search_wms_inherit" model="ir.ui.view">
+            <field name="name">product.template.search.wms.inherit</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_search_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//search" position="inside">
+                    <separator/>
+                    <filter name="wms_returnable"
+                            string="Returnable"
+                            domain="[('wms_is_returnable', '=', True)]"/>
+                    <filter name="wms_not_returnable"
+                            string="Not returnable"
+                            domain="[('wms_is_returnable', '=', False)]"/>
+                    <filter name="wms_unclassified"
+                            string="Unclassified (no WMS Kind)"
+                            domain="[('wms_product_kind', '=', False)]"/>
+                    <separator/>
+                    <filter name="group_wms_kind"
+                            string="WMS Kind"
+                            context="{'group_by': 'wms_product_kind'}"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

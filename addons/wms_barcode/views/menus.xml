@@ -7,6 +7,12 @@
                   action="action_wms_scan_receipt"
                   sequence="20"/>
 
+        <menuitem id="menu_wms_scan_return"
+                  name="Scan Return"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_scan_return"
+                  sequence="22"/>
+
         <menuitem id="menu_wms_scan_issue"
                   name="Scan Issue (FIFO)"
                   parent="wms_location.menu_wms_operations"
