@@ -8,3 +8,9 @@ __pycache__/
 backups/
 *.dump
 .claude/
+
+# Native-install artifacts (created by scripts/install-native.ps1)
+.odoo/
+.venv/
+.runtime/
+config/odoo.native.conf
