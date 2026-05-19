@@ -54,6 +54,11 @@ class WmsDamage(models.Model):
     )
 
     # ---- Audit trail (matches Scan Issue) -------------------------------
+    # All three required: the trust's invariant is that every stock-moving
+    # action records who reported it, who authorised it, and which keeper
+    # was on the desk. The action_confirm() guard re-checks this at
+    # confirm-time so a record can be drafted with placeholders but never
+    # committed without real names.
     wms_reported_by = fields.Char(
         string="Reported by",
         index=True,
@@ -191,6 +196,19 @@ class WmsDamage(models.Model):
                     "work isn't blocked. Open a Repair Order to bring this "
                     "one back into service."
                 ) % (qty, product_name, remaining)
+            elif rec.product_id.wms_product_kind in ("tool", "spare", "equipment"):
+                # Non-returnable but the product is a tool / spare /
+                # equipment that COULD in principle be reconditioned
+                # (worn drill bit, partial spool, etc.). Other units cover
+                # the gap so it isn't urgent, but flag it so the Admin
+                # can decide whether to repair or scrap.
+                rec.recommended_action = "repair_with_spare"
+                rec.recommendation_message = (
+                    "%g × %s damaged, %g still on hand so work isn't "
+                    "blocked. This is a %s — assess whether it can be "
+                    "reconditioned or should be scrapped via the Damage "
+                    "location. No urgent buy required."
+                ) % (qty, product_name, remaining, kind_label)
             else:
                 rec.recommended_action = "note_only"
                 rec.recommendation_message = (
@@ -211,25 +229,52 @@ class WmsDamage(models.Model):
 
     @api.constrains("product_id", "quantity", "source_slot_id", "state")
     def _check_source_slot_stock(self):
-        """Refuse to file damage for more units than the slot actually
-        holds. Without this, an operator can type qty=10 on a slot that
-        only has 3, and Odoo will happily generate negative quants when
-        the picking validates."""
+        """Refuse to file damage for more units than the slot has FREE
+        (i.e. total - reserved). Without this two failure modes are open:
+
+          1. Operator types qty=10 on a slot that only has 3 → negative
+             quants when the picking validates.
+          2. Operator damages qty that another keeper has already
+             reserved for an in-flight Scan Issue → the issue's planned
+             quants vanish underneath it and the picking explodes on
+             validate.
+
+        Subtracting reserved_quantity closes both holes."""
         Quant = self.env["stock.quant"].sudo()
         for rec in self:
             if rec.state == "confirmed":
                 continue  # already posted, don't re-validate
             if not (rec.product_id and rec.source_slot_id and rec.quantity):
                 continue
-            available = sum(
-                Quant.search(
-                    [
-                        ("product_id", "=", rec.product_id.id),
-                        ("location_id", "=", rec.source_slot_id.id),
-                    ]
-                ).mapped("quantity")
+            quants = Quant.search(
+                [
+                    ("product_id", "=", rec.product_id.id),
+                    ("location_id", "=", rec.source_slot_id.id),
+                ]
             )
-            if rec.quantity > available + 0.0001:  # tiny float tolerance
+            total = sum(quants.mapped("quantity"))
+            reserved = sum(quants.mapped("reserved_quantity"))
+            free = max(0.0, total - reserved)
+            if rec.quantity > free + 0.0001:  # tiny float tolerance
+                # Break the message into two cases so the operator
+                # knows whether to recount or to wait for an in-flight
+                # issue to release stock.
+                if reserved > 0 and rec.quantity <= total + 0.0001:
+                    raise UserError(
+                        "Slot %s holds %g × %s, but %g unit(s) are already "
+                        "reserved for an in-flight Scan Issue. Only %g are "
+                        "free to damage right now. Wait for the issue to "
+                        "validate (or be cancelled), or reduce the damage "
+                        "quantity to %g."
+                        % (
+                            rec.source_slot_id.display_name,
+                            total,
+                            rec.product_id.display_name,
+                            reserved,
+                            free,
+                            free,
+                        )
+                    )
                 raise UserError(
                     "You're trying to file %g × %s as damaged at slot %s, but "
                     "only %g unit(s) are actually there. Re-count the slot or "
@@ -238,7 +283,7 @@ class WmsDamage(models.Model):
                         rec.quantity,
                         rec.product_id.display_name,
                         rec.source_slot_id.display_name,
-                        available,
+                        free,
                     )
                 )
 
@@ -246,6 +291,25 @@ class WmsDamage(models.Model):
         for rec in self:
             if rec.state != "draft":
                 continue
+            # Audit-trail invariant — confirm cannot post a damage event
+            # with missing names. Drafts can be saved with placeholders
+            # so the operator has scratch space, but the final commit
+            # must record who-reported / who-authorised / which keeper.
+            missing = []
+            if not (rec.wms_reported_by or "").strip():
+                missing.append("Reported by")
+            if not (rec.wms_authorized_by or "").strip():
+                missing.append("Authorised by")
+            if not rec.wms_storekeeper_id:
+                missing.append("Store Keeper on duty")
+            if missing:
+                raise UserError(
+                    "Fill in the audit-trail field(s) before confirming this "
+                    "damage event: %s. The trust requires every stock-moving "
+                    "action to record who reported it, who authorised it, "
+                    "and which keeper was on the desk." % ", ".join(missing)
+                )
+
             damage_loc = self.env["stock.location"].search(
                 [
                     ("wms_is_damage", "=", True),
@@ -272,12 +336,18 @@ class WmsDamage(models.Model):
                 )
             if not picking_type.active:
                 picking_type.sudo().active = True  # auto-unarchive
+            # Picking inherits the damage event's audit fields so reports
+            # keyed off stock.picking can read damage moves without
+            # cross-referencing wms.damage. Same shape as Scan Issue.
             picking = self.env["stock.picking"].create(
                 {
                     "picking_type_id": picking_type.id,
                     "location_id": rec.source_slot_id.id,
                     "location_dest_id": damage_loc.id,
                     "origin": rec.name,
+                    "wms_taken_by": (rec.wms_reported_by or "").strip(),
+                    "wms_ordered_by": (rec.wms_authorized_by or "").strip(),
+                    "wms_storekeeper_id": rec.wms_storekeeper_id.id,
                 }
             )
             self.env["stock.move"].create(

@@ -16,7 +16,11 @@
                         <button name="action_scrap" type="object"
                                 string="Scrap"
                                 invisible="state != 'in_repair'"/>
-                        <field name="state" widget="statusbar"/>
+                        <button name="action_cancel" type="object"
+                                string="Cancel"
+                                invisible="state != 'draft'"/>
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="draft,in_repair,done"/>
                     </header>
                     <sheet>
                         <h1><field name="name" readonly="1"/></h1>
