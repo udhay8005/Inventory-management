@@ -1,4 +1,4 @@
-from odoo import api, fields, models
+from odoo import fields, models
 from odoo.exceptions import UserError
 
 
@@ -37,71 +37,33 @@ class WmsScanReceipt(models.TransientModel):
         "returnable (Fluids, Consumables) will be refused at validate.",
     )
 
-    # ---- Quality check + approval gate ----------------------------------
+    # ---- Quality check ---------------------------------------------------
+    # This trust runs internal stock — products aren't sold, no invoices
+    # are issued, no money changes hands. So there's no price-based
+    # approval gate. The QC checkbox stays: the Receiver still confirms
+    # the physical count and condition before the receipt is filed, which
+    # is the whole point of responsible tracking.
     qc_passed = fields.Boolean(
         string="Quality check passed",
-        help="Receiver confirms physical count + condition match what was ordered.",
+        help="Receiver confirms physical count and condition match what was expected.",
     )
     qc_notes = fields.Text(string="QC notes")
-    total_value = fields.Monetary(
-        compute="_compute_total_value",
-        currency_field="currency_id",
-        help="Total estimated value of this receipt, based on each product's sale price.",
-    )
-    currency_id = fields.Many2one(
-        "res.currency",
-        default=lambda s: s.env.company.currency_id,
-    )
-    approval_threshold = fields.Monetary(
-        compute="_compute_total_value",
-        currency_field="currency_id",
-        help="Receipts whose total value exceeds this amount require a Manager's approval before they can be validated. Administrators can adjust this threshold in the system settings.",
-    )
-    approval_required = fields.Boolean(
-        compute="_compute_total_value",
-        help="Indicates that this receipt's total value exceeds the approval threshold and a Manager must approve it.",
-    )
-    approved_by_id = fields.Many2one(
-        "res.users",
-        string="Approved by",
-        readonly=True,
-        help="Set when a WMS Manager approves a high-value receipt.",
-    )
-    is_manager = fields.Boolean(
-        compute="_compute_is_manager",
-        help="True if the current user is in the WMS Manager group.",
-    )
 
-    @api.depends("line_ids.product_id", "line_ids.quantity")
-    def _compute_total_value(self):
-        ICP = self.env["ir.config_parameter"].sudo()
-        threshold = float(
-            ICP.get_param(
-                "wms_barcode.receipt_approval_threshold",
-                "10000",
-            )
-        )
-        for wiz in self:
-            total = sum(
-                (line.product_id.list_price or 0.0) * line.quantity for line in wiz.line_ids
-            )
-            wiz.total_value = total
-            wiz.approval_threshold = threshold
-            wiz.approval_required = total > threshold
-
-    @api.depends_context("uid")
-    def _compute_is_manager(self):
-        is_mgr = self.env.user.has_group("wms_location.group_wms_manager")
-        for wiz in self:
-            wiz.is_manager = is_mgr
-
-    def action_approve(self):
-        """Manager-only: stamp approval. Validate becomes unblocked."""
-        self.ensure_one()
-        if not self.env.user.has_group("wms_location.group_wms_manager"):
-            raise UserError("Only WMS Managers can approve high-value receipts.")
-        self.approved_by_id = self.env.user.id
-        return self._reopen()
+    # ---- Audit trail (matches Scan Issue / damage / repair) -------------
+    storekeeper_id = fields.Many2one(
+        "wms.storekeeper",
+        string="Store Keeper on duty",
+        required=True,
+        domain=[("active", "=", True)],
+        help="The on-duty Store Keeper who took the delivery. Picked from "
+        "the roster the Admin maintains under Configuration → Store Keepers.",
+    )
+    delivered_by = fields.Char(
+        string="Delivered by",
+        help="Name of the person / vendor who handed the goods over "
+        "(driver, vendor representative, internal courier). Optional but "
+        "helpful for the audit trail.",
+    )
 
     def on_barcode_scanned(self, barcode):
         """Called automatically by the JS barcode listener when a scan
@@ -127,7 +89,10 @@ class WmsScanReceipt(models.TransientModel):
                     "lot_id": info["lot"].id if kind == "lot" else False,
                 }
             )
-            self.feedback = "Added %s × %s" % (info.get("units", 1.0), info["product"].display_name)
+            self.feedback = "Added %s × %s" % (
+                info.get("units", 1.0),
+                info["product"].display_name,
+            )
         elif kind == "location":
             # Apply this slot to the most recent line that has no destination yet.
             target = self.line_ids.filtered(lambda ln: not ln.location_dest_id)[-1:]
@@ -189,14 +154,6 @@ class WmsScanReceipt(models.TransientModel):
                 "physically counted and inspected the delivery."
             )
 
-        # Approval gate for high-value receipts.
-        if self.approval_required and not self.approved_by_id:
-            raise UserError(
-                "Total value %s exceeds the approval threshold of %s. "
-                "A WMS Manager must click 'Approve' before this receipt "
-                "can be validated." % (self.total_value, self.approval_threshold)
-            )
-
         # Auto-assign slot if operator didn't.
         for line in self.line_ids:
             if not line.location_dest_id:
@@ -219,7 +176,11 @@ class WmsScanReceipt(models.TransientModel):
                 "picking_type_id": picking_type.id,
                 "location_id": picking_type.default_location_src_id.id,
                 "location_dest_id": self.warehouse_id.lot_stock_id.id,
-                "origin": "Barcode scan",
+                "origin": "Barcode scan" + (" (return)" if self.is_return else ""),
+                # Audit-trail fields — same shape as Scan Issue so reports
+                # can read both incoming and outgoing flows the same way.
+                "wms_taken_by": (self.delivered_by or "").strip(),
+                "wms_storekeeper_id": self.storekeeper_id.id,
             }
         )
         for line in self.line_ids:
@@ -245,6 +206,24 @@ class WmsScanReceipt(models.TransientModel):
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
+
+        # Audit-trail message — matches the Scan Issue chatter pattern.
+        picking.message_post(
+            body=(
+                "<p><b>%(kind)s.</b> "
+                "Delivered by <b>%(delivered)s</b>; "
+                "Store Keeper on duty: <b>%(keeper)s</b>; "
+                "logged in as: <b>%(login)s</b>.</p>"
+            )
+            % {
+                "kind": "Return received" if self.is_return else "Receipt received",
+                "delivered": picking.wms_taken_by or "(unspecified)",
+                "keeper": self.storekeeper_id.name or "(unknown)",
+                "login": self.env.user.display_name or "(system)",
+            },
+            subject="Receipt audit",
+            message_type="notification",
+        )
 
         return {
             "type": "ir.actions.act_window",

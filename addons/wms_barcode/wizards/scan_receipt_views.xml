@@ -48,11 +48,6 @@
                             </list>
                         </field>
 
-                        <!-- Hidden helpers used by visibility expressions -->
-                        <field name="is_manager" invisible="1"/>
-                        <field name="approval_required" invisible="1"/>
-                        <field name="currency_id" invisible="1"/>
-
                         <div class="row mt-3 border-top pt-3">
                             <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">
@@ -63,23 +58,15 @@
                             </div>
                             <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">
-                                    Approval
+                                    Audit trail
                                 </h6>
-                                <group>
-                                    <field name="total_value" widget="monetary"/>
-                                    <field name="approval_threshold" widget="monetary"/>
-                                    <field name="approved_by_id" readonly="1"
-                                           invisible="not approval_required"/>
-                                </group>
-                                <div class="alert alert-warning"
-                                     invisible="not approval_required or approved_by_id"
-                                     role="alert">
-                                    Total exceeds approval threshold — a WMS
-                                    Manager must approve before Validate.
-                                </div>
-                                <button name="action_approve" type="object"
-                                        string="Approve receipt" class="btn-warning"
-                                        invisible="not approval_required or approved_by_id or not is_manager"/>
+                                <label for="storekeeper_id"/>
+                                <field name="storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="On-duty Store Keeper"/>
+                                <label for="delivered_by" class="mt-2"/>
+                                <field name="delivered_by"
+                                       placeholder="Driver / vendor / courier (optional)"/>
                             </div>
                         </div>
                     </sheet>

@@ -15,6 +15,29 @@
             <field name="model">product.template</field>
             <field name="inherit_id" ref="product.product_template_only_form_view"/>
             <field name="arch" type="xml">
+                <!--
+                    Smart button: "Where is it?" — opens the per-slot
+                    breakdown for this product in one click, from anywhere
+                    in the system that shows the product form.
+                -->
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="action_view_wms_locations"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-map-marker">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_value">
+                                <field name="wms_location_count"/>
+                            </span>
+                            <span class="o_stat_text">slot(s)</span>
+                            <span class="o_stat_text text-muted">
+                                <field name="wms_total_on_hand" widget="float"
+                                       options="{'human_readable': True}"/>
+                                on hand
+                            </span>
+                        </div>
+                    </button>
+                </xpath>
                 <xpath expr="//notebook" position="inside">
                     <page string="WMS Classification" name="wms_classification">
                         <group>
