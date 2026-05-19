@@ -46,5 +46,28 @@
             <field name="user_ids" eval="[(4, ref('base.user_admin'))]"/>
         </record>
 
+        <!--
+            Hide Odoo's built-in Inventory app from Store Keepers.
+
+            Store Keepers must keep stock.group_stock_user so the WMS
+            wizards (Scan Receipt / Scan Issue / Damage) can create
+            stock.pickings programmatically. But seeing the Inventory app
+            menu gives them a back-door to create pickings WITHOUT going
+            through Scan Receipt — bypassing the QC checkbox, the
+            on-duty Store Keeper roster, and the audit chatter.
+
+            Restricting the root menu to stock.group_stock_manager hides
+            the whole app from Store Keepers (they're only in
+            stock.group_stock_user via group_wms_user). Managers still
+            see it because group_wms_manager implies
+            stock.group_stock_manager.
+
+            Net effect: the trust's WMS workflows become the only path
+            for a Store Keeper to move stock — exactly as designed.
+        -->
+        <record id="stock.menu_stock_root" model="ir.ui.menu">
+            <field name="group_ids" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
+        </record>
+
     </data>
 </odoo>
