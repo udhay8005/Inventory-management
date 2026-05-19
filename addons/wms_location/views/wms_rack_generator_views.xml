@@ -2,23 +2,52 @@
 <odoo>
     <data>
 
+        <!--
+            Rack Generator form.
+
+            Two tabs:
+              * "Quick grid" – shelf_count × column_count × default slots.
+              * "Visual builder" – embeds the OWL <RackBuilder/> widget
+                which writes the chosen layout into `layout_json`.
+
+            When `layout_json` is non-empty the wizard ignores the quick
+            grid inputs (see wms.rack.generator._build_spec).
+        -->
         <record id="view_wms_rack_generator_form" model="ir.ui.view">
             <field name="name">wms.rack.generator.form</field>
             <field name="model">wms.rack.generator</field>
             <field name="arch" type="xml">
-                <form string="Generate Rack">
-                    <group>
-                        <field name="warehouse_id"/>
-                        <field name="parent_location_id"/>
-                        <field name="rack_code"/>
-                        <field name="dividers_per_level"/>
-                        <field name="capacity_per_slot"/>
-                        <field name="level_prefix"/>
-                        <field name="divider_prefix"/>
-                        <field name="slot_prefix"/>
-                    </group>
+                <form string="Create Rack">
+                    <sheet>
+                        <group string="Rack identity">
+                            <field name="warehouse_id"/>
+                            <field name="parent_location_id"/>
+                            <field name="rack_code" placeholder="R01"/>
+                            <field name="rack_name" placeholder="Optional display name"/>
+                            <field name="capacity_per_slot"/>
+                        </group>
+                        <notebook>
+                            <page string="Quick grid">
+                                <group>
+                                    <field name="shelf_count"/>
+                                    <field name="column_count"/>
+                                    <field name="default_slot_count"/>
+                                </group>
+                                <div class="alert alert-info" role="alert">
+                                    Quick grid creates one compartment per (shelf × column) cell with the same slot count.
+                                    Switch to <b>Visual builder</b> if you need merged compartments (e.g. one tall compartment spanning shelves 1–3).
+                                </div>
+                            </page>
+                            <page string="Visual builder">
+                                <field name="layout_json" widget="wms_rack_builder"/>
+                                <div class="alert alert-secondary" role="alert">
+                                    Click cells in the preview to select them, then use <b>Merge up</b> / <b>Merge down</b> / <b>Split</b> to build spanning compartments. Adjust the slot count per compartment in the side panel. The JSON below is generated for you — leave it alone unless you really want to edit it by hand.
+                                </div>
+                            </page>
+                        </notebook>
+                    </sheet>
                     <footer>
-                        <button string="Generate" name="action_generate" type="object" class="btn-primary"/>
+                        <button string="Create rack" name="action_generate" type="object" class="btn-primary"/>
                         <button string="Cancel" class="btn-secondary" special="cancel"/>
                     </footer>
                 </form>
@@ -26,7 +55,7 @@
         </record>
 
         <record id="action_wms_rack_generator" model="ir.actions.act_window">
-            <field name="name">Generate Rack</field>
+            <field name="name">Create Rack</field>
             <field name="res_model">wms.rack.generator</field>
             <field name="view_mode">form</field>
             <field name="target">new</field>

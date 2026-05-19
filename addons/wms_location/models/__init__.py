@@ -1,1 +1,1 @@
-from . import stock_location, stock_quant
+from . import product_template, stock_location, stock_quant

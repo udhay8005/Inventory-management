@@ -3,16 +3,14 @@
     <data>
         <!--
             Full-page QWeb template for /wms/rack/<id>/grid.
-            web.frontend_layout gives us the Odoo header/footer; the body
-            is pure Bootstrap so it scales from phone to desktop.
+
+            Uses CSS Grid with `grid-row: start / end` so compartments
+            spanning multiple shelves (e.g. a tall column for bottles
+            covering shelves 1-3) render as a single tall cell at the
+            correct height. Shelf 1 sits at the top of the grid to
+            match the physical view of the rack.
         -->
         <template id="rack_grid_page" name="WMS Rack Visual Grid">
-            <!--
-                Self-contained HTML page. We load Odoo's frontend CSS asset
-                bundle for Bootstrap styling but DON'T inherit the portal
-                template (which requires the portal module and breaks on
-                bare backend installs).
-            -->
             <t t-call="web.html_container">
                 <head>
                     <title t-esc="'Rack %s — WMS' % rack.wms_rack_code"/>
@@ -20,6 +18,36 @@
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
                     <t t-call-assets="web.assets_frontend_minimal"
                        t-css="true" t-js="false"/>
+                    <style>
+                        .wms-rack-grid {
+                            display: grid;
+                            gap: 4px;
+                            background: #1f2933;
+                            padding: 6px;
+                            border-radius: 4px;
+                        }
+                        .wms-rack-grid__cell {
+                            padding: 6px;
+                            border-radius: 3px;
+                            font-size: 11px;
+                            line-height: 1.2;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: flex-start;
+                        }
+                        .wms-rack-grid__cell-head {
+                            display: flex;
+                            justify-content: space-between;
+                            font-weight: 600;
+                        }
+                        .wms-rack-grid__cell-products {
+                            margin-top: 4px;
+                            font-size: 10px;
+                            opacity: 0.85;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                        }
+                    </style>
                 </head>
                 <body>
                 <div class="container-fluid my-3">
@@ -31,8 +59,10 @@
                                 <small class="text-muted ms-2" t-esc="rack.complete_name"/>
                             </h2>
                             <small>
+                                <span t-esc="shelves"/> shelves ×
+                                <span t-esc="columns"/> columns ·
                                 <span t-esc="total_slots"/> slots ·
-                                <strong t-esc="'%.0f' % rack_on_hand"/> units on hand
+                                <strong t-esc="rack_on_hand_label"/> units on hand
                             </small>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
@@ -48,60 +78,32 @@
                         </div>
                     </div>
 
-                    <div t-if="not matrix" class="alert alert-warning">
-                        This rack has no levels yet. Use
-                        <em>WMS → Configuration → Generate Rack</em> to set it up.
+                    <div t-if="not cells" class="alert alert-warning">
+                        This rack has no compartments yet. Use
+                        <em>WMS → Configuration → Create Rack</em> to set it up.
                     </div>
 
-                    <!--
-                        One <table> per rack — rows = levels (top→bottom),
-                        cells = dividers; each cell internally renders its 3 slots
-                        as small coloured boxes.
-                    -->
-                    <div class="table-responsive" t-if="matrix">
-                        <table class="table table-bordered table-sm align-middle mb-0"
-                               style="background:#fafafa;">
-                            <thead class="table-light">
-                                <tr>
-                                    <th style="width:60px;">Level</th>
-                                    <t t-foreach="matrix[0]['dividers']" t-as="dcol">
-                                        <th class="text-center">
-                                            <span t-esc="dcol['divider'].name"/>
-                                        </th>
+                    <div t-if="cells"
+                         class="wms-rack-grid"
+                         t-att-style="'grid-template-rows: repeat(%d, minmax(70px, auto)); grid-template-columns: repeat(%d, minmax(120px, 1fr));' % (shelves, columns)">
+                        <t t-foreach="cells" t-as="cell">
+                            <div t-att-class="'wms-rack-grid__cell ' + cell['color']"
+                                 t-att-style="'grid-row: %d / %d; grid-column: %d / %d;' % (cell['row_start'], cell['row_end'], cell['col_start'], cell['col_end'])"
+                                 t-att-title="cell['compartment'].complete_name + ' — ' + cell['on_hand_label'] + ' units'">
+                                <div class="wms-rack-grid__cell-head">
+                                    <span t-esc="cell['compartment'].name"/>
+                                    <span t-esc="cell['on_hand_label']"/>
+                                </div>
+                                <div t-if="cell['products']" class="wms-rack-grid__cell-products">
+                                    <t t-foreach="cell['products']" t-as="p">
+                                        <span t-esc="p.default_code or p.name"/><t t-if="not p_last">, </t>
                                     </t>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr t-foreach="matrix" t-as="row">
-                                    <th class="text-center bg-white">
-                                        <span t-esc="row['level'].name"/>
-                                    </th>
-                                    <t t-foreach="row['dividers']" t-as="dcell">
-                                        <td style="vertical-align: top; padding: 4px;">
-                                            <div class="d-flex flex-column gap-1">
-                                                <t t-foreach="dcell['slots']" t-as="cell">
-                                                    <div t-att-class="'p-2 rounded ' + cell['color']"
-                                                         t-att-title="cell['slot'].complete_name + ' — ' + str(cell['on_hand']) + ' units'"
-                                                         style="min-height:48px; font-size:11px; line-height:1.2;">
-                                                        <div class="d-flex justify-content-between">
-                                                            <strong t-esc="cell['slot'].name"/>
-                                                            <span t-esc="'%.0f' % cell['on_hand']"/>
-                                                        </div>
-                                                        <div t-if="cell['products']" class="text-truncate"
-                                                             style="max-width: 160px;">
-                                                            <t t-foreach="cell['products']" t-as="p">
-                                                                <small t-esc="p.default_code or p.name"/>
-                                                                <t t-if="not p_last">, </t>
-                                                            </t>
-                                                        </div>
-                                                    </div>
-                                                </t>
-                                            </div>
-                                        </td>
-                                    </t>
-                                </tr>
-                            </tbody>
-                        </table>
+                                </div>
+                                <div t-elif="cell['on_hand'] > 0">
+                                    <small t-esc="cell['pct_label']"/>
+                                </div>
+                            </div>
+                        </t>
                     </div>
                 </div>
                 </body>

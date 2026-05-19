@@ -68,6 +68,31 @@
                                        options="{'size': [400, 300]}"/>
                             </div>
                         </div>
+
+                        <div class="row mt-3 border-top pt-3">
+                            <div class="col-12">
+                                <h6 class="text-uppercase text-muted"
+                                    style="font-size:11px;">
+                                    Audit trail
+                                </h6>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="taken_by"/>
+                                <field name="taken_by"
+                                       placeholder="Name of the person taking these items"/>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="ordered_by"/>
+                                <field name="ordered_by"
+                                       placeholder="Name of the person who authorised this"/>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="storekeeper_id"/>
+                                <field name="storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="Select on-duty Store Keeper"/>
+                            </div>
+                        </div>
                     </sheet>
                     <footer>
                         <button name="action_plan" type="object"
