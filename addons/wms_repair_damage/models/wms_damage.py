@@ -222,9 +222,7 @@ class WmsDamage(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("name", "New") == "New":
-                vals["name"] = (
-                    self.env["ir.sequence"].next_by_code("wms.damage") or "DMG/0001"
-                )
+                vals["name"] = self.env["ir.sequence"].next_by_code("wms.damage") or "DMG/0001"
         return super().create(vals_list)
 
     @api.constrains("product_id", "quantity", "source_slot_id", "state")
@@ -319,8 +317,7 @@ class WmsDamage(models.Model):
             )
             if not damage_loc:
                 raise UserError(
-                    "No Damage location for warehouse %s."
-                    % rec.warehouse_id.display_name
+                    "No Damage location for warehouse %s." % rec.warehouse_id.display_name
                 )
 
             # Use the warehouse's int_type_id m2o directly.
@@ -365,9 +362,7 @@ class WmsDamage(models.Model):
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
                 if not ml.quantity:
-                    ml.quantity = (
-                        ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-                    )
+                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
             picking.button_validate()
             rec.write({"state": "confirmed", "picking_id": picking.id})
 
@@ -419,9 +414,7 @@ class WmsDamage(models.Model):
             "slot": self.source_slot_id.display_name,
             "reporter": self.wms_reported_by or "(unspecified)",
             "auth": self.wms_authorized_by or "(unspecified)",
-            "keeper": (
-                self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"
-            ),
+            "keeper": (self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"),
         }
         for user in group.users:
             user.partner_id.message_post(

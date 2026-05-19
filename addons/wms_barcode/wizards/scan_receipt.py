@@ -97,9 +97,7 @@ class WmsScanReceipt(models.TransientModel):
             # Apply this slot to the most recent line that has no destination yet.
             target = self.line_ids.filtered(lambda ln: not ln.location_dest_id)[-1:]
             if not target:
-                self.feedback = (
-                    "No pending line for slot %s" % info["location"].display_name
-                )
+                self.feedback = "No pending line for slot %s" % info["location"].display_name
             else:
                 target.location_dest_id = info["location"].id
                 self.feedback = "Slot %s assigned" % info["location"].display_name
@@ -159,9 +157,7 @@ class WmsScanReceipt(models.TransientModel):
         # Auto-assign slot if operator didn't.
         for line in self.line_ids:
             if not line.location_dest_id:
-                line.location_dest_id = self._auto_assign_slot(
-                    line.product_id, line.quantity
-                )
+                line.location_dest_id = self._auto_assign_slot(line.product_id, line.quantity)
 
         # Use the warehouse-level m2o so we don't hit Odoo 19's archived
         # picking type problem for 1-step warehouses.

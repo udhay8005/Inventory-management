@@ -88,9 +88,7 @@ class WmsRepairOrder(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("name", "New") == "New":
-                vals["name"] = (
-                    self.env["ir.sequence"].next_by_code("wms.repair") or "REP/0001"
-                )
+                vals["name"] = self.env["ir.sequence"].next_by_code("wms.repair") or "REP/0001"
         return super().create(vals_list)
 
     def _find_location(self, flag):
@@ -153,8 +151,7 @@ class WmsRepairOrder(models.Model):
             repair_loc = rec._find_location("wms_is_repair")
             if not (damage_loc and repair_loc):
                 raise UserError(
-                    "Damage / Repair locations missing for %s."
-                    % rec.warehouse_id.display_name
+                    "Damage / Repair locations missing for %s." % rec.warehouse_id.display_name
                 )
             picking_vals = {
                 "picking_type_id": rec._internal_picking_type().id,
@@ -166,8 +163,7 @@ class WmsRepairOrder(models.Model):
             picking = self.env["stock.picking"].create(picking_vals)
             self.env["stock.move"].create(
                 {
-                    "description_picking": "Send to repair: %s"
-                    % rec.product_id.display_name,
+                    "description_picking": "Send to repair: %s" % rec.product_id.display_name,
                     "product_id": rec.product_id.id,
                     "product_uom_qty": rec.quantity,
                     "product_uom": rec.product_id.uom_id.id,
@@ -180,9 +176,7 @@ class WmsRepairOrder(models.Model):
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
                 if not ml.quantity:
-                    ml.quantity = (
-                        ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-                    )
+                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
             picking.button_validate()
             rec.write({"state": "in_repair", "start_picking_id": picking.id})
             rec._post_state_audit(
@@ -208,8 +202,7 @@ class WmsRepairOrder(models.Model):
             picking = self.env["stock.picking"].create(picking_vals)
             self.env["stock.move"].create(
                 {
-                    "description_picking": "Return from repair: %s"
-                    % rec.product_id.display_name,
+                    "description_picking": "Return from repair: %s" % rec.product_id.display_name,
                     "product_id": rec.product_id.id,
                     "product_uom_qty": rec.quantity,
                     "product_uom": rec.product_id.uom_id.id,
@@ -222,15 +215,12 @@ class WmsRepairOrder(models.Model):
             picking.action_assign()
             for ml in picking.move_ids.move_line_ids:
                 if not ml.quantity:
-                    ml.quantity = (
-                        ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-                    )
+                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
             picking.button_validate()
             rec.write({"state": "done", "finish_picking_id": picking.id})
             rec._post_state_audit(
                 "Repair done",
-                "Item returned to slot %s and is available for issue again."
-                % dest.display_name,
+                "Item returned to slot %s and is available for issue again." % dest.display_name,
             )
 
     def action_scrap(self):
@@ -297,9 +287,7 @@ class WmsRepairOrder(models.Model):
                 "reporter": self.wms_reported_by or "(unspecified)",
                 "auth": self.wms_authorized_by or "(unspecified)",
                 "keeper": (
-                    self.wms_storekeeper_id.name
-                    if self.wms_storekeeper_id
-                    else "(unknown)"
+                    self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"
                 ),
                 "login": self.env.user.display_name or "(system)",
             },
