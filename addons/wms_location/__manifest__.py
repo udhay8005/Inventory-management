@@ -34,7 +34,12 @@ Key features:
         "views/wms_floor_zone_generator_views.xml",
         "views/wms_zone_generator_views.xml",
         "views/menus.xml",
+        "views/favicon_override.xml",
+        "views/login_layout_override.xml",
+        "views/backup_menus.xml",
         "data/wms_data.xml",
+        "data/wms_sku_sequences.xml",
+        "data/wms_barcode_actions.xml",
     ],
     "demo": [
         "demo/demo.xml",
@@ -44,6 +49,12 @@ Key features:
             "wms_location/static/src/components/rack_builder/rack_builder.js",
             "wms_location/static/src/components/rack_builder/rack_builder.xml",
             "wms_location/static/src/components/rack_builder/rack_builder.scss",
+        ],
+        # Loaded on /web/login. Patches UserSwitch to drop `admin`
+        # from the "Choose a user" picker so privileged logins are
+        # not advertised on the login page.
+        "web.assets_frontend": [
+            "wms_location/static/src/js/hide_admin_from_user_switch.js",
         ],
     },
     "application": True,

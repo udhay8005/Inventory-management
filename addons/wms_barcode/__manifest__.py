@@ -16,6 +16,7 @@
         "wizards/scan_receipt_views.xml",
         "wizards/scan_issue_views.xml",
         "wizards/wms_demo_seeder_views.xml",
+        "wizards/wms_product_onboard_views.xml",
         "reports/barcode_label_report.xml",
         "reports/barcode_label_template.xml",
         "reports/thermal_label_report.xml",

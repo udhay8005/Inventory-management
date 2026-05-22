@@ -58,6 +58,78 @@
                             Tick Returnable manually if you want to override the kind-derived
                             default (e.g. a partially-used sealed paint can the supplier accepts back).
                         </div>
+
+                        <!--
+                            Kind-specific attribute groups. Each shows only when
+                            wms_product_kind matches. `invisible` is a Python
+                            expression evaluated client-side, so when the Admin
+                            picks "Medicine" from the dropdown the Medicine group
+                            appears immediately - no save needed.
+
+                            Fields kept off the form when the kind doesn't match
+                            stay on the model (they're just blank); switching
+                            kind later will surface them populated if the data
+                            was ever entered.
+                        -->
+                        <group string="Fluid details"
+                               invisible="wms_product_kind != 'fluid'">
+                            <field name="wms_volume_litres"/>
+                            <field name="wms_container_size"/>
+                            <field name="wms_expiry_date"/>
+                        </group>
+
+                        <group string="Medicine details"
+                               invisible="wms_product_kind != 'medicine'">
+                            <field name="wms_expiry_date" required="wms_product_kind == 'medicine'"/>
+                            <field name="wms_batch_number"/>
+                            <field name="wms_dosage"/>
+                        </group>
+
+                        <group string="Feed details"
+                               invisible="wms_product_kind != 'feed'">
+                            <field name="wms_expiry_date" required="wms_product_kind == 'feed'"/>
+                            <field name="wms_batch_number"/>
+                            <field name="wms_weight_kg"/>
+                        </group>
+
+                        <group string="Textile details"
+                               invisible="wms_product_kind != 'textile'">
+                            <field name="wms_size"/>
+                            <field name="wms_colour"/>
+                            <field name="wms_material"/>
+                        </group>
+
+                        <group string="Construction details"
+                               invisible="wms_product_kind != 'construction'">
+                            <field name="wms_grade"/>
+                            <field name="wms_material"/>
+                            <field name="wms_dimensions"/>
+                        </group>
+
+                        <group string="Plumbing details"
+                               invisible="wms_product_kind != 'plumbing'">
+                            <field name="wms_material"/>
+                            <field name="wms_diameter_mm"/>
+                            <field name="wms_length_m"/>
+                        </group>
+
+                        <group string="Electrical details"
+                               invisible="wms_product_kind != 'electrical'">
+                            <field name="wms_voltage_v"/>
+                            <field name="wms_wattage_w"/>
+                        </group>
+
+                        <group string="Pooja details"
+                               invisible="wms_product_kind != 'pooja'">
+                            <field name="wms_expiry_date"
+                                   help="Use for ghee, oil, garlands - things that go off."/>
+                            <field name="wms_batch_number"/>
+                        </group>
+
+                        <group string="Asset details"
+                               invisible="wms_product_kind not in ('tool', 'spare')">
+                            <field name="wms_serial_number"/>
+                        </group>
                     </page>
                 </xpath>
             </field>
