@@ -194,11 +194,7 @@ class WmsRackGenerator(models.TransientModel):
                 else:
                     left = int(comp.get("column_index", 1))
                     right = int(comp.get("column_index", left))
-                cells = [
-                    (s, c)
-                    for s in range(top, bot + 1)
-                    for c in range(left, right + 1)
-                ]
+                cells = [(s, c) for s in range(top, bot + 1) for c in range(left, right + 1)]
 
             if not cells:
                 raise UserError(
@@ -227,12 +223,12 @@ class WmsRackGenerator(models.TransientModel):
                 occupied[(s, c)] = idx
 
             # ---- Compute / store the bounding box --------------------
-            tops    = [s for s, _ in cells]
-            cols    = [c for _, c in cells]
+            tops = [s for s, _ in cells]
+            cols = [c for _, c in cells]
             comp["cells"] = [[s, c] for s, c in cells]
-            comp["shelf_top"]    = min(tops)
+            comp["shelf_top"] = min(tops)
             comp["shelf_bottom"] = max(tops)
-            comp["column_left"]  = min(cols)
+            comp["column_left"] = min(cols)
             comp["column_right"] = max(cols)
             comp.pop("column_index", None)
             comp["slot_count"] = max(1, int(comp.get("slot_count") or 1))
@@ -299,12 +295,13 @@ class WmsRackGenerator(models.TransientModel):
                 # interior shape can coexist in one rack.
                 shape_tag = "P%d" % (len(cells))
                 barcode = "%s-%s-%s-%s" % (
-                    rack_code, shelf_label, column_label, shape_tag,
+                    rack_code,
+                    shelf_label,
+                    column_label,
+                    shape_tag,
                 )
             else:
-                comp_name = comp_spec.get("label") or (
-                    "%s-%s" % (shelf_label, column_label)
-                )
+                comp_name = comp_spec.get("label") or ("%s-%s" % (shelf_label, column_label))
                 barcode = "%s-%s-%s" % (rack_code, shelf_label, column_label)
             compartment = Location.create(
                 {

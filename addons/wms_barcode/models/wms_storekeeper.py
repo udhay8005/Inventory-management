@@ -25,13 +25,12 @@ from __future__ import annotations
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
-
 # Capability ↔ group xmlid map. Keep aligned with wms_security.xml.
 _CAPABILITY_GROUPS = {
-    "can_scan_receive":   "wms_location.group_wms_can_scan_receive",
-    "can_scan_issue":     "wms_location.group_wms_can_scan_issue",
-    "can_file_damage":    "wms_location.group_wms_can_file_damage",
-    "can_submit_audit":   "wms_location.group_wms_can_submit_audit",
+    "can_scan_receive": "wms_location.group_wms_can_scan_receive",
+    "can_scan_issue": "wms_location.group_wms_can_scan_issue",
+    "can_file_damage": "wms_location.group_wms_can_file_damage",
+    "can_submit_audit": "wms_location.group_wms_can_submit_audit",
     "can_manage_catalog": "wms_location.group_wms_can_manage_catalog",
 }
 
@@ -90,8 +89,7 @@ class WmsStorekeeper(models.Model):
         string="Can Scan Issue",
         compute="_compute_capabilities",
         inverse="_inverse_can_scan_issue",
-        help="Shows the Scan Issue (FIFO) menu and grants create on "
-        "the wizard. Default ON.",
+        help="Shows the Scan Issue (FIFO) menu and grants create on " "the wizard. Default ON.",
     )
     can_file_damage = fields.Boolean(
         string="Can file Damage events",
@@ -221,48 +219,62 @@ class WmsStorekeeper(models.Model):
         ]
         for rec in self:
             if rec.user_id:
-                raise UserError(_(
-                    "'%s' already has an Odoo login (%s). Edit the "
-                    "capability check-boxes directly; the login itself "
-                    "can be managed from Settings -> Users."
-                ) % (rec.name, rec.user_id.login))
+                raise UserError(
+                    _(
+                        "'%s' already has an Odoo login (%s). Edit the "
+                        "capability check-boxes directly; the login itself "
+                        "can be managed from Settings -> Users."
+                    )
+                    % (rec.name, rec.user_id.login)
+                )
             if not rec.login:
-                raise UserError(_(
-                    "Pick a Login for '%s' before creating the user. "
-                    "Use a short lowercase name (e.g. 'suresh', 'ramesh')."
-                ) % rec.name)
+                raise UserError(
+                    _(
+                        "Pick a Login for '%s' before creating the user. "
+                        "Use a short lowercase name (e.g. 'suresh', 'ramesh')."
+                    )
+                    % rec.name
+                )
             if not rec.initial_password:
-                raise UserError(_(
-                    "Set an Initial password so '%s' has something to "
-                    "type on first login. They can change it themselves "
-                    "afterwards under their user menu."
-                ) % rec.name)
+                raise UserError(
+                    _(
+                        "Set an Initial password so '%s' has something to "
+                        "type on first login. They can change it themselves "
+                        "afterwards under their user menu."
+                    )
+                    % rec.name
+                )
 
             # Check for login clash before create so the error is
             # friendly instead of a SQL UNIQUE violation.
             clash = Users.with_context(active_test=False).search(
-                [("login", "=", rec.login)], limit=1,
+                [("login", "=", rec.login)],
+                limit=1,
             )
             if clash:
-                raise UserError(_(
-                    "Login %r is already taken (by %s). Pick another."
-                ) % (rec.login, clash.name))
+                raise UserError(
+                    _("Login %r is already taken (by %s). Pick another.") % (rec.login, clash.name)
+                )
 
-            user = Users.create({
-                "name": rec.name,
-                "login": rec.login,
-                "password": rec.initial_password,
-                "email": rec.email or False,
-                "lang": "en_US",
-                "notification_type": "inbox",
-                "group_ids": [
-                    (6, 0, [internal.id, base.id] + [g.id for g in default_caps]),
-                ],
-            })
-            rec.write({
-                "user_id": user.id,
-                "initial_password": False,  # never persist plaintext
-            })
+            user = Users.create(
+                {
+                    "name": rec.name,
+                    "login": rec.login,
+                    "password": rec.initial_password,
+                    "email": rec.email or False,
+                    "lang": "en_US",
+                    "notification_type": "inbox",
+                    "group_ids": [
+                        (6, 0, [internal.id, base.id] + [g.id for g in default_caps]),
+                    ],
+                }
+            )
+            rec.write(
+                {
+                    "user_id": user.id,
+                    "initial_password": False,  # never persist plaintext
+                }
+            )
 
     def action_open_login(self):
         """Quick-jump to the res.users record for further admin tasks
@@ -296,8 +308,11 @@ class WmsStorekeeper(models.Model):
     def _check_login_no_whitespace(self):
         for rec in self:
             if rec.login and (rec.login != rec.login.strip() or " " in rec.login):
-                raise ValidationError(_(
-                    "Login %r contains whitespace. Use a short, "
-                    "lowercase, single-word handle - e.g. 'suresh', "
-                    "'ramesh_a'."
-                ) % rec.login)
+                raise ValidationError(
+                    _(
+                        "Login %r contains whitespace. Use a short, "
+                        "lowercase, single-word handle - e.g. 'suresh', "
+                        "'ramesh_a'."
+                    )
+                    % rec.login
+                )

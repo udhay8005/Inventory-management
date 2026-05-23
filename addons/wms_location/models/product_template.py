@@ -21,25 +21,25 @@ from odoo.exceptions import ValidationError
 #   * `False` -> once it leaves the gate it is gone: feed eaten,
 #     pooja ghee burned, medicine injected, cement set in a wall.
 KIND_RETURNABLE_DEFAULTS = {
-    "raw_material":  True,
-    "packaging":     True,
-    "fluid":         False,
+    "raw_material": True,
+    "packaging": True,
+    "fluid": False,
     "finished_good": True,
-    "wip":           True,
-    "consumable":    False,
-    "tool":          True,
-    "spare":         True,
+    "wip": True,
+    "consumable": False,
+    "tool": True,
+    "spare": True,
     # --- Added for the trust's actual inventory categories -----------
-    "medicine":      False,   # veterinary injections, ointments
-    "feed":          False,   # grass, bran, cattle feed - consumed
-    "sanitation":    False,   # handwash, soap, disinfectant
-    "construction":  False,   # cement, steel rod, sand, brick
-    "plumbing":      False,   # pipe, elbow, valve - one-way install
-    "electrical":    False,   # switch, wire, bulb, electronics
-    "textile":       True,    # cloth / towel / blanket - washed and reused
-    "stationery":    False,   # calendar, photo, book, pen - one-way
-    "safety":        True,    # fire extinguisher refilled, helmet reused
-    "pooja":         False,   # ghee, flowers, incense, oil - consumed in puja
+    "medicine": False,  # veterinary injections, ointments
+    "feed": False,  # grass, bran, cattle feed - consumed
+    "sanitation": False,  # handwash, soap, disinfectant
+    "construction": False,  # cement, steel rod, sand, brick
+    "plumbing": False,  # pipe, elbow, valve - one-way install
+    "electrical": False,  # switch, wire, bulb, electronics
+    "textile": True,  # cloth / towel / blanket - washed and reused
+    "stationery": False,  # calendar, photo, book, pen - one-way
+    "safety": True,  # fire extinguisher refilled, helmet reused
+    "pooja": False,  # ghee, flowers, incense, oil - consumed in puja
 }
 
 # The dropdown shown on the product form. Order matches the dict
@@ -47,25 +47,25 @@ KIND_RETURNABLE_DEFAULTS = {
 # sees what the auto-generated SKU is going to look like before
 # they save.
 WMS_KIND_SELECTION = [
-    ("raw_material",  "Raw Material (RM)"),
-    ("packaging",     "Packaging (PK)"),
-    ("fluid",         "Fluid / Liquid / Oil (FL)"),
+    ("raw_material", "Raw Material (RM)"),
+    ("packaging", "Packaging (PK)"),
+    ("fluid", "Fluid / Liquid / Oil (FL)"),
     ("finished_good", "Finished Good (FG)"),
-    ("wip",           "Work in Progress (WIP)"),
-    ("consumable",    "Consumable (CONS)"),
-    ("tool",          "Tool / Equipment (TOOL)"),
-    ("spare",         "Spare Part (SPARE)"),
+    ("wip", "Work in Progress (WIP)"),
+    ("consumable", "Consumable (CONS)"),
+    ("tool", "Tool / Equipment (TOOL)"),
+    ("spare", "Spare Part (SPARE)"),
     # --- Trust-specific categories -------------------------------------
-    ("medicine",      "Medicine - veterinary (MED)"),
-    ("feed",          "Feed / Grass / Bran (FEED)"),
-    ("sanitation",    "Sanitation / Handwash / Cleaning (SAN)"),
-    ("construction",  "Construction: cement / steel / sand (CONST)"),
-    ("plumbing",      "Plumbing: pipe / fitting / valve (PLMB)"),
-    ("electrical",    "Electrical / Electronics (ELEC)"),
-    ("textile",       "Textile / Cloth / Blanket (TEXT)"),
-    ("stationery",    "Stationery: calendar / book / photo (STAT)"),
-    ("safety",        "Safety: fire extinguisher / helmet (SAFE)"),
-    ("pooja",         "Pooja items: lamp / pot / ghee / flowers (POOJA)"),
+    ("medicine", "Medicine - veterinary (MED)"),
+    ("feed", "Feed / Grass / Bran (FEED)"),
+    ("sanitation", "Sanitation / Handwash / Cleaning (SAN)"),
+    ("construction", "Construction: cement / steel / sand (CONST)"),
+    ("plumbing", "Plumbing: pipe / fitting / valve (PLMB)"),
+    ("electrical", "Electrical / Electronics (ELEC)"),
+    ("textile", "Textile / Cloth / Blanket (TEXT)"),
+    ("stationery", "Stationery: calendar / book / photo (STAT)"),
+    ("safety", "Safety: fire extinguisher / helmet (SAFE)"),
+    ("pooja", "Pooja items: lamp / pot / ghee / flowers (POOJA)"),
 ]
 
 # SKU prefix per kind. The trailing "-" matches the ir.sequence prefix
@@ -77,47 +77,47 @@ WMS_KIND_SELECTION = [
 # constraint _check_sku_prefix uses it to validate manually-typed
 # codes match the kind.
 KIND_SKU_PREFIX = {
-    "raw_material":  "RM",
-    "packaging":     "PK",
-    "fluid":         "FL",
+    "raw_material": "RM",
+    "packaging": "PK",
+    "fluid": "FL",
     "finished_good": "FG",
-    "wip":           "WIP",
-    "consumable":    "CONS",
-    "tool":          "TOOL",
-    "spare":         "SPARE",
-    "medicine":      "MED",
-    "feed":          "FEED",
-    "sanitation":    "SAN",
-    "construction":  "CONST",
-    "plumbing":      "PLMB",
-    "electrical":    "ELEC",
-    "textile":       "TEXT",
-    "stationery":    "STAT",
-    "safety":        "SAFE",
-    "pooja":         "POOJA",
+    "wip": "WIP",
+    "consumable": "CONS",
+    "tool": "TOOL",
+    "spare": "SPARE",
+    "medicine": "MED",
+    "feed": "FEED",
+    "sanitation": "SAN",
+    "construction": "CONST",
+    "plumbing": "PLMB",
+    "electrical": "ELEC",
+    "textile": "TEXT",
+    "stationery": "STAT",
+    "safety": "SAFE",
+    "pooja": "POOJA",
 }
 
 # ir.sequence.code per kind. The XML data file in
 # data/wms_sku_sequences.xml defines one ir.sequence per entry here.
 KIND_SEQ_CODE = {
-    "raw_material":  "wms.sku.raw_material",
-    "packaging":     "wms.sku.packaging",
-    "fluid":         "wms.sku.fluid",
+    "raw_material": "wms.sku.raw_material",
+    "packaging": "wms.sku.packaging",
+    "fluid": "wms.sku.fluid",
     "finished_good": "wms.sku.finished_good",
-    "wip":           "wms.sku.wip",
-    "consumable":    "wms.sku.consumable",
-    "tool":          "wms.sku.tool",
-    "spare":         "wms.sku.spare",
-    "medicine":      "wms.sku.medicine",
-    "feed":          "wms.sku.feed",
-    "sanitation":    "wms.sku.sanitation",
-    "construction":  "wms.sku.construction",
-    "plumbing":      "wms.sku.plumbing",
-    "electrical":    "wms.sku.electrical",
-    "textile":       "wms.sku.textile",
-    "stationery":    "wms.sku.stationery",
-    "safety":        "wms.sku.safety",
-    "pooja":         "wms.sku.pooja",
+    "wip": "wms.sku.wip",
+    "consumable": "wms.sku.consumable",
+    "tool": "wms.sku.tool",
+    "spare": "wms.sku.spare",
+    "medicine": "wms.sku.medicine",
+    "feed": "wms.sku.feed",
+    "sanitation": "wms.sku.sanitation",
+    "construction": "wms.sku.construction",
+    "plumbing": "wms.sku.plumbing",
+    "electrical": "wms.sku.electrical",
+    "textile": "wms.sku.textile",
+    "stationery": "wms.sku.stationery",
+    "safety": "wms.sku.safety",
+    "pooja": "wms.sku.pooja",
 }
 
 
@@ -246,8 +246,7 @@ class ProductTemplate(models.Model):
     )
     wms_dimensions = fields.Char(
         string="Dimensions",
-        help="Free-text. '12 mm rod, 12 m length', '230 x 110 x 75 mm "
-        "brick', etc.",
+        help="Free-text. '12 mm rod, 12 m length', '230 x 110 x 75 mm " "brick', etc.",
     )
 
     # Plumbing (PLMB) ------------------------------------------------
@@ -257,15 +256,13 @@ class ProductTemplate(models.Model):
     )
     wms_length_m = fields.Float(
         string="Length (m)",
-        help="Pipe length per unit, metres. Helps planning the cut "
-        "list during a plumbing job.",
+        help="Pipe length per unit, metres. Helps planning the cut " "list during a plumbing job.",
     )
 
     # Electrical / Electronics (ELEC) --------------------------------
     wms_voltage_v = fields.Float(
         string="Voltage (V)",
-        help="Operating voltage. 230 V single-phase mains, 12 V DC, "
-        "415 V three-phase, etc.",
+        help="Operating voltage. 230 V single-phase mains, 12 V DC, " "415 V three-phase, etc.",
     )
     wms_wattage_w = fields.Float(
         string="Wattage (W)",
@@ -332,10 +329,13 @@ class ProductTemplate(models.Model):
                     # Guard against another product already owning
                     # this string as its barcode (uniqueness is
                     # enforced by Odoo's `barcode_uniq` constraint).
-                    clash = self.env["product.product"].sudo().search(
-                        [("barcode", "=", tmpl.default_code),
-                         ("id", "!=", variant.id)],
-                        limit=1,
+                    clash = (
+                        self.env["product.product"]
+                        .sudo()
+                        .search(
+                            [("barcode", "=", tmpl.default_code), ("id", "!=", variant.id)],
+                            limit=1,
+                        )
                     )
                     if not clash:
                         variant.barcode = tmpl.default_code
@@ -343,19 +343,23 @@ class ProductTemplate(models.Model):
                 # b. Secondary EAN-13 numeric barcode as an alias.
                 #    Look for any existing alias with units_per_scan=1
                 #    so re-runs don't pile up duplicate EAN-13s.
-                has_unit_alias = Alias.search_count([
-                    ("product_id", "=", variant.id),
-                    ("units_per_scan", "=", 1.0),
-                ])
+                has_unit_alias = Alias.search_count(
+                    [
+                        ("product_id", "=", variant.id),
+                        ("units_per_scan", "=", 1.0),
+                    ]
+                )
                 if not has_unit_alias:
                     ean = self._next_ean13()
                     if ean:
-                        Alias.create({
-                            "barcode": ean,
-                            "product_id": variant.id,
-                            "units_per_scan": 1.0,
-                            "note": "Auto-generated EAN-13 unit barcode",
-                        })
+                        Alias.create(
+                            {
+                                "barcode": ean,
+                                "product_id": variant.id,
+                                "units_per_scan": 1.0,
+                                "note": "Auto-generated EAN-13 unit barcode",
+                            }
+                        )
 
     @api.model
     def _next_ean13(self):
@@ -387,7 +391,7 @@ class ProductTemplate(models.Model):
             (10 - 3) mod 10 = 7    -> check digit '7' ok
         """
         digits = [int(c) for c in twelve_digits]
-        odd_sum = sum(digits[0::2])   # positions 1,3,5,7,9,11
+        odd_sum = sum(digits[0::2])  # positions 1,3,5,7,9,11
         even_sum = sum(digits[1::2])  # positions 2,4,6,8,10,12
         total = odd_sum + 3 * even_sum
         return str((10 - (total % 10)) % 10)
@@ -406,19 +410,13 @@ class ProductTemplate(models.Model):
         an extra positional argument.
         """
         targets = self
-        before = sum(
-            1 for v in targets.mapped("product_variant_ids")
-            if not v.barcode
-        )
+        before = sum(1 for v in targets.mapped("product_variant_ids") if not v.barcode)
         targets._wms_ensure_barcodes()
         # Force a re-read so the post-write barcode values are
         # visible (the recordset's cache reflected the pre-write
         # state).
         targets.invalidate_recordset(["product_variant_ids"])
-        after = sum(
-            1 for v in targets.mapped("product_variant_ids")
-            if not v.barcode
-        )
+        after = sum(1 for v in targets.mapped("product_variant_ids") if not v.barcode)
         filled = before - after
         return {
             "type": "ir.actions.client",
@@ -429,9 +427,12 @@ class ProductTemplate(models.Model):
                     "Filled %d Code128 barcode%s on %d product%s. "
                     "Re-print thermal labels via Action -> Print -> "
                     "WMS thermal label."
-                ) % (
-                    filled, "" if filled == 1 else "s",
-                    len(targets), "" if len(targets) == 1 else "s",
+                )
+                % (
+                    filled,
+                    "" if filled == 1 else "s",
+                    len(targets),
+                    "" if len(targets) == 1 else "s",
                 ),
                 "type": "success" if filled else "info",
                 "sticky": False,
@@ -462,14 +463,19 @@ class ProductTemplate(models.Model):
             # Accept either "TOOL-..." or just "TOOL" (length 4) as the
             # whole code. Anything else is a kind/code mismatch.
             if not (code == expected or code.startswith(expected + "-")):
-                kind_label = dict(WMS_KIND_SELECTION).get(tmpl.wms_product_kind, tmpl.wms_product_kind)
-                raise ValidationError(_(
-                    "SKU '%(code)s' does not match WMS Kind '%(kind)s'.\n\n"
-                    "Expected prefix: %(prefix)s-\n"
-                    "Either change the SKU to start with '%(prefix)s-', "
-                    "or clear the SKU field and the system will generate "
-                    "one automatically from the %(kind)s sequence."
-                ) % {"code": tmpl.default_code, "kind": kind_label, "prefix": expected})
+                kind_label = dict(WMS_KIND_SELECTION).get(
+                    tmpl.wms_product_kind, tmpl.wms_product_kind
+                )
+                raise ValidationError(
+                    _(
+                        "SKU '%(code)s' does not match WMS Kind '%(kind)s'.\n\n"
+                        "Expected prefix: %(prefix)s-\n"
+                        "Either change the SKU to start with '%(prefix)s-', "
+                        "or clear the SKU field and the system will generate "
+                        "one automatically from the %(kind)s sequence."
+                    )
+                    % {"code": tmpl.default_code, "kind": kind_label, "prefix": expected}
+                )
 
     # ---- "Where is it?" smart-button summary -----------------------------
     wms_total_on_hand = fields.Float(

@@ -25,7 +25,6 @@ import os
 import sys
 import xmlrpc.client
 
-
 # Constant must match _ATTACHMENT_NAME in
 # addons/wms_location/controllers/favicon.py.
 FAVICON_ATTACHMENT_NAME = "wms.favicon.image"
@@ -47,9 +46,7 @@ def main() -> None:
     models = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/object")
 
     # 1. Company logo --------------------------------------------------------
-    user_row = models.execute_kw(
-        db, uid, password, "res.users", "read", [[uid], ["company_id"]]
-    )[0]
+    user_row = models.execute_kw(db, uid, password, "res.users", "read", [[uid], ["company_id"]])[0]
     company_id = user_row["company_id"][0]
     print(f"[branding] Updating company id={company_id}")
 
@@ -63,7 +60,11 @@ def main() -> None:
     )
 
     company = models.execute_kw(
-        db, uid, password, "res.company", "read",
+        db,
+        uid,
+        password,
+        "res.company",
+        "read",
         [[company_id], ["name", "logo"]],
     )[0]
     logo_kb = (len(company["logo"]) * 3 // 4) // 1024 if company["logo"] else 0
@@ -75,8 +76,13 @@ def main() -> None:
     favicon_size = os.path.getsize(fav_path)
 
     existing = models.execute_kw(
-        db, uid, password, "ir.attachment", "search",
-        [[("name", "=", FAVICON_ATTACHMENT_NAME)]], {"limit": 1},
+        db,
+        uid,
+        password,
+        "ir.attachment",
+        "search",
+        [[("name", "=", FAVICON_ATTACHMENT_NAME)]],
+        {"limit": 1},
     )
 
     vals = {
@@ -88,7 +94,11 @@ def main() -> None:
     }
     if existing:
         models.execute_kw(
-            db, uid, password, "ir.attachment", "write",
+            db,
+            uid,
+            password,
+            "ir.attachment",
+            "write",
             [existing, vals],
         )
         print(
@@ -97,7 +107,11 @@ def main() -> None:
         )
     else:
         att_id = models.execute_kw(
-            db, uid, password, "ir.attachment", "create",
+            db,
+            uid,
+            password,
+            "ir.attachment",
+            "create",
             [vals],
         )
         print(

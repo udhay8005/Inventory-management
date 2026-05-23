@@ -27,7 +27,6 @@ the form colour-codes mismatches.
 from __future__ import annotations
 
 from markupsafe import Markup
-
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
@@ -41,11 +40,11 @@ class WmsAudit(models.Model):
     name = fields.Char(default="New", readonly=True, copy=False, tracking=True)
     state = fields.Selection(
         [
-            ("draft",       "Draft"),
+            ("draft", "Draft"),
             ("in_progress", "In progress"),
-            ("submitted",   "Submitted"),
-            ("reviewed",    "Reviewed"),
-            ("rejected",    "Rejected"),
+            ("submitted", "Submitted"),
+            ("reviewed", "Reviewed"),
+            ("rejected", "Rejected"),
         ],
         default="draft",
         tracking=True,
@@ -57,8 +56,7 @@ class WmsAudit(models.Model):
         tracking=True,
         default=lambda self: self.env.user,
         domain="[('group_ids.id', '=?', group_wms_user_id)]",
-        help="The Store Keeper doing the walk. Defaults to the user "
-        "who opens the audit.",
+        help="The Store Keeper doing the walk. Defaults to the user " "who opens the audit.",
     )
     storekeeper_id = fields.Many2one(
         "wms.storekeeper",
@@ -96,9 +94,7 @@ class WmsAudit(models.Model):
     def _compute_counts(self):
         for rec in self:
             rec.line_count = len(rec.line_ids)
-            rec.variance_count = sum(
-                1 for l in rec.line_ids if l.counted_qty != l.expected_qty
-            )
+            rec.variance_count = sum(1 for ln in rec.line_ids if ln.counted_qty != ln.expected_qty)
 
     @api.depends()
     def _compute_group_id(self):
@@ -113,9 +109,7 @@ class WmsAudit(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("name", "New") == "New":
-                vals["name"] = self.env["ir.sequence"].next_by_code(
-                    "wms.audit"
-                ) or "AUDIT/NEW"
+                vals["name"] = self.env["ir.sequence"].next_by_code("wms.audit") or "AUDIT/NEW"
         return super().create(vals_list)
 
     # ---------------------------------------------------------------
@@ -127,10 +121,10 @@ class WmsAudit(models.Model):
         """
         for rec in self:
             if rec.state != "draft":
-                raise UserError(_(
-                    "Audit %s is not in draft. Open a fresh audit to "
-                    "re-walk the warehouse."
-                ) % rec.name)
+                raise UserError(
+                    _("Audit %s is not in draft. Open a fresh audit to " "re-walk the warehouse.")
+                    % rec.name
+                )
             if not rec.line_ids:
                 rec._populate_from_quants()
             rec.state = "in_progress"
@@ -140,7 +134,8 @@ class WmsAudit(models.Model):
                     "<p><b>Audit started.</b> %d slot/product combinations "
                     "queued. Walk the racks and enter the counted "
                     "quantity for each line.</p>"
-                ) % len(rec.line_ids),
+                )
+                % len(rec.line_ids),
                 subject="Audit started",
             )
 
@@ -149,19 +144,23 @@ class WmsAudit(models.Model):
         keeper has the expected value to compare against."""
         self.ensure_one()
         Quant = self.env["stock.quant"].sudo()
-        quants = Quant.search([
-            ("location_id.usage", "=", "internal"),
-            ("quantity", ">", 0),
-        ])
+        quants = Quant.search(
+            [
+                ("location_id.usage", "=", "internal"),
+                ("quantity", ">", 0),
+            ]
+        )
         Line = self.env["wms.audit.line"].sudo()
         for q in quants:
-            Line.create({
-                "audit_id": self.id,
-                "location_id": q.location_id.id,
-                "product_id": q.product_id.id,
-                "expected_qty": q.quantity,
-                "counted_qty": 0.0,
-            })
+            Line.create(
+                {
+                    "audit_id": self.id,
+                    "location_id": q.location_id.id,
+                    "product_id": q.product_id.id,
+                    "expected_qty": q.quantity,
+                    "counted_qty": 0.0,
+                }
+            )
 
     def action_submit(self):
         """Store keeper hands the audit in. Lock the lines and post a
@@ -169,16 +168,18 @@ class WmsAudit(models.Model):
         Inbox the next time Odoo opens."""
         for rec in self:
             if rec.state != "in_progress":
-                raise UserError(_(
-                    "Only an in-progress audit can be submitted. Audit "
-                    "%s is currently in %s."
-                ) % (rec.name, rec.state))
+                raise UserError(
+                    _("Only an in-progress audit can be submitted. Audit " "%s is currently in %s.")
+                    % (rec.name, rec.state)
+                )
             if not rec.storekeeper_id:
-                raise UserError(_(
-                    "Pick the on-duty Store Keeper from the roster "
-                    "before submitting (drop-down at the top of the "
-                    "form)."
-                ))
+                raise UserError(
+                    _(
+                        "Pick the on-duty Store Keeper from the roster "
+                        "before submitting (drop-down at the top of the "
+                        "form)."
+                    )
+                )
             rec.state = "submitted"
             rec.submitted_at = fields.Datetime.now()
 
@@ -188,8 +189,8 @@ class WmsAudit(models.Model):
             # Build the digest body. Markup() so the HTML renders
             # instead of escaping.
             top_variances = rec.line_ids.filtered(
-                lambda l: l.counted_qty != l.expected_qty
-            ).sorted(lambda l: abs(l.counted_qty - l.expected_qty), reverse=True)[:10]
+                lambda ln: ln.counted_qty != ln.expected_qty
+            ).sorted(lambda ln: abs(ln.counted_qty - ln.expected_qty), reverse=True)[:10]
             rows = []
             for line in top_variances:
                 colour = "#cc0000" if line.counted_qty < line.expected_qty else "#0066aa"
@@ -199,7 +200,8 @@ class WmsAudit(models.Model):
                     "<td style='padding:2px 8px;text-align:right'>%g</td>"
                     "<td style='padding:2px 8px;text-align:right'>%g</td>"
                     "<td style='padding:2px 8px;text-align:right;color:%s'>"
-                    "<b>%+g</b></td></tr>" % (
+                    "<b>%+g</b></td></tr>"
+                    % (
                         line.location_id.complete_name or "",
                         line.product_id.display_name,
                         line.expected_qty,
@@ -238,10 +240,10 @@ class WmsAudit(models.Model):
         so the books match the physical count."""
         for rec in self:
             if rec.state != "submitted":
-                raise UserError(_(
-                    "Only a submitted audit can be reviewed. %s is in "
-                    "%s."
-                ) % (rec.name, rec.state))
+                raise UserError(
+                    _("Only a submitted audit can be reviewed. %s is in " "%s.")
+                    % (rec.name, rec.state)
+                )
             rec.state = "reviewed"
             rec.reviewed_at = fields.Datetime.now()
             rec.reviewed_by = self.env.user
@@ -252,27 +254,39 @@ class WmsAudit(models.Model):
             for line in rec.line_ids:
                 if line.counted_qty == line.expected_qty:
                     continue
-                quant = self.env["stock.quant"].sudo().search([
-                    ("product_id", "=", line.product_id.id),
-                    ("location_id", "=", line.location_id.id),
-                ], limit=1)
+                quant = (
+                    self.env["stock.quant"]
+                    .sudo()
+                    .search(
+                        [
+                            ("product_id", "=", line.product_id.id),
+                            ("location_id", "=", line.location_id.id),
+                        ],
+                        limit=1,
+                    )
+                )
                 if quant:
-                    quant.with_context(inventory_mode=True).write({
-                        "quantity": line.counted_qty,
-                    })
+                    quant.with_context(inventory_mode=True).write(
+                        {
+                            "quantity": line.counted_qty,
+                        }
+                    )
                 elif line.counted_qty > 0:
-                    self.env["stock.quant"].sudo().with_context(inventory_mode=True).create({
-                        "product_id": line.product_id.id,
-                        "location_id": line.location_id.id,
-                        "quantity": line.counted_qty,
-                    })
+                    self.env["stock.quant"].sudo().with_context(inventory_mode=True).create(
+                        {
+                            "product_id": line.product_id.id,
+                            "location_id": line.location_id.id,
+                            "quantity": line.counted_qty,
+                        }
+                    )
 
             rec.message_post(
                 body=Markup(
                     "<p><b>Audit accepted</b> by <b>%s</b>. "
                     "%d adjustment(s) applied; quants now match the "
                     "physical count.</p>"
-                ) % (self.env.user.display_name, rec.variance_count),
+                )
+                % (self.env.user.display_name, rec.variance_count),
                 subject="Audit reviewed",
             )
 
@@ -286,7 +300,8 @@ class WmsAudit(models.Model):
                     "<p><b>Audit rejected</b> by <b>%s</b>. The Store "
                     "Keeper should re-walk the flagged lines and "
                     "re-submit a fresh audit.</p>"
-                ) % self.env.user.display_name,
+                )
+                % self.env.user.display_name,
                 subject="Audit rejected",
             )
 
@@ -324,8 +339,7 @@ class WmsAuditLine(models.Model):
         compute="_compute_variance",
         store=True,
         readonly=True,
-        help="counted - expected. Negative = missing stock, "
-        "positive = unexpected stock found.",
+        help="counted - expected. Negative = missing stock, " "positive = unexpected stock found.",
     )
     note = fields.Char(
         string="Note",

@@ -24,7 +24,6 @@ from datetime import timedelta
 
 from odoo import api, fields, models
 
-
 # Window after which we stop warning. 30 minutes balances "still
 # fresh" against "the keeper went on lunch and the Admin is editing
 # an hour later — no surprise to expect anymore".
@@ -50,15 +49,9 @@ class WmsKeeperWarningMixin(models.AbstractModel):
 
     @api.depends("write_uid", "write_date")
     def _compute_wms_keeper_edit(self):
-        manager_group = self.env.ref(
-            "wms_location.group_wms_manager", raise_if_not_found=False
-        )
-        user_group = self.env.ref(
-            "wms_location.group_wms_user", raise_if_not_found=False
-        )
-        cutoff = fields.Datetime.now() - timedelta(
-            minutes=_WARNING_WINDOW_MINUTES
-        )
+        manager_group = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
+        user_group = self.env.ref("wms_location.group_wms_user", raise_if_not_found=False)
+        cutoff = fields.Datetime.now() - timedelta(minutes=_WARNING_WINDOW_MINUTES)
         for rec in self:
             rec.wms_keeper_edit_warning = False
             rec.wms_keeper_edit_summary = False
@@ -78,8 +71,7 @@ class WmsKeeperWarningMixin(models.AbstractModel):
             minutes = max(1, int(elapsed.total_seconds() // 60))
             rec.wms_keeper_edit_warning = True
             rec.wms_keeper_edit_summary = (
-                "%s saved this %d minute%s ago. Review their changes "
-                "before saving over them."
+                "%s saved this %d minute%s ago. Review their changes " "before saving over them."
             ) % (
                 rec.write_uid.name,
                 minutes,

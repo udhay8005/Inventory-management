@@ -50,9 +50,7 @@ class WmsFaviconController(http.Controller):
         """Serve the trust-branded icon, falling back to Odoo's default
         if no upload exists yet so the tab is never iconless."""
         attachment = (
-            request.env["ir.attachment"]
-            .sudo()
-            .search([("name", "=", _ATTACHMENT_NAME)], limit=1)
+            request.env["ir.attachment"].sudo().search([("name", "=", _ATTACHMENT_NAME)], limit=1)
         )
         if not attachment or not attachment.datas:
             # Let Werkzeug fall back to its 404 / the bundled static file

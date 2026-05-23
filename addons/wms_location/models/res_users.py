@@ -49,16 +49,11 @@ class ResUsers(models.Model):
         module upgrade. Returns the number of users touched (for
         logging).
         """
-        base = self.env.ref(
-            "wms_location.group_wms_user", raise_if_not_found=False
-        )
-        manager = self.env.ref(
-            "wms_location.group_wms_manager", raise_if_not_found=False
-        )
+        base = self.env.ref("wms_location.group_wms_user", raise_if_not_found=False)
+        manager = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
         if not base:
             _logger.warning(
-                "wms_location: group_wms_user not found, skipping "
-                "capability backfill"
+                "wms_location: group_wms_user not found, skipping " "capability backfill"
             )
             return 0
 

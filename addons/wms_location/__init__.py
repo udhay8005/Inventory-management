@@ -83,11 +83,13 @@ def _create_default_storekeeper(env):
     # --- 2. Backfill capabilities on existing keepers (every upgrade) ---
     if not cap_groups:
         return
-    existing_keepers = Users.search([
-        ("group_ids", "in", base_group.id),
-        # Don't touch Admin - they get capabilities via group_wms_manager.
-        ("group_ids", "not in", env.ref("wms_location.group_wms_manager").id),
-    ])
+    existing_keepers = Users.search(
+        [
+            ("group_ids", "in", base_group.id),
+            # Don't touch Admin - they get capabilities via group_wms_manager.
+            ("group_ids", "not in", env.ref("wms_location.group_wms_manager").id),
+        ]
+    )
     added = 0
     for user in existing_keepers:
         missing = [g.id for g in cap_groups if g not in user.group_ids]
@@ -98,6 +100,7 @@ def _create_default_storekeeper(env):
         _logger.info(
             "wms_location: backfilled %d capability assignments onto "
             "%d existing Store Keeper user(s).",
-            sum(len([g for g in cap_groups if g not in u.group_ids]) for u in existing_keepers) + added,
+            sum(len([g for g in cap_groups if g not in u.group_ids]) for u in existing_keepers)
+            + added,
             added,
         )

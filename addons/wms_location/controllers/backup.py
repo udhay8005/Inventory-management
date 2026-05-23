@@ -28,7 +28,7 @@ import tempfile
 from datetime import datetime
 
 from odoo import http
-from odoo.http import request, content_disposition
+from odoo.http import content_disposition, request
 
 _logger = logging.getLogger(__name__)
 
@@ -89,9 +89,7 @@ class WmsBackupController(http.Controller):
     def backup_download(self, **kw):
         """Stream an encrypted pg_dump of the current database."""
         user = request.env.user
-        manager = request.env.ref(
-            "wms_location.group_wms_manager", raise_if_not_found=False
-        )
+        manager = request.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
         if not manager or manager not in user.group_ids:
             return request.not_found()
 
@@ -103,17 +101,18 @@ class WmsBackupController(http.Controller):
                 "pg_dump.exe is not on PATH and not at the standard "
                 "PostgreSQL\\17\\bin location. Install PostgreSQL "
                 "client tools or run the CLI backup script "
-                "(scripts\\backup-native.ps1) instead."
+                "(scripts\\backup-native.ps1) instead.",
             )
         if not gpg:
             return self._error_page(
                 "GPG not found",
                 "gpg.exe is not on PATH and not at the standard "
                 "GnuPG\\bin location. Install GnuPG via "
-                "<code>winget install GnuPG.GnuPG</code> and try again."
+                "<code>winget install GnuPG.GnuPG</code> and try again.",
             )
 
         from odoo.tools import config
+
         db_name = request.env.cr.dbname
         db_host = config.get("db_host") or "localhost"
         db_port = str(config.get("db_port") or 5432)
@@ -122,36 +121,47 @@ class WmsBackupController(http.Controller):
 
         project_root = os.path.abspath(
             os.path.join(
-                os.path.dirname(__file__), os.pardir, os.pardir, os.pardir,
+                os.path.dirname(__file__),
+                os.pardir,
+                os.pardir,
+                os.pardir,
             )
         )
-        passphrase = _read_env_value(
-            os.path.join(project_root, ".env"), "BACKUP_PASSPHRASE"
-        )
+        passphrase = _read_env_value(os.path.join(project_root, ".env"), "BACKUP_PASSPHRASE")
         if not passphrase or passphrase == "changeme_backup_passphrase":
             return self._error_page(
                 "BACKUP_PASSPHRASE not set",
                 "Open <code>.env</code> in the project root and set "
                 "<code>BACKUP_PASSPHRASE</code> to a strong value "
                 "(24+ characters, no whitespace). Without it the "
-                "encrypted backup cannot be restored later."
+                "encrypted backup cannot be restored later.",
             )
 
         env = os.environ.copy()
         env["PGPASSWORD"] = db_password
-        with tempfile.NamedTemporaryFile(
-            suffix=".dump", delete=False
-        ) as dump_file:
+        with tempfile.NamedTemporaryFile(suffix=".dump", delete=False) as dump_file:
             dump_path = dump_file.name
         try:
             dump_cmd = [
                 pg_dump,
-                "-U", db_user, "-h", db_host, "-p", db_port,
-                "-d", db_name, "-Fc", "-f", dump_path,
+                "-U",
+                db_user,
+                "-h",
+                db_host,
+                "-p",
+                db_port,
+                "-d",
+                db_name,
+                "-Fc",
+                "-f",
+                dump_path,
             ]
             _logger.info("WMS backup: invoking pg_dump for db=%s", db_name)
             result = subprocess.run(
-                dump_cmd, env=env, capture_output=True, timeout=600,
+                dump_cmd,
+                env=env,
+                capture_output=True,
+                timeout=600,
             )
             if result.returncode != 0:
                 stderr = result.stderr.decode("utf-8", "replace")[:500]
@@ -160,16 +170,20 @@ class WmsBackupController(http.Controller):
                     f"<pre>{stderr}</pre>",
                 )
 
-            with tempfile.NamedTemporaryFile(
-                suffix=".dump.gpg", delete=False
-            ) as enc_file:
+            with tempfile.NamedTemporaryFile(suffix=".dump.gpg", delete=False) as enc_file:
                 enc_path = enc_file.name
             try:
                 gpg_cmd = [
-                    gpg, "--batch", "--yes",
-                    "--passphrase-fd", "0",
-                    "--symmetric", "--cipher-algo", "AES256",
-                    "-o", enc_path,
+                    gpg,
+                    "--batch",
+                    "--yes",
+                    "--passphrase-fd",
+                    "0",
+                    "--symmetric",
+                    "--cipher-algo",
+                    "AES256",
+                    "-o",
+                    enc_path,
                     dump_path,
                 ]
                 _logger.info("WMS backup: encrypting dump")
@@ -192,7 +206,9 @@ class WmsBackupController(http.Controller):
                 filename = f"{db_name}-{stamp}.dump.gpg"
                 _logger.info(
                     "WMS backup: serving %s (%d bytes) to user %s",
-                    filename, len(payload), user.login,
+                    filename,
+                    len(payload),
+                    user.login,
                 )
                 return request.make_response(
                     payload,
@@ -229,14 +245,15 @@ class WmsBackupController(http.Controller):
         command and the backup folder path.
         """
         user = request.env.user
-        manager = request.env.ref(
-            "wms_location.group_wms_manager", raise_if_not_found=False
-        )
+        manager = request.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
         if not manager or manager not in user.group_ids:
             return request.not_found()
         project_root = os.path.abspath(
             os.path.join(
-                os.path.dirname(__file__), os.pardir, os.pardir, os.pardir,
+                os.path.dirname(__file__),
+                os.pardir,
+                os.pardir,
+                os.pardir,
             )
         )
         backups_dir = os.path.join(project_root, "backups").replace("/", "\\")
@@ -273,9 +290,7 @@ restores from <code>pg_restore</code>.</p>
 <p><a href="/odoo">Back to WMS</a></p>
 </body></html>
 """
-        return request.make_response(
-            body, headers=[("Content-Type", "text/html; charset=utf-8")]
-        )
+        return request.make_response(body, headers=[("Content-Type", "text/html; charset=utf-8")])
 
     def _error_page(self, title, body_html):
         html = (
@@ -287,6 +302,4 @@ restores from <code>pg_restore</code>.</p>
             "<p><a href='/odoo'>Back to WMS</a></p>"
             "</body></html>"
         )
-        return request.make_response(
-            html, headers=[("Content-Type", "text/html; charset=utf-8")]
-        )
+        return request.make_response(html, headers=[("Content-Type", "text/html; charset=utf-8")])

@@ -57,11 +57,21 @@ def main() -> None:
 
     # --- 1. Locate the demo products (templates + variants) -------------
     tmpl_ids = call(
-        models, db, uid, password, "product.template", "search",
+        models,
+        db,
+        uid,
+        password,
+        "product.template",
+        "search",
         [[("default_code", "in", DEMO_SKUS)]],
     )
     prod_ids = call(
-        models, db, uid, password, "product.product", "search",
+        models,
+        db,
+        uid,
+        password,
+        "product.product",
+        "search",
         [[("default_code", "in", DEMO_SKUS)]],
     )
     if not tmpl_ids and not prod_ids:
@@ -81,8 +91,9 @@ def main() -> None:
             ("wms.forecast", "forecasts"),
             ("wms.forecast.history", "forecast history"),
         ]:
-            ids = call(models, db, uid, password, model_name, "search",
-                       [[("product_id", "in", prod_ids)]])
+            ids = call(
+                models, db, uid, password, model_name, "search", [[("product_id", "in", prod_ids)]]
+            )
             print(f"  would delete {len(ids):>4} rows from {label} ({model_name})")
         return
 
@@ -90,16 +101,16 @@ def main() -> None:
     cascade_steps = [
         # (model, ID domain)
         ("wms.repair.order", [("product_id", "in", prod_ids)]),
-        ("wms.damage",       [("product_id", "in", prod_ids)]),
+        ("wms.damage", [("product_id", "in", prod_ids)]),
         # Stock moves block deletion of products via FK. We unlink in
         # state 'cancel' / 'draft' first; 'done' moves stay - the
         # ORM will refuse to delete a product with done moves, which
         # is what we want as a safety net.
-        ("stock.move.line",  [("product_id", "in", prod_ids)]),
-        ("stock.move",       [("product_id", "in", prod_ids)]),
-        ("stock.quant",      [("product_id", "in", prod_ids)]),
+        ("stock.move.line", [("product_id", "in", prod_ids)]),
+        ("stock.move", [("product_id", "in", prod_ids)]),
+        ("stock.quant", [("product_id", "in", prod_ids)]),
         ("wms.barcode.alias", [("product_id", "in", prod_ids)]),
-        ("wms.forecast",     [("product_id", "in", prod_ids)]),
+        ("wms.forecast", [("product_id", "in", prod_ids)]),
         ("wms.forecast.history", [("product_id", "in", prod_ids)]),
     ]
 
@@ -129,8 +140,9 @@ def main() -> None:
     if tmpl_ids:
         # template unlink may already have happened via cascade; check
         # what's left.
-        remaining = call(models, db, uid, password, "product.template", "search",
-                         [[("id", "in", tmpl_ids)]])
+        remaining = call(
+            models, db, uid, password, "product.template", "search", [[("id", "in", tmpl_ids)]]
+        )
         if remaining:
             try:
                 call(models, db, uid, password, "product.template", "unlink", [remaining])
@@ -140,16 +152,21 @@ def main() -> None:
 
     # --- 4. Reset the per-kind sequences --------------------------------
     seq_codes = [
-        "wms.sku.raw_material", "wms.sku.packaging", "wms.sku.fluid",
-        "wms.sku.finished_good", "wms.sku.wip", "wms.sku.consumable",
-        "wms.sku.tool", "wms.sku.spare",
+        "wms.sku.raw_material",
+        "wms.sku.packaging",
+        "wms.sku.fluid",
+        "wms.sku.finished_good",
+        "wms.sku.wip",
+        "wms.sku.consumable",
+        "wms.sku.tool",
+        "wms.sku.spare",
     ]
     for code in seq_codes:
-        sids = call(models, db, uid, password, "ir.sequence", "search",
-                    [[("code", "=", code)]])
+        sids = call(models, db, uid, password, "ir.sequence", "search", [[("code", "=", code)]])
         if sids:
-            call(models, db, uid, password, "ir.sequence", "write",
-                 [sids, {"number_next_actual": 1}])
+            call(
+                models, db, uid, password, "ir.sequence", "write", [sids, {"number_next_actual": 1}]
+            )
     print(f"[wipe] Reset {len(seq_codes)} SKU sequences to 1")
 
     print("[wipe] Done. Inventory is empty; create products via the Admin UI.")

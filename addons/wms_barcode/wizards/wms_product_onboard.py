@@ -29,13 +29,11 @@ supports clipboard import.
 from __future__ import annotations
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
 
 # Re-use the canonical kind list so this wizard stays aligned with
 # the source of truth in wms_location.
-from odoo.addons.wms_location.models.product_template import (
-    WMS_KIND_SELECTION,
-)
+from odoo.addons.wms_location.models.product_template import WMS_KIND_SELECTION
+from odoo.exceptions import UserError
 
 
 class WmsProductOnboard(models.TransientModel):
@@ -63,27 +61,39 @@ class WmsProductOnboard(models.TransientModel):
             if not line.name:
                 raise UserError(_("Row %d: product name is required.") % (line._origin.id or 0))
             if not line.wms_product_kind:
-                raise UserError(_(
-                    "Row %r: pick a WMS Kind so the system can choose the "
-                    "right SKU prefix (TOOL-, CONS-, ...)."
-                ) % line.name)
+                raise UserError(
+                    _(
+                        "Row %r: pick a WMS Kind so the system can choose the "
+                        "right SKU prefix (TOOL-, CONS-, ...)."
+                    )
+                    % line.name
+                )
             if line.initial_qty < 0:
                 raise UserError(_("Row %r: initial quantity cannot be negative.") % line.name)
             # Allow qty=0 (catalog-only rows). If qty>0 we need a slot.
             if line.initial_qty > 0 and not line.location_id:
-                raise UserError(_(
-                    "Row %r: pick a slot (or scan its barcode) when "
-                    "initial quantity is > 0. Use 0 for catalog-only rows."
-                ) % line.name)
+                raise UserError(
+                    _(
+                        "Row %r: pick a slot (or scan its barcode) when "
+                        "initial quantity is > 0. Use 0 for catalog-only rows."
+                    )
+                    % line.name
+                )
             # Medicine and Feed without expiry is a real liability.
             # Treat them like an audit-trail field on damage events:
             # block the save until the field is filled.
             if line.wms_product_kind in ("medicine", "feed") and not line.expiry_date:
-                raise UserError(_(
-                    "Row %r is a %s product - the expiry date is "
-                    "required. Enter the date stamped on the supplier's "
-                    "label (or pack)."
-                ) % (line.name, dict(WMS_KIND_SELECTION).get(line.wms_product_kind, line.wms_product_kind)))
+                raise UserError(
+                    _(
+                        "Row %r is a %s product - the expiry date is "
+                        "required. Enter the date stamped on the supplier's "
+                        "label (or pack)."
+                    )
+                    % (
+                        line.name,
+                        dict(WMS_KIND_SELECTION).get(line.wms_product_kind, line.wms_product_kind),
+                    )
+                )
 
     def action_onboard(self):
         """Create products + place initial stock + open labels PDF."""
@@ -105,7 +115,8 @@ class WmsProductOnboard(models.TransientModel):
                     "%d product%s created. Open Inventory -> WMS Products "
                     "to see the new SKUs. Print labels later via "
                     "Action -> Print thermal label."
-                ) % (n, "" if n == 1 else "s"),
+                )
+                % (n, "" if n == 1 else "s"),
                 "type": "success",
                 "sticky": False,
             },
@@ -148,10 +159,12 @@ class WmsProductOnboard(models.TransientModel):
 
             # 2. Optional supplier
             if line.supplier_id:
-                self.env["product.supplierinfo"].create({
-                    "product_tmpl_id": tmpl.id,
-                    "partner_id": line.supplier_id.id,
-                })
+                self.env["product.supplierinfo"].create(
+                    {
+                        "product_tmpl_id": tmpl.id,
+                        "partner_id": line.supplier_id.id,
+                    }
+                )
 
             # 3. Place initial stock in the chosen slot.
             #    stock.quant create with sudo so the post-create
@@ -159,15 +172,15 @@ class WmsProductOnboard(models.TransientModel):
             #    the perm_unlink lockdown on quants for safety nets
             #    Odoo runs internally.
             if line.initial_qty > 0 and line.location_id:
-                Quant.with_context(inventory_mode=True).create({
-                    "product_id": variant.id,
-                    "location_id": line.location_id.id,
-                    "quantity": line.initial_qty,
-                })
+                Quant.with_context(inventory_mode=True).create(
+                    {
+                        "product_id": variant.id,
+                        "location_id": line.location_id.id,
+                        "quantity": line.initial_qty,
+                    }
+                )
 
-        self.summary = _(
-            "%d product%s onboarded with %d unit%s of stock placed."
-        ) % (
+        self.summary = _("%d product%s onboarded with %d unit%s of stock placed.") % (
             len(self.line_ids),
             "" if len(self.line_ids) == 1 else "s",
             int(sum(self.line_ids.mapped("initial_qty"))),
@@ -188,9 +201,9 @@ class WmsProductOnboard(models.TransientModel):
         """
         if not products:
             return {"type": "ir.actions.act_window_close"}
-        return self.env.ref(
-            "wms_barcode.action_report_wms_product_label_thermal"
-        ).report_action(products)
+        return self.env.ref("wms_barcode.action_report_wms_product_label_thermal").report_action(
+            products
+        )
 
 
 class WmsProductOnboardLine(models.TransientModel):
@@ -236,7 +249,7 @@ class WmsProductOnboardLine(models.TransientModel):
         "stock.location",
         string="Slot",
         domain="[('usage', '=', 'internal'), "
-               "('wms_location_type', 'in', ('slot', 'floor_zone'))]",
+        "('wms_location_type', 'in', ('slot', 'floor_zone'))]",
         help="Where the initial stock goes. Required when initial qty > 0.",
     )
     location_scan = fields.Char(
@@ -273,6 +286,7 @@ class WmsProductOnboardLine(models.TransientModel):
                     "message": _(
                         "No internal location matches barcode %r. Check "
                         "the slot sticker, or pick from the dropdown."
-                    ) % code,
+                    )
+                    % code,
                 }
             }
