@@ -256,15 +256,39 @@ class StockLocation(models.Model):
     def find_oldest_quants_for_product(self, product_id, qty_needed, parent_location_id=None):
         """FIFO helper: returns (plan, missing) where `plan` is an ordered
         list of (quant, take_qty) tuples consuming the oldest quants first.
+
+        Scoping:
+          - Strict pass first: only quants whose location is ``child_of``
+            the given parent (typically the warehouse's ``lot_stock_id``).
+            That keeps issues for a multi-warehouse setup tidy.
+          - Fallback: if the strict pass finds nothing AND a parent was
+            requested, retry across *every* internal location in the
+            current company. This rescues the common single-warehouse
+            setup where the trust placed its racks under a custom
+            top-level location (e.g. "Dakshin Vrindavan") instead of
+            the default ``WH/Stock`` tree — stock is real, just outside
+            the warehouse subtree, and the planner used to mis-report
+            STOCK OUT.
         """
-        domain = [
+        base_domain = [
             ("product_id", "=", product_id),
             ("quantity", ">", 0),
             ("location_id.usage", "=", "internal"),
         ]
+        strict = list(base_domain)
         if parent_location_id:
-            domain.append(("location_id.id", "child_of", parent_location_id))
-        quants = self.env["stock.quant"].search(domain, order="in_date asc, id asc")
+            strict.append(("location_id.id", "child_of", parent_location_id))
+        quants = self.env["stock.quant"].search(strict, order="in_date asc, id asc")
+        if not quants and parent_location_id:
+            # Fallback: search every internal location in the active company
+            # — but skip company-foreign quants so multi-company stays sane.
+            company_id = self.env.company.id
+            fallback = list(base_domain) + [
+                "|",
+                ("company_id", "=", company_id),
+                ("company_id", "=", False),
+            ]
+            quants = self.env["stock.quant"].search(fallback, order="in_date asc, id asc")
         plan = []
         remaining = qty_needed
         for q in quants:

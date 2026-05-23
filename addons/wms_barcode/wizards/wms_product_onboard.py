@@ -102,7 +102,13 @@ class WmsProductOnboard(models.TransientModel):
         return self._labels_action(created_products)
 
     def action_onboard_no_print(self):
-        """Create products + place initial stock. No PDF."""
+        """Create products + place initial stock. No PDF.
+
+        Chain a `next: act_window_close` action so the dialog closes
+        after the toast — without it the wizard sits in its post-save
+        readonly state and an impatient double-click re-submits, which
+        would silently create duplicate SKUs.
+        """
         self._validate()
         created_products = self._do_onboard()
         n = len(created_products)
@@ -119,6 +125,7 @@ class WmsProductOnboard(models.TransientModel):
                 % (n, "" if n == 1 else "s"),
                 "type": "success",
                 "sticky": False,
+                "next": {"type": "ir.actions.act_window_close"},
             },
         }
 

@@ -319,3 +319,76 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(plan[0][1], 5.0)
         self.assertEqual(plan[1][0], q2)
         self.assertEqual(plan[1][1], 1.0)
+
+    def test_fifo_helper_falls_back_outside_warehouse_tree(self):
+        """When a Trust parks its rack under a custom top-level location
+        (e.g. ``Dakshin Vrindavan``) instead of ``WH/Stock``, the strict
+        ``child_of lot_stock_id`` lookup misses the stock. The planner
+        must fall back to internal locations of the same company so
+        Scan Issue doesn't wrongly report STOCK OUT.
+        """
+        # Build a parent location that's a sibling of WH/Stock, not a
+        # descendant — mimics the Trust's "Dakshin Vrindavan" branded
+        # top-level location. company_id stays the same so the company
+        # guard in the fallback still matches.
+        outside_parent = self.env["stock.location"].create(
+            {
+                "name": "Dakshin Vrindavan (test)",
+                "usage": "internal",
+                "location_id": False,
+                "company_id": self.env.company.id,
+            }
+        )
+        gen = self.env["wms.rack.generator"].create(
+            {
+                "rack_code": "R-OUT",
+                "parent_location_id": outside_parent.id,
+                "shelf_count": 1,
+                "column_count": 1,
+                "default_slot_count": 1,
+            }
+        )
+        gen.action_generate()
+        slot = self.env["stock.location"].search(
+            [
+                ("wms_location_type", "=", "slot"),
+                ("location_id.location_id.wms_rack_code", "=", "R-OUT"),
+            ],
+            limit=1,
+        )
+        self.assertTrue(slot, "Rack didn't create the slot")
+        product = self.env["product.product"].create(
+            {
+                "name": "Out-of-tree Widget",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        self.env["stock.quant"].create(
+            {
+                "product_id": product.id,
+                "location_id": slot.id,
+                "quantity": 3,
+                "in_date": "2025-03-01 10:00:00",
+            }
+        )
+        # Sanity: the strict pass returns no quants because the slot
+        # sits outside the warehouse's lot_stock_id subtree.
+        strict_hits = self.env["stock.quant"].search_count(
+            [
+                ("product_id", "=", product.id),
+                ("quantity", ">", 0),
+                ("location_id.usage", "=", "internal"),
+                ("location_id.id", "child_of", self.warehouse.lot_stock_id.id),
+            ]
+        )
+        self.assertEqual(strict_hits, 0, "Slot should be outside WH/Stock")
+        # Fallback rescues us.
+        plan, missing = self.env["stock.location"].find_oldest_quants_for_product(
+            product.id,
+            2,
+            parent_location_id=self.warehouse.lot_stock_id.id,
+        )
+        self.assertEqual(missing, 0, "Fallback should have found the out-of-tree quant")
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0][1], 2.0)
