@@ -142,8 +142,20 @@ class WmsRackGenerator(models.TransientModel):
         }
 
     def _validate_spec(self, spec):
-        """Validate the spec and normalise legacy `column_index` to the new
-        column_left/column_right pair."""
+        """Validate the spec and normalise three legacy variants:
+
+          1. column_index (single int) -> column_left/column_right
+          2. column_left/column_right rectangle -> cells list
+          3. cells list with no bounding box -> derived shelf_top/bottom
+                                                 + column_left/right
+
+        After this method runs every compartment has both:
+          * `cells` = list of [shelf, column] pairs (the canonical
+            shape; supports arbitrary 4-connected polyominoes)
+          * `shelf_top`/`shelf_bottom`/`column_left`/`column_right` =
+            bounding box of `cells` (kept for stock.location's
+            wms_shelf_* fields and the warehouse-map renderer)
+        """
         required = ("rack_code", "shelves", "columns", "compartments")
         for key in required:
             if key not in spec:
@@ -155,44 +167,73 @@ class WmsRackGenerator(models.TransientModel):
         columns = int(spec["columns"])
         if shelves < 1 or columns < 1:
             raise UserError("Shelves and columns must both be at least 1.")
-        # 2D coverage matrix indexed by (shelf, column) — every cell can
-        # only be owned by one compartment.
+
+        # 2D coverage matrix indexed by (shelf, column). Every cell
+        # can only be owned by one compartment.
         occupied = {}
+
         for idx, comp in enumerate(spec["compartments"], start=1):
-            top = int(comp["shelf_top"])
-            bot = int(comp.get("shelf_bottom") or top)
-            # Accept either the new column_left/column_right pair OR the
-            # legacy column_index (kept as backward-compat for any older
-            # JSON the user may have saved).
-            if "column_left" in comp:
-                left = int(comp["column_left"])
-                right = int(comp.get("column_right") or left)
+            # ---- Resolve cells ---------------------------------------
+            cells = comp.get("cells")
+            if cells:
+                # Coerce to list-of-tuples for hashing + sanity check
+                try:
+                    cells = [(int(p[0]), int(p[1])) for p in cells]
+                except (TypeError, ValueError, IndexError):
+                    raise UserError(
+                        "Compartment #%d has a malformed 'cells' "
+                        "entry. Expected list of [shelf, column]." % idx
+                    )
             else:
-                left = int(comp["column_index"])
-                right = int(comp.get("column_index"))
-            if not (1 <= top <= shelves and 1 <= bot <= shelves and bot >= top):
+                # Legacy formats - convert to cells.
+                top = int(comp["shelf_top"])
+                bot = int(comp.get("shelf_bottom") or top)
+                if "column_left" in comp:
+                    left = int(comp["column_left"])
+                    right = int(comp.get("column_right") or left)
+                else:
+                    left = int(comp.get("column_index", 1))
+                    right = int(comp.get("column_index", left))
+                cells = [
+                    (s, c)
+                    for s in range(top, bot + 1)
+                    for c in range(left, right + 1)
+                ]
+
+            if not cells:
                 raise UserError(
-                    "Compartment #%d shelf range %d..%d is invalid (rack has %d shelves)."
-                    % (idx, top, bot, shelves)
+                    "Compartment #%d has no cells. Every compartment "
+                    "must cover at least one (shelf, column)." % idx
                 )
-            if not (1 <= left <= columns and 1 <= right <= columns and right >= left):
-                raise UserError(
-                    "Compartment #%d column range %d..%d is invalid (rack has %d columns)."
-                    % (idx, left, right, columns)
-                )
-            for row in range(top, bot + 1):
-                for col in range(left, right + 1):
-                    key = (row, col)
-                    if key in occupied:
-                        raise UserError(
-                            "Cell (shelf %d, column %d) is covered by two compartments "
-                            "(#%d and #%d). Compartments cannot overlap."
-                            % (row, col, occupied[key], idx)
-                        )
-                    occupied[key] = idx
-            comp["shelf_bottom"] = bot
-            comp["column_left"] = left
-            comp["column_right"] = right
+
+            # ---- Range + uniqueness checks ---------------------------
+            for s, c in cells:
+                if not (1 <= s <= shelves):
+                    raise UserError(
+                        "Compartment #%d references shelf %d which is "
+                        "out of range 1..%d." % (idx, s, shelves)
+                    )
+                if not (1 <= c <= columns):
+                    raise UserError(
+                        "Compartment #%d references column %d which is "
+                        "out of range 1..%d." % (idx, c, columns)
+                    )
+                if (s, c) in occupied:
+                    raise UserError(
+                        "Cell (shelf %d, column %d) is covered by two "
+                        "compartments (#%d and #%d). Compartments "
+                        "cannot overlap." % (s, c, occupied[(s, c)], idx)
+                    )
+                occupied[(s, c)] = idx
+
+            # ---- Compute / store the bounding box --------------------
+            tops    = [s for s, _ in cells]
+            cols    = [c for _, c in cells]
+            comp["cells"] = [[s, c] for s, c in cells]
+            comp["shelf_top"]    = min(tops)
+            comp["shelf_bottom"] = max(tops)
+            comp["column_left"]  = min(cols)
+            comp["column_right"] = max(cols)
             comp.pop("column_index", None)
             comp["slot_count"] = max(1, int(comp.get("slot_count") or 1))
         return spec
@@ -239,9 +280,32 @@ class WmsRackGenerator(models.TransientModel):
             left = int(comp_spec["column_left"])
             right = int(comp_spec["column_right"])
             slot_count = int(comp_spec.get("slot_count") or 1)
+            cells = comp_spec.get("cells") or []
+
+            # Detect non-rectangular shape: cells count < bbox area.
+            bbox_area = (bot - top + 1) * (right - left + 1)
+            is_polyomino = bool(cells) and len(cells) < bbox_area
+
             shelf_label = _shelf_label(top, bot)
             column_label = _column_label(left, right)
-            comp_name = comp_spec.get("label") or ("%s-%s" % (shelf_label, column_label))
+            if is_polyomino:
+                # For an L / T / U shape the bounding-box label is
+                # misleading. Compose the name from each cell so it
+                # reads "SH02-C01_SH03-C01-C02" or similar - lists
+                # exactly which cells the compartment covers.
+                comp_name = comp_spec.get("label") or _polyomino_label(cells)
+                # Barcode includes a hash of the cells so two
+                # compartments with the same bbox but different
+                # interior shape can coexist in one rack.
+                shape_tag = "P%d" % (len(cells))
+                barcode = "%s-%s-%s-%s" % (
+                    rack_code, shelf_label, column_label, shape_tag,
+                )
+            else:
+                comp_name = comp_spec.get("label") or (
+                    "%s-%s" % (shelf_label, column_label)
+                )
+                barcode = "%s-%s-%s" % (rack_code, shelf_label, column_label)
             compartment = Location.create(
                 {
                     "name": comp_name,
@@ -254,7 +318,7 @@ class WmsRackGenerator(models.TransientModel):
                     "wms_column_left": left,
                     "wms_column_right": right,
                     "wms_slot_count": slot_count,
-                    "barcode": "%s-%s-%s" % (rack_code, shelf_label, column_label),
+                    "barcode": barcode,
                 }
             )
             for n in range(1, slot_count + 1):
@@ -291,3 +355,34 @@ def _column_label(left, right):
     if not right or right == left:
         return "C%02d" % left
     return "C%02d-%02d" % (left, right)
+
+
+def _polyomino_label(cells):
+    """Render a polyomino's cells as a deterministic, human-readable
+    string. Example: cells = [[2,1],[3,1],[3,2]] -> "SH02-C01_SH03-C01-C02".
+
+    Groups cells by shelf so wide rows compress to a range. The
+    underscore separates shelves. The label is unique per cell-set
+    which is what we want for the compartment name shown in the rack
+    grid view.
+    """
+    by_shelf = {}
+    for s, c in cells:
+        by_shelf.setdefault(int(s), []).append(int(c))
+    parts = []
+    for s in sorted(by_shelf):
+        cols = sorted(set(by_shelf[s]))
+        # Compress contiguous columns into ranges (1,2,3 -> "01-03").
+        runs = []
+        i = 0
+        while i < len(cols):
+            j = i
+            while j + 1 < len(cols) and cols[j + 1] == cols[j] + 1:
+                j += 1
+            if i == j:
+                runs.append("C%02d" % cols[i])
+            else:
+                runs.append("C%02d-%02d" % (cols[i], cols[j]))
+            i = j + 1
+        parts.append("SH%02d-%s" % (s, "-".join(runs)))
+    return "_".join(parts)

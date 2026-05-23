@@ -39,12 +39,84 @@
             <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
         </record>
 
+        <!--
+            ============================================================
+            Per-keeper capability sub-groups
+            ============================================================
+
+            Each sub-group is a single tickable "advantage" the Admin
+            grants to a Store Keeper from the roster form. Each implies
+            group_wms_user so the holder always has the read-only
+            baseline (login + see WMS + read inventory).
+
+            Menus and ACL rows are gated by these sub-groups - a user
+            with group_wms_user alone (no sub-groups) can log in and
+            browse, but the Scan Receipt menu / Damage form / Audit
+            list never appear.
+
+            The Manager group below implies all five so the Admin sees
+            everything by default.
+        -->
+
+        <record id="group_wms_can_scan_receive" model="res.groups">
+            <field name="name">WMS / Capability: Scan Receipt + Scan Return</field>
+            <field name="implied_ids" eval="[(4, ref('group_wms_user'))]"/>
+        </record>
+
+        <record id="group_wms_can_scan_issue" model="res.groups">
+            <field name="name">WMS / Capability: Scan Issue (outbound)</field>
+            <field name="implied_ids" eval="[(4, ref('group_wms_user'))]"/>
+        </record>
+
+        <record id="group_wms_can_file_damage" model="res.groups">
+            <field name="name">WMS / Capability: File damage events</field>
+            <field name="implied_ids" eval="[(4, ref('group_wms_user'))]"/>
+        </record>
+
+        <record id="group_wms_can_submit_audit" model="res.groups">
+            <field name="name">WMS / Capability: Submit inventory audits</field>
+            <field name="implied_ids" eval="[(4, ref('group_wms_user'))]"/>
+        </record>
+
+        <record id="group_wms_can_manage_catalog" model="res.groups">
+            <field name="name">WMS / Capability: Manage carton aliases + labels</field>
+            <field name="implied_ids" eval="[(4, ref('group_wms_user'))]"/>
+        </record>
+
+        <!--
+            Manager - declared AFTER the capability groups so its
+            implied_ids can reference them. Admin user is added here
+            in a single record. The capability sub-groups are
+            included via implied_ids so the Admin auto-inherits
+            every capability + the base group_wms_user role.
+        -->
         <record id="group_wms_manager" model="res.groups">
             <field name="name">WMS / Manager</field>
-            <field name="implied_ids"
-                   eval="[(4, ref('stock.group_stock_manager')), (4, ref('group_wms_user'))]"/>
+            <field name="implied_ids" eval="[
+                (4, ref('stock.group_stock_manager')),
+                (4, ref('group_wms_user')),
+                (4, ref('group_wms_can_scan_receive')),
+                (4, ref('group_wms_can_scan_issue')),
+                (4, ref('group_wms_can_file_damage')),
+                (4, ref('group_wms_can_submit_audit')),
+                (4, ref('group_wms_can_manage_catalog')),
+            ]"/>
             <field name="user_ids" eval="[(4, ref('base.user_admin'))]"/>
         </record>
+
+        <!--
+            Backward compatibility: anyone currently in group_wms_user
+            (the legacy "Store Keeper" baseline role) gets all five
+            capability sub-groups added so they keep their existing
+            menus after upgrade. Without this, a pre-existing
+            storekeeper user would lose Scan / Damage / Audit access
+            until an Admin re-ticks the boxes.
+
+            Idempotent: the underlying method only ADDS missing
+            group memberships - re-running on already-granted users
+            is a no-op.
+        -->
+        <function model="res.users" name="_wms_backfill_capabilities"/>
 
         <!--
             Hide Odoo's built-in Inventory app from Store Keepers.

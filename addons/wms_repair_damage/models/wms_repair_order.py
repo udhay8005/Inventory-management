@@ -1,3 +1,4 @@
+from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -14,7 +15,11 @@ class WmsRepairOrder(models.Model):
 
     _name = "wms.repair.order"
     _description = "Repair order"
-    _inherit = ["mail.thread", "mail.activity.mixin"]
+    _inherit = [
+        "mail.thread",
+        "mail.activity.mixin",
+        "wms.keeper.warning.mixin",
+    ]
     _order = "create_date desc, id desc"
 
     name = fields.Char(default="New", readonly=True, copy=False)
@@ -277,23 +282,24 @@ class WmsRepairOrder(models.Model):
         order's history stands on its own without cross-referencing the
         picking. Same pattern as wms.damage.action_confirm."""
         self.ensure_one()
+        # Markup() tells Odoo this body is already safe HTML; without it,
+        # Odoo 19 escapes the angle brackets and the <p>/<b> tags display
+        # literally in the chatter.
+        body = Markup(
+            "<p><b>%(headline)s.</b> %(detail)s</p>"
+            "<p>Reported by <b>%(reporter)s</b>; authorised by "
+            "<b>%(auth)s</b>; Store Keeper on duty: "
+            "<b>%(keeper)s</b>; logged in as: <b>%(login)s</b>.</p>"
+        ) % {
+            "headline": headline,
+            "detail": detail,
+            "reporter": self.wms_reported_by or "(unspecified)",
+            "auth": self.wms_authorized_by or "(unspecified)",
+            "keeper": (self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"),
+            "login": self.env.user.display_name or "(system)",
+        }
         self.message_post(
-            body=(
-                "<p><b>%(headline)s.</b> %(detail)s</p>"
-                "<p>Reported by <b>%(reporter)s</b>; authorised by "
-                "<b>%(auth)s</b>; Store Keeper on duty: "
-                "<b>%(keeper)s</b>; logged in as: <b>%(login)s</b>.</p>"
-            )
-            % {
-                "headline": headline,
-                "detail": detail,
-                "reporter": self.wms_reported_by or "(unspecified)",
-                "auth": self.wms_authorized_by or "(unspecified)",
-                "keeper": (
-                    self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"
-                ),
-                "login": self.env.user.display_name or "(system)",
-            },
+            body=body,
             subject="Repair audit",
             message_type="notification",
         )

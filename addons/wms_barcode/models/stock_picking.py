@@ -20,13 +20,15 @@ class StockPicking(models.Model):
     `views/stock_picking_views.xml`.
     """
 
-    _inherit = "stock.picking"
+    _inherit = ["stock.picking", "wms.keeper.warning.mixin"]
 
     wms_taken_by = fields.Char(
-        string="Taken by",
+        string="Handled by",
         index=True,
-        help="Name of the person who physically received this stock "
-        "(e.g. the worker, department lead, or visitor).",
+        help="Name of the person who physically handled this stock at the "
+        "warehouse door — the receiver on an incoming delivery, or the "
+        "person who took the goods on an issue. Neutral so the same "
+        "column reads naturally on both directions of the transfer.",
     )
     wms_ordered_by = fields.Char(
         string="Ordered by",

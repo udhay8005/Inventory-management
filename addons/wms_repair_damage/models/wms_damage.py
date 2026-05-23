@@ -1,3 +1,4 @@
+from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -10,7 +11,11 @@ class WmsDamage(models.Model):
 
     _name = "wms.damage"
     _description = "Damage event"
-    _inherit = ["mail.thread", "mail.activity.mixin"]
+    _inherit = [
+        "mail.thread",
+        "mail.activity.mixin",
+        "wms.keeper.warning.mixin",
+    ]
     _order = "create_date desc, id desc"
 
     name = fields.Char(default="New", readonly=True, copy=False)
@@ -211,9 +216,9 @@ class WmsDamage(models.Model):
                     "work isn't blocked. Open a Repair Order to bring this "
                     "one back into service."
                 ) % (qty, product_name, remaining)
-            elif rec.product_id.wms_product_kind in ("tool", "spare", "equipment"):
-                # Non-returnable but the product is a tool / spare /
-                # equipment that COULD in principle be reconditioned
+            elif rec.product_id.wms_product_kind in ("tool", "spare"):
+                # Non-returnable but the product is a tool / spare
+                # that COULD in principle be reconditioned
                 # (worn drill bit, partial spool, etc.). Other units cover
                 # the gap so it isn't urgent, but flag it so the Admin
                 # can decide whether to repair or scrap.
@@ -384,17 +389,19 @@ class WmsDamage(models.Model):
             # Mirror the audit-trail summary into the chatter so the
             # damage history stands on its own without cross-referencing
             # the picking.
+            # Markup() so Odoo 19 renders the <p>/<b> tags instead of
+            # escaping them to visible text in the chatter.
+            audit_body = Markup(
+                "<p><b>Damage confirmed.</b> "
+                "Reported by <b>%s</b>; authorised by <b>%s</b>; "
+                "Store Keeper on duty: <b>%s</b>.</p>"
+            ) % (
+                rec.wms_reported_by or "(unspecified)",
+                rec.wms_authorized_by or "(unspecified)",
+                rec.wms_storekeeper_id.name or "(unknown)",
+            )
             rec.message_post(
-                body=(
-                    "<p><b>Damage confirmed.</b> "
-                    "Reported by <b>%s</b>; authorised by <b>%s</b>; "
-                    "Store Keeper on duty: <b>%s</b>.</p>"
-                )
-                % (
-                    rec.wms_reported_by or "(unspecified)",
-                    rec.wms_authorized_by or "(unspecified)",
-                    rec.wms_storekeeper_id.name or "(unknown)",
-                ),
+                body=audit_body,
                 subject="Damage audit",
                 message_type="notification",
             )
@@ -413,7 +420,7 @@ class WmsDamage(models.Model):
         group = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
         if not group or not group.users:
             return
-        body = (
+        body = Markup(
             "<p><b>⚠ URGENT BUY required.</b></p>"
             "<p>%(qty)g × <b>%(product)s</b> just got filed as damaged at "
             "<b>%(slot)s</b>, and the trust has <b>zero spares</b> of this "
