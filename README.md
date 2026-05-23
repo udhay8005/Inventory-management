@@ -86,15 +86,24 @@ when any of the three fields is blank.
 ## Day-to-day commands
 
 ```powershell
+# Core server lifecycle
 scripts\start-native.ps1                       # Start the server
 scripts\start-native.ps1 -Upgrade wms_barcode  # Restart upgrading a module
 scripts\start-native.ps1 -Dev "reload,qweb"    # Dev mode (auto-reload)
 scripts\stop-native.ps1                        # Graceful stop
+
+# Backup + recovery
 scripts\backup-native.ps1                      # Dump DB + zip filestore
+scripts\reset-pg-password.ps1                  # Forgot postgres password? Run this (UAC).
+
+# Optional add-ons (run in a separate PowerShell window)
+scripts\start-ai-worker.ps1                    # Out-of-process forecast worker
+scripts\start-tunnel.ps1                       # Quick Cloudflare HTTPS tunnel
+scripts\start-tunnel.ps1 -Mode Named           # Permanent tunnel (needs CLOUDFLARE_TUNNEL_TOKEN in .env)
 ```
 
-PostgreSQL runs as a Windows service (`postgresql-x64-16`) and auto-starts on
-boot, so the database is always there waiting.
+PostgreSQL runs as a Windows service (`postgresql-x64-15/16/17` — auto-detected)
+and auto-starts on boot, so the database is always there waiting.
 
 ## Project layout
 
@@ -110,7 +119,8 @@ Inventory_mngt/
 │   ├── start-native.ps1        Start Odoo
 │   ├── stop-native.ps1         Stop Odoo
 │   └── backup-native.ps1       Dump + zip
-├── ai_worker/                  Optional out-of-process forecast runner
+├── ai_worker/                  Optional out-of-process forecast runner (statsmodels)
+│                               Run natively via scripts\start-ai-worker.ps1
 ├── docs/                       Architecture & design notes
 └── addons/
     ├── wms_location/           Rack/Compartment/Slot model + role groups + rack builder OWL component

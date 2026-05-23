@@ -28,11 +28,15 @@
     Password to set for the local 'odoo' Postgres user. Default: read from
     .env (DB_PASSWORD), else 'odoo_local_dev_pw'.
 
+.PARAMETER DbPort
+    Port Postgres is listening on. Default: auto-detect from postgresql.conf,
+    falling back to 5432.
+
 .EXAMPLE
     scripts\install-native.ps1
 
 .EXAMPLE
-    scripts\install-native.ps1 -Reset
+    scripts\install-native.ps1 -Reset -DbPort 1088
 
 .NOTES
     Requires: Windows 10/11, PowerShell 5.1+, admin rights for winget installs,
@@ -43,7 +47,8 @@ param(
     [switch]$Reset,
     [switch]$SkipWinget,
     [string]$DbName = 'wms',
-    [string]$DbPassword
+    [string]$DbPassword,
+    [int]$DbPort = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,9 +108,11 @@ if (-not $SkipWinget) {
         throw "winget is not available. Install 'App Installer' from the Microsoft Store first, then re-run this script."
     }
 
+    # PostgreSQL: accept any 15/16/17 (script auto-detects the service later).
+    # Python: prefer 3.12 (Odoo's tested version), accept 3.13 if installed.
     $packages = @(
-        @{ Id='PostgreSQL.PostgreSQL.16'; Probe={ Get-Command psql -ErrorAction SilentlyContinue } },
-        @{ Id='Python.Python.3.12';      Probe={ (Get-Command py -ErrorAction SilentlyContinue) -and (py -3.12 --version 2>$null) } },
+        @{ Id='PostgreSQL.PostgreSQL.17'; Probe={ Get-Command psql -ErrorAction SilentlyContinue } },
+        @{ Id='Python.Python.3.12';      Probe={ (Get-Command py -ErrorAction SilentlyContinue) -and ( (py -3.12 --version 2>$null) -or (py -3.13 --version 2>$null) ) } },
         @{ Id='wkhtmltopdf.wkhtmltox';   Probe={ Get-Command wkhtmltopdf -ErrorAction SilentlyContinue } },
         @{ Id='Git.Git';                 Probe={ Get-Command git -ErrorAction SilentlyContinue } }
     )
@@ -127,39 +134,59 @@ if (-not $SkipWinget) {
 # === 2. PostgreSQL - service + role + DB ===================================
 Write-Step "Configuring PostgreSQL"
 
-$pgService = Get-Service -Name 'postgresql-x64-16' -ErrorAction SilentlyContinue
+# Auto-detect whichever Postgres service is installed (15/16/17). Odoo 19
+# works with all three; we just need ONE running locally.
+$pgService = Get-Service -Name 'postgresql-x64-*' -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending | Select-Object -First 1
 if (-not $pgService) {
-    throw "PostgreSQL 16 service 'postgresql-x64-16' not found. Install PostgreSQL via winget or run with -SkipWinget after manual install."
+    throw "No PostgreSQL service found. Install PostgreSQL 15, 16, or 17 (e.g. winget install PostgreSQL.PostgreSQL.17) or run with -SkipWinget after manual install."
 }
+Write-OK "Detected PostgreSQL service: $($pgService.Name)"
+
 if ($pgService.Status -ne 'Running') {
-    Start-Service postgresql-x64-16
-    Write-OK "Started postgresql-x64-16 service"
+    Start-Service $pgService.Name
+    Write-OK "Started $($pgService.Name)"
 } else {
-    Write-Skip "postgresql-x64-16 already running"
+    Write-Skip "$($pgService.Name) already running"
 }
 
-# Create 'odoo' role + grant CREATEDB. Use the 'postgres' superuser via PGPASSWORD env (set during winget install or by user).
-# If the postgres user has no password yet, the user must set one first; we print clear guidance instead of failing silently.
-$psqlCheck = & psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname='odoo'" 2>$null
+# Auto-detect Postgres port from postgresql.conf if user didn't override.
+if ($DbPort -eq 0) {
+    $pgConf = Get-ChildItem 'C:\Program Files\PostgreSQL\*\data\postgresql.conf' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($pgConf) {
+        $portLine = Select-String -Path $pgConf.FullName -Pattern '^\s*port\s*=\s*(\d+)' | Select-Object -First 1
+        if ($portLine) {
+            $DbPort = [int]$portLine.Matches.Groups[1].Value
+        }
+    }
+    if ($DbPort -eq 0) { $DbPort = 5432 }
+}
+Write-OK "Using Postgres on port $DbPort"
+
+# Create 'odoo' role + grant CREATEDB. Use the 'postgres' superuser via PGPASSWORD env.
+# The user must have set PGPASSWORD at User scope (or in this shell) for this to work
+# - all auth methods are scram-sha-256 in modern PG installs, no trust path.
+$psqlArgs = @('-U','postgres','-h','localhost','-p',$DbPort,'-d','postgres','-w')
+$psqlCheck = & psql @psqlArgs -tAc "SELECT 1 FROM pg_roles WHERE rolname='odoo'" 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "    Cannot reach Postgres as 'postgres' user." -ForegroundColor Yellow
-    Write-Host "    Set PGPASSWORD in this shell to the postgres superuser password, then re-run:" -ForegroundColor Yellow
-    Write-Host "        `$env:PGPASSWORD = '<your-postgres-password>'" -ForegroundColor Yellow
+    Write-Host "    Cannot reach Postgres as 'postgres' user on port $DbPort." -ForegroundColor Yellow
+    Write-Host "    Set PGPASSWORD at User scope, then re-run:" -ForegroundColor Yellow
+    Write-Host "        [Environment]::SetEnvironmentVariable('PGPASSWORD','<your-postgres-password>','User')" -ForegroundColor Yellow
     Write-Host "        scripts\install-native.ps1 -SkipWinget" -ForegroundColor Yellow
     throw "Postgres auth failed."
 }
 
 if ($psqlCheck -ne '1') {
-    & psql -U postgres -d postgres -c "CREATE ROLE odoo WITH LOGIN CREATEDB PASSWORD '$DbPassword';" | Out-Null
+    & psql @psqlArgs -c "CREATE ROLE odoo WITH LOGIN CREATEDB PASSWORD '$DbPassword';" | Out-Null
     Write-OK "Created Postgres role 'odoo' with CREATEDB"
 } else {
-    & psql -U postgres -d postgres -c "ALTER ROLE odoo WITH PASSWORD '$DbPassword' CREATEDB;" | Out-Null
+    & psql @psqlArgs -c "ALTER ROLE odoo WITH PASSWORD '$DbPassword' CREATEDB;" | Out-Null
     Write-OK "Updated password + CREATEDB on existing 'odoo' role"
 }
 
-$dbExists = & psql -U postgres -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DbName'" 2>$null
+$dbExists = & psql @psqlArgs -tAc "SELECT 1 FROM pg_database WHERE datname='$DbName'" 2>$null
 if ($dbExists -ne '1') {
-    & psql -U postgres -d postgres -c "CREATE DATABASE $DbName OWNER odoo;" | Out-Null
+    & psql @psqlArgs -c "CREATE DATABASE $DbName OWNER odoo;" | Out-Null
     Write-OK "Created database '$DbName' owned by odoo"
 } else {
     Write-Skip "Database '$DbName' already exists"
@@ -180,7 +207,28 @@ if (Test-Path (Join-Path $OdooSrc 'odoo-bin')) {
 Write-Step "Creating Python venv + installing dependencies (~5 min the first time)"
 
 if (-not (Test-Path (Join-Path $VenvDir 'Scripts\python.exe'))) {
-    & py -3.12 -m venv $VenvDir
+    # Prefer Python 3.12 (Odoo's tested baseline). Fall back to 3.13.
+    # py -0 lists every Python the launcher knows about; safer than running
+    # py -3.X --version which throws under ErrorActionPreference=Stop when
+    # that version isn't installed.
+    $pyList = ''
+    try { $pyList = (py -0 2>&1 | Out-String) } catch { $pyList = '' }
+    $pyVer = $null
+    # Prefer 3.12 > 3.11 > 3.13. Odoo 19's pinned requirements (e.g.
+    # rl-renderPM 4.0.3) don't build on 3.13 because the old wheel API
+    # they call (wheel.bdist_wheel.get_abi_tag) was removed. 3.11 + 3.12
+    # work cleanly with the published wheels.
+    if ($pyList -match '(?m)^\s*-V:?3\.12') { $pyVer = '3.12' }
+    elseif ($pyList -match '(?m)^\s*-V:?3\.11') { $pyVer = '3.11' }
+    elseif ($pyList -match '(?m)^\s*-V:?3\.13') { $pyVer = '3.13' }
+    else {
+        Write-Host "py -0 output:" -ForegroundColor Yellow
+        Write-Host $pyList
+        throw "No usable Python (3.11/3.12/3.13) found via the 'py' launcher. Install Python 3.12 from python.org or via 'winget install Python.Python.3.12'."
+    }
+    Write-OK "Using Python $pyVer for the venv"
+    & py "-$pyVer" -m venv $VenvDir
+    if ($LASTEXITCODE -ne 0) { throw "py -$pyVer -m venv failed (exit $LASTEXITCODE)" }
     Write-OK "Created venv at $VenvDir"
 } else {
     Write-Skip "Venv already exists at $VenvDir"
@@ -238,7 +286,7 @@ addons_path = $($OdooSrc -replace '\\','/')/addons,$($ProjectRoot -replace '\\',
 data_dir = $($DataDir -replace '\\','/')
 
 db_host = localhost
-db_port = 5432
+db_port = $DbPort
 db_user = odoo
 db_password = $DbPassword
 
@@ -259,7 +307,10 @@ log_handler = :INFO
 logfile = $($LogDir -replace '\\','/')/odoo.log
 "@
 
-Set-Content -Path $ConfPath -Value $confBody -Encoding utf8
+# Use .NET's WriteAllText with explicit no-BOM UTF-8 because
+# Set-Content -Encoding utf8 prepends a BOM that Python's configparser
+# can't read (raises MissingSectionHeaderError on the first [options]).
+[System.IO.File]::WriteAllText($ConfPath, $confBody, [System.Text.UTF8Encoding]::new($false))
 Write-OK "Wrote $ConfPath"
 
 # === 7. First-time DB initialisation =======================================

@@ -61,10 +61,30 @@ if (-not (Test-Path $ConfPath)) {
     exit 1
 }
 
-$pgService = Get-Service -Name 'postgresql-x64-16' -ErrorAction SilentlyContinue
+# Auto-detect Postgres service (any 15/16/17). Start it if stopped.
+$pgService = Get-Service -Name 'postgresql-x64-*' -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending | Select-Object -First 1
 if ($pgService -and $pgService.Status -ne 'Running') {
-    Write-Host "Starting postgresql-x64-16 service..." -ForegroundColor Cyan
-    Start-Service postgresql-x64-16
+    Write-Host "Starting $($pgService.Name) service..." -ForegroundColor Cyan
+    Start-Service $pgService.Name
+}
+
+# Make sure wkhtmltopdf is on PATH so Odoo's PDF report engine finds it.
+# Without this, Print actions fall back to HTML mode and labels look broken.
+$wkPaths = @(
+    'C:\Program Files\wkhtmltopdf\bin',
+    'C:\Program Files (x86)\wkhtmltopdf\bin'
+)
+foreach ($p in $wkPaths) {
+    if ((Test-Path "$p\wkhtmltopdf.exe") -and ($env:Path -notlike "*$p*")) {
+        $env:Path = "$p;$env:Path"
+    }
+}
+
+# Same idea for Postgres tools (pg_dump in the venv-shell context, etc.).
+$pgBin = 'C:\Program Files\PostgreSQL\17\bin'
+if ((Test-Path "$pgBin\psql.exe") -and ($env:Path -notlike "*$pgBin*")) {
+    $env:Path = "$pgBin;$env:Path"
 }
 
 # ─── Build command line ───────────────────────────────────────────────────

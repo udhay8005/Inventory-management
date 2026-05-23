@@ -108,5 +108,5 @@ fans out a Discuss notification to every member of `WMS / Manager` via
 - [ ] Disable the database manager in prod: `list_db = False` in `config/odoo.conf`.
 - [ ] Restrict `pg_hba` to the Docker subnet.
 - [ ] Branch protection on `main`: require PR + green CI before merge.
-- [ ] Run `docker compose pull` and rebuild monthly for Odoo CE security patches.
+- [ ] Run `cd .odoo && git pull origin 19.0 && cd .. && .venv\Scripts\pip install -r .odoo\requirements.txt --upgrade` monthly for Odoo CE security patches; then restart with `scripts\start-native.ps1`.
 - [ ] Schedule `pg_dump` backups + restore drill quarterly.

@@ -11,15 +11,36 @@ _logger = logging.getLogger(__name__)
 # Five realistic warehouse products. Each gets a unique unit barcode + a
 # carton barcode alias if it's a bulk item. Stock is sprinkled across
 # random slots with mixed in_dates so FIFO has something to chew on.
+#
+# Each tuple now ALSO carries the WMS Kind so the recommendation engine
+# in wms_repair_damage can classify damage events out-of-the-box. Without
+# this, all seeded products defaulted to NULL kind / non-returnable and
+# every damage fell through to the 'note_only' branch.
 DEMO_PRODUCTS = [
-    # (name, default_code, unit_barcode, list_price, is_bulk, carton_qty, carton_barcode)
-    # All are storable so stock.quant can hold them; `is_bulk` only drives
-    # whether we seed a carton barcode + larger qty.
-    ("Screw M4×20mm", "SCRW-M4-20", "8901111000001", 0.05, True, 1000, "CTN-SCRW-M4-20-1000"),
-    ("Hex Nut M4", "NUT-M4", "8901111000002", 0.03, True, 500, "CTN-NUT-M4-500"),
-    ("Cable Tie 200mm", "TIE-200", "8901111000003", 0.12, True, 100, "CTN-TIE-200-100"),
-    ("Power Drill 18V", "DRILL-18V", "8901111000004", 4500, False, 0, None),
-    ("Safety Helmet", "HELMET-01", "8901111000005", 320, False, 0, None),
+    # (name, default_code, unit_barcode, list_price, is_bulk, carton_qty, carton_barcode, wms_kind)
+    (
+        "Screw M4×20mm",
+        "SCRW-M4-20",
+        "8901111000001",
+        0.05,
+        True,
+        1000,
+        "CTN-SCRW-M4-20-1000",
+        "consumable",
+    ),
+    ("Hex Nut M4", "NUT-M4", "8901111000002", 0.03, True, 500, "CTN-NUT-M4-500", "consumable"),
+    (
+        "Cable Tie 200mm",
+        "TIE-200",
+        "8901111000003",
+        0.12,
+        True,
+        100,
+        "CTN-TIE-200-100",
+        "consumable",
+    ),
+    ("Power Drill 18V", "DRILL-18V", "8901111000004", 4500, False, 0, None, "tool"),
+    ("Safety Helmet", "HELMET-01", "8901111000005", 320, False, 0, None, "consumable"),
 ]
 
 
@@ -67,7 +88,7 @@ class WmsDemoSeeder(models.TransientModel):
         created_products = 0
         created_quants = 0
 
-        for name, code, barcode, price, is_bulk, ctn_qty, ctn_barcode in DEMO_PRODUCTS:
+        for name, code, barcode, price, is_bulk, ctn_qty, ctn_barcode, wms_kind in DEMO_PRODUCTS:
             product = Product.search([("barcode", "=", barcode)], limit=1)
             if not product:
                 product = Product.create(
@@ -79,9 +100,19 @@ class WmsDemoSeeder(models.TransientModel):
                         # Odoo 19: storable = consu + is_storable
                         "type": "consu",
                         "is_storable": True,
+                        # Set WMS Kind so the recommendation engine in
+                        # wms_repair_damage works out-of-the-box. The
+                        # wms_is_returnable boolean is auto-computed
+                        # from this via product.template's compute.
+                        "wms_product_kind": wms_kind,
                     }
                 )
                 created_products += 1
+            elif not product.wms_product_kind:
+                # Product already existed from an earlier run that
+                # predated the kind field — back-fill it so the
+                # recommendation engine still works.
+                product.wms_product_kind = wms_kind
 
             if ctn_barcode and not Alias.search([("barcode", "=", ctn_barcode)], limit=1):
                 Alias.create(

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            Backup download is a URL action that fires the controller
+            at /wms/admin/backup/download. The route runs pg_dump |
+            gpg server-side and streams an encrypted .dump.gpg file
+            to the browser. Admin-only; the controller double-checks
+            group membership.
+
+            Restore is a separate URL action that opens an
+            instructions page - restoring from a web upload is too
+            destructive to expose with a single click. The page
+            shows the CLI command + the backup folder path so the
+            Admin can run scripts\restore-native.ps1 from PowerShell.
+        -->
+        <record id="action_wms_backup_download" model="ir.actions.act_url">
+            <field name="name">Download encrypted backup</field>
+            <field name="url">/wms/admin/backup/download</field>
+            <field name="target">self</field>
+        </record>
+
+        <record id="action_wms_restore_info" model="ir.actions.act_url">
+            <field name="name">Restore from backup (CLI)</field>
+            <field name="url">/wms/admin/restore/info</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_wms_backup_download"
+                  name="Download encrypted backup"
+                  parent="menu_wms_config"
+                  action="action_wms_backup_download"
+                  groups="group_wms_manager"
+                  sequence="80"/>
+
+        <menuitem id="menu_wms_restore_info"
+                  name="Restore from backup..."
+                  parent="menu_wms_config"
+                  action="action_wms_restore_info"
+                  groups="group_wms_manager"
+                  sequence="81"/>
+    </data>
+</odoo>

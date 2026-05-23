@@ -1,3 +1,4 @@
+from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -234,19 +235,20 @@ class WmsScanIssue(models.TransientModel):
         # Admin can scroll back through it later. Includes the Odoo
         # login (env.user) too — the on-duty roster name covers the
         # actual human; the login records which Odoo account was used.
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        audit_body = Markup(
+            "<p><b>Issued.</b> "
+            "Taken by <b>%s</b>; ordered by <b>%s</b>; "
+            "Store Keeper on duty: <b>%s</b>; "
+            "logged in as: <b>%s</b>.</p>"
+        ) % (
+            picking.wms_taken_by or "(unspecified)",
+            picking.wms_ordered_by or "(unspecified)",
+            picking.wms_storekeeper_id.name or "(unknown)",
+            self.env.user.display_name or "(system)",
+        )
         picking.message_post(
-            body=(
-                "<p><b>Issued.</b> "
-                "Taken by <b>%s</b>; ordered by <b>%s</b>; "
-                "Store Keeper on duty: <b>%s</b>; "
-                "logged in as: <b>%s</b>.</p>"
-            )
-            % (
-                picking.wms_taken_by or "(unspecified)",
-                picking.wms_ordered_by or "(unspecified)",
-                picking.wms_storekeeper_id.name or "(unknown)",
-                self.env.user.display_name or "(system)",
-            ),
+            body=audit_body,
             subject="Issue audit",
             message_type="notification",
         )

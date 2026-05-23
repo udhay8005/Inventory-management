@@ -3,6 +3,7 @@
 ## Phase 0 — Bring-up (Day 1)
 - [x] Docker compose, Dockerfile, odoo.conf, env example
 - [x] Doc skeleton
+- [x] Migrated off Docker to native Windows install (PostgreSQL service + Python venv + Odoo source clone). See `scripts\install-native.ps1`.
 
 ## Phase 1 — Core hierarchy (Days 2-4) — `wms_location`
 - [x] `stock.location` extension with `wms_location_type` + position fields
