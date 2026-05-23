@@ -233,7 +233,7 @@ class WmsAudit(models.Model):
             # message shows in their Inbox.
             mgr = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
             if mgr:
-                rec.message_subscribe(partner_ids=mgr.users.partner_id.ids)
+                rec.message_subscribe(partner_ids=mgr.all_user_ids.partner_id.ids)
 
     def action_review_accept(self):
         """Admin accepts the audit. Variances become stock adjustments

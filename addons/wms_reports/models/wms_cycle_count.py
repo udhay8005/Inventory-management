@@ -127,7 +127,7 @@ class WmsCycleCountReminderCron(models.AbstractModel):
         )
         if not managers:
             return
-        recipients = managers.users
+        recipients = managers.all_user_ids
         if not recipients:
             return
 

@@ -111,7 +111,7 @@ class WmsExpiryAlert(models.Model):
         manager_group = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
         if not manager_group:
             return
-        manager_partners = manager_group.users.partner_id
+        manager_partners = manager_group.all_user_ids.partner_id
 
         if not manager_partners:
             return
@@ -145,7 +145,7 @@ class WmsExpiryAlert(models.Model):
         # call. We attach to res.users so Odoo's notification system
         # routes it correctly per user.
         Users = self.env["res.users"].sudo()
-        for user in manager_group.users:
+        for user in manager_group.all_user_ids:
             Users.browse(user.id).message_post(
                 body=body,
                 subject="WMS: weekly expiry digest",

@@ -95,11 +95,26 @@ class WmsDamage(models.Model):
 
     @api.depends("source_slot_id")
     def _compute_warehouse(self):
+        """Walk the location hierarchy upward looking for a warehouse
+        binding. If no ancestor is bound to a warehouse (common for
+        trust-branded top-level locations like "Dakshin Vrindavan"
+        where the rack sits OUTSIDE the WH/Stock subtree), fall back
+        to the active company's primary warehouse so action_confirm
+        can still find a Damage location and an internal-transfer
+        picking type — same pattern as the FIFO out-of-tree fallback
+        in stock_location.find_oldest_quants_for_product.
+        """
+        Warehouse = self.env["stock.warehouse"]
         for rec in self:
             loc = rec.source_slot_id
             while loc and not loc.warehouse_id:
                 loc = loc.location_id
-            rec.warehouse_id = loc.warehouse_id if loc else False
+            if loc and loc.warehouse_id:
+                rec.warehouse_id = loc.warehouse_id
+            else:
+                rec.warehouse_id = Warehouse.search(
+                    [("company_id", "=", rec.env.company.id)], limit=1
+                )
 
     # ---- Smart "what should we do about this?" recommendation ------------
     remaining_on_hand = fields.Float(
@@ -418,7 +433,7 @@ class WmsDamage(models.Model):
         confirm. Silently skips if no Managers are configured."""
         self.ensure_one()
         group = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
-        if not group or not group.users:
+        if not group or not group.all_user_ids:
             return
         body = Markup(
             "<p><b>⚠ URGENT BUY required.</b></p>"
@@ -438,7 +453,7 @@ class WmsDamage(models.Model):
             "auth": self.wms_authorized_by or "(unspecified)",
             "keeper": (self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"),
         }
-        for user in group.users:
+        for user in group.all_user_ids:
             user.partner_id.message_post(
                 body=body,
                 subject="WMS — URGENT BUY: %s" % self.product_id.display_name,

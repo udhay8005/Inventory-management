@@ -1,6 +1,6 @@
 {
     "name": "WMS — Reports & Dashboards",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.0.1",
     "summary": "Live SQL-view dashboards: oldest stock, occupancy, dead stock, reorder summary.",
     "depends": ["wms_location", "wms_ai_forecast", "wms_repair_damage", "stock"],
     "author": "WMS",
