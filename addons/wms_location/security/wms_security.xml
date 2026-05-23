@@ -141,5 +141,23 @@
             <field name="group_ids" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
         </record>
 
+        <!--
+            Same idea for the other top-level Odoo apps that creep into
+            the Storekeeper's app picker out-of-the-box: Apps and
+            Dashboards. The Storekeeper has no business installing
+            modules or building spreadsheet dashboards — both are
+            Admin-only tools. Restrict to group_wms_manager (which the
+            Admin role implies) so the app picker shows only Discuss +
+            WMS for an on-duty keeper. Invoicing / Purchase / Settings
+            / Inventory are already hidden via their own default
+            groups; this pair was the gap.
+        -->
+        <record id="base.menu_management" model="ir.ui.menu">
+            <field name="group_ids" eval="[(6, 0, [ref('wms_location.group_wms_manager')])]"/>
+        </record>
+        <record id="spreadsheet_dashboard.spreadsheet_dashboard_menu_root" model="ir.ui.menu">
+            <field name="group_ids" eval="[(6, 0, [ref('wms_location.group_wms_manager')])]"/>
+        </record>
+
     </data>
 </odoo>
