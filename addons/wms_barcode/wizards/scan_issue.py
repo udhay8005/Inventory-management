@@ -118,16 +118,29 @@ class WmsScanIssue(models.TransientModel):
             parent_location_id=self.warehouse_id.lot_stock_id.id,
         )
 
+        # Was FEFO used? Decide the same way find_oldest_quants_for_product
+        # does, so the feedback text matches the planner's behaviour.
+        from odoo.addons.wms_location.models.product_template import EXPIRY_SENSITIVE_KINDS
+
+        kind = product.product_tmpl_id.wms_product_kind
+        used_fefo = (kind in EXPIRY_SENSITIVE_KINDS) or bool(
+            product.product_tmpl_id.wms_expiry_date
+        )
+
         # Clear previous plan
         self.plan_line_ids.unlink()
         for quant, take in plan:
+            # The planner may have picked a sibling batch (FEFO) — use
+            # the quant's own product, not the scanned one.
+            picked = quant.product_id
             self.env["wms.scan.issue.plan"].create(
                 {
                     "wizard_id": self.id,
-                    "product_id": product.id,
+                    "product_id": picked.id,
                     "quant_id": quant.id,
                     "location_id": quant.location_id.id,
                     "in_date": quant.in_date,
+                    "expiry_date": picked.product_tmpl_id.wms_expiry_date,
                     "available": quant.quantity - quant.reserved_quantity,
                     "take": take,
                 }
@@ -138,6 +151,7 @@ class WmsScanIssue(models.TransientModel):
         # the requested quantity, surface a STOCK OUT message so the
         # operator knows immediately to wait for a return or alert the
         # Admin — not a cryptic "short by 5".
+        rule = "FEFO" if used_fefo else "FIFO"
         if not plan and missing:
             self.feedback = (
                 "⚠ STOCK OUT — no %s available anywhere in the warehouse. "
@@ -146,14 +160,28 @@ class WmsScanIssue(models.TransientModel):
             ) % product.display_name
         elif missing:
             self.feedback = (
-                "⚠ Only %s × %s on hand — that's %s less than you asked for. "
-                "Reduce the quantity, or wait for the rest to come back via "
-                "Scan Return."
-            ) % (
-                qty - missing,
-                product.display_name,
-                missing,
-            )
+                "⚠ Only %s × %s on hand (%s plan) — that's %s less than "
+                "you asked for. Reduce the quantity, or wait for the rest "
+                "to come back via Scan Return."
+            ) % (qty - missing, product.display_name, rule, missing)
+        elif used_fefo:
+            # Make it obvious when the planner has crossed batches so the
+            # keeper doesn't think the wizard misread their scan.
+            picked_names = {ln.product_id.display_name for ln in self.plan_line_ids}
+            if len(picked_names) > 1 or (picked_names and product.display_name not in picked_names):
+                self.feedback = (
+                    "FEFO: planned %s × %s — taking from earlier-expiring "
+                    "batch(es): %s. Pick from the slot(s) below."
+                ) % (qty, product.display_name, ", ".join(sorted(picked_names)))
+            else:
+                self.feedback = (
+                    "FEFO: planned %s × %s across %d slot(s) — earliest expiry first."
+                    % (
+                        qty,
+                        product.display_name,
+                        len(plan),
+                    )
+                )
         else:
             self.feedback = "Planned %s × %s across %d slot(s)." % (
                 qty,
@@ -300,13 +328,21 @@ class WmsScanIssue(models.TransientModel):
 
 class WmsScanIssuePlan(models.TransientModel):
     _name = "wms.scan.issue.plan"
-    _description = "Planned deduction line (FIFO)"
-    _order = "in_date asc"
+    _description = "Planned deduction line (FIFO / FEFO)"
+    # No fixed _order: when the wizard does FEFO, lines are written in
+    # expiry order; for plain FIFO they're written in in_date order.
+    # Sorting in SQL by either column would re-shuffle the wrong cases.
 
     wizard_id = fields.Many2one("wms.scan.issue", ondelete="cascade", required=True)
     product_id = fields.Many2one("product.product", required=True)
     quant_id = fields.Many2one("stock.quant")
     location_id = fields.Many2one("stock.location", string="Slot")
     in_date = fields.Datetime()
+    expiry_date = fields.Date(
+        string="Expires",
+        help="Batch expiry date for medicine / feed / fluid / pooja. "
+        "When set, the planner sorts by this date (FEFO) — earliest "
+        "expiry first — instead of arrival date.",
+    )
     available = fields.Float()
     take = fields.Float()

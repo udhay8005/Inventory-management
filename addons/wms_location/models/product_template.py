@@ -42,6 +42,19 @@ KIND_RETURNABLE_DEFAULTS = {
     "pooja": False,  # ghee, flowers, incense, oil - consumed in puja
 }
 
+# Kinds whose stock must be issued by **expiry date** (FEFO), not by
+# arrival date (FIFO). Trust workflow: veterinary medicine must leave
+# the shelf with the soonest-expiring batch first, cattle feed rots,
+# food-grade fluid (ghee, edible oil) goes rancid, pooja items spoil.
+#
+# When a product belongs to one of these kinds (or has an explicit
+# wms_expiry_date set), ``find_oldest_quants_for_product`` switches to
+# FEFO: it orders quants by (expiry asc, in_date asc) and expands the
+# search to sibling batches with the same name + kind — that way a
+# brand-new MED-00042 batch with a 2027 expiry never gets picked while
+# an older MED-00037 batch expiring next month is still on the shelf.
+EXPIRY_SENSITIVE_KINDS = frozenset({"medicine", "feed", "fluid", "pooja"})
+
 # The dropdown shown on the product form. Order matches the dict
 # above; the label in parens echoes the SKU prefix so the Admin
 # sees what the auto-generated SKU is going to look like before

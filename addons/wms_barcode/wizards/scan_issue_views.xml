@@ -40,6 +40,9 @@
                                 <field name="product_id"/>
                                 <field name="location_id"/>
                                 <field name="in_date"/>
+                                <field name="expiry_date" optional="show"
+                                       decoration-danger="expiry_date and expiry_date &lt;= (context_today() + relativedelta(days=30)).strftime('%Y-%m-%d')"
+                                       decoration-warning="expiry_date and expiry_date &lt;= (context_today() + relativedelta(days=90)).strftime('%Y-%m-%d')"/>
                                 <field name="available"/>
                                 <field name="take"/>
                             </list>
