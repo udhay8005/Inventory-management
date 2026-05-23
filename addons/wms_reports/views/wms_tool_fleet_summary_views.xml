@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Tool / spare fleet recommendation report.
+
+            Surface the SQL view as a list with the shortage column
+            first (sorted desc) so the buyer sees the most-urgent gaps
+            at the top of the page. Search defaults to "Has shortage"
+            so the all-zero rows fall off the list unless the user
+            ticks them back in.
+        -->
+        <record id="view_wms_tool_fleet_summary_tree" model="ir.ui.view">
+            <field name="name">wms.tool.fleet.summary.tree</field>
+            <field name="model">wms.tool.fleet.summary</field>
+            <field name="arch" type="xml">
+                <list create="0" delete="0" edit="0"
+                      decoration-danger="shortage > 0"
+                      decoration-muted="event_count &lt; 5">
+                    <field name="product_id"/>
+                    <field name="wms_product_kind"/>
+                    <field name="peak_concurrent_out"/>
+                    <field name="event_count"/>
+                    <field name="current_on_hand"/>
+                    <field name="recommended_fleet_size"/>
+                    <field name="shortage"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_tool_fleet_summary_search" model="ir.ui.view">
+            <field name="name">wms.tool.fleet.summary.search</field>
+            <field name="model">wms.tool.fleet.summary</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <filter name="filter_shortage"
+                            string="Has shortage"
+                            domain="[('shortage', '>', 0)]"/>
+                    <filter name="filter_tools"
+                            string="Tools only"
+                            domain="[('wms_product_kind', '=', 'tool')]"/>
+                    <filter name="filter_spares"
+                            string="Spares only"
+                            domain="[('wms_product_kind', '=', 'spare')]"/>
+                    <filter name="filter_reliable"
+                            string="≥ 5 movements (reliable)"
+                            domain="[('event_count', '>=', 5)]"/>
+                    <separator/>
+                    <!-- Group-by filters: Odoo's search panel auto-puts them
+                         under "Group By" in the UI; no <group> wrapper needed
+                         (and search-view <group> doesn't accept string=). -->
+                    <filter name="group_kind"
+                            string="Kind"
+                            context="{'group_by': 'wms_product_kind'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_tool_fleet_summary" model="ir.actions.act_window">
+            <field name="name">Tool / Spare fleet recommendations</field>
+            <field name="res_model">wms.tool.fleet.summary</field>
+            <field name="view_mode">list</field>
+            <field name="search_view_id" ref="view_wms_tool_fleet_summary_search"/>
+            <field name="context">{'search_default_filter_shortage': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Nothing to recommend — congrats!
+                </p>
+                <p>
+                    This report calculates, for every <b>Tool</b> and <b>Spare
+                    Part</b> in the catalogue, how many physical units were
+                    simultaneously checked out at the peak of the last 90 days.
+                    If the on-hand count is below <i>peak + 1 spare</i>, the
+                    row is flagged red and listed here.
+                </p>
+                <p>
+                    Untick <b>Has shortage</b> to see every fleet that's
+                    well-stocked too.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>

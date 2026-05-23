@@ -12,6 +12,7 @@ SQL-view dashboard. Optional: posts a Discuss message to WMS Managers.
 
 import logging
 
+from markupsafe import Markup
 from odoo import api, fields, models, tools
 
 _logger = logging.getLogger(__name__)
@@ -130,7 +131,8 @@ class WmsCycleCountReminderCron(models.AbstractModel):
         if not recipients:
             return
 
-        body = (
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        body = Markup(
             "<p><b>%d slot(s)</b> haven't been counted in over 30 days. "
             "Open <i>WMS → Reports → Cycle Count Due</i> to walk through "
             "and reconcile them.</p>"

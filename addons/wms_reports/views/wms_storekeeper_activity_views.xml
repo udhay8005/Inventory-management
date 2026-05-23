@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Day-by-day Store Keeper activity log.
+
+            Three views are stitched together so the Admin can pivot
+            between a flat audit timeline (list), a per-day-per-keeper
+            matrix (pivot), and a quick visual comparison (graph). The
+            search defaults Group By to Day + Store Keeper so the first
+            paint already shows "what did each person do each day".
+        -->
+
+        <record id="view_wms_storekeeper_activity_tree" model="ir.ui.view">
+            <field name="name">wms.storekeeper.activity.tree</field>
+            <field name="model">wms.storekeeper.activity</field>
+            <field name="arch" type="xml">
+                <list create="0" delete="0" edit="0"
+                      decoration-info="activity_type == 'receipt'"
+                      decoration-warning="activity_type == 'issue'"
+                      decoration-success="activity_type == 'return'"
+                      decoration-danger="activity_type == 'damage'"
+                      decoration-muted="activity_type == 'repair'">
+                    <field name="activity_datetime"/>
+                    <field name="storekeeper_id"/>
+                    <field name="activity_type"/>
+                    <field name="reference"/>
+                    <field name="product_id"/>
+                    <field name="quantity"/>
+                    <field name="partner_name"/>
+                    <field name="user_id" optional="hide"/>
+                    <field name="picking_id" optional="hide"/>
+                    <field name="damage_id" optional="hide"/>
+                    <field name="repair_id" optional="hide"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_storekeeper_activity_pivot" model="ir.ui.view">
+            <field name="name">wms.storekeeper.activity.pivot</field>
+            <field name="model">wms.storekeeper.activity</field>
+            <field name="arch" type="xml">
+                <pivot string="Store Keeper Activity">
+                    <field name="activity_date" type="row" interval="day"/>
+                    <field name="storekeeper_id" type="row"/>
+                    <field name="activity_type" type="col"/>
+                    <field name="quantity" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_storekeeper_activity_graph" model="ir.ui.view">
+            <field name="name">wms.storekeeper.activity.graph</field>
+            <field name="model">wms.storekeeper.activity</field>
+            <field name="arch" type="xml">
+                <graph string="Store Keeper Activity" type="bar" stacked="1">
+                    <field name="activity_date" interval="day"/>
+                    <field name="activity_type"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_storekeeper_activity_search" model="ir.ui.view">
+            <field name="name">wms.storekeeper.activity.search</field>
+            <field name="model">wms.storekeeper.activity</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="storekeeper_id"/>
+                    <field name="product_id"/>
+                    <field name="reference"/>
+                    <field name="activity_type"/>
+                    <filter name="filter_receipts"
+                            string="Receipts"
+                            domain="[('activity_type', '=', 'receipt')]"/>
+                    <filter name="filter_issues"
+                            string="Issues"
+                            domain="[('activity_type', '=', 'issue')]"/>
+                    <filter name="filter_returns"
+                            string="Returns"
+                            domain="[('activity_type', '=', 'return')]"/>
+                    <filter name="filter_damages"
+                            string="Damages"
+                            domain="[('activity_type', '=', 'damage')]"/>
+                    <separator/>
+                    <!--
+                        Time period quick filters. We use rolling
+                        windows (last 7 days, last 30 days, ...) for
+                        the week/month variants because Odoo's
+                        client-side domain interpreter does not
+                        implement datetime.date.weekday() or
+                        non-default strftime patterns. Calendar-week
+                        is approximated by the rolling 7-day window
+                        - close enough for the trust's monthly review.
+                    -->
+                    <filter name="filter_today"
+                            string="Today"
+                            domain="[('activity_date', '=', context_today().strftime('%Y-%m-%d'))]"/>
+                    <filter name="filter_this_week"
+                            string="This week (7d)"
+                            domain="[('activity_date', '>=', (context_today() - relativedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                    <filter name="filter_this_month"
+                            string="This month (30d)"
+                            domain="[('activity_date', '>=', (context_today() - relativedelta(days=30)).strftime('%Y-%m-%d'))]"/>
+                    <filter name="filter_this_year"
+                            string="This year (365d)"
+                            domain="[('activity_date', '>=', (context_today() - relativedelta(days=365)).strftime('%Y-%m-%d'))]"/>
+                    <separator/>
+                    <filter name="filter_7d"
+                            string="Last 7 days"
+                            domain="[('activity_date', '>=', (context_today() - relativedelta(days=7)).strftime('%Y-%m-%d'))]"/>
+                    <filter name="filter_30d"
+                            string="Last 30 days"
+                            domain="[('activity_date', '>=', (context_today() - relativedelta(days=30)).strftime('%Y-%m-%d'))]"/>
+                    <filter name="filter_90d"
+                            string="Last 90 days"
+                            domain="[('activity_date', '>=', (context_today() - relativedelta(days=90)).strftime('%Y-%m-%d'))]"/>
+                    <filter name="filter_365d"
+                            string="Last 365 days"
+                            domain="[('activity_date', '>=', (context_today() - relativedelta(days=365)).strftime('%Y-%m-%d'))]"/>
+                    <separator/>
+                    <!--
+                        Group-by options at every date interval. The
+                        pivot view picks up whichever combination the
+                        Admin ticks, so the same screen renders a
+                        daily, weekly, monthly, quarterly, or yearly
+                        breakdown without a separate report action.
+                    -->
+                    <filter name="group_day"
+                            string="Day"
+                            context="{'group_by': 'activity_date:day'}"/>
+                    <filter name="group_week"
+                            string="Week"
+                            context="{'group_by': 'activity_date:week'}"/>
+                    <filter name="group_month"
+                            string="Month"
+                            context="{'group_by': 'activity_date:month'}"/>
+                    <filter name="group_quarter"
+                            string="Quarter"
+                            context="{'group_by': 'activity_date:quarter'}"/>
+                    <filter name="group_year"
+                            string="Year"
+                            context="{'group_by': 'activity_date:year'}"/>
+                    <separator/>
+                    <filter name="group_keeper"
+                            string="Store Keeper"
+                            context="{'group_by': 'storekeeper_id'}"/>
+                    <filter name="group_activity"
+                            string="Activity"
+                            context="{'group_by': 'activity_type'}"/>
+                    <filter name="group_product"
+                            string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_storekeeper_activity" model="ir.actions.act_window">
+            <field name="name">Store Keeper Activity</field>
+            <field name="res_model">wms.storekeeper.activity</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_storekeeper_activity_search"/>
+            <field name="context">{
+                'search_default_group_day': 1,
+                'search_default_group_keeper': 1,
+                'search_default_filter_30d': 1,
+            }</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No Store Keeper activity yet.
+                </p>
+                <p>
+                    Every Scan Receipt, Scan Return, Scan Issue, damage
+                    report, and repair order recorded by a Store Keeper
+                    shows up here, tagged with the date and the on-duty
+                    keeper from the roster. Switch to the <b>Pivot</b>
+                    view to see a day-by-keeper matrix, or <b>Graph</b>
+                    for a stacked-bar overview.
+                </p>
+            </field>
+        </record>
+
+        <!--
+            Convenience actions: same model, same view, just
+            pre-applied filters + groupings for the three time
+            buckets the trust looks at most. Drop straight into the
+            'right' view without manually ticking filters.
+        -->
+        <record id="action_wms_storekeeper_activity_weekly" model="ir.actions.act_window">
+            <field name="name">Weekly summary</field>
+            <field name="res_model">wms.storekeeper.activity</field>
+            <field name="view_mode">pivot,list,graph</field>
+            <field name="search_view_id" ref="view_wms_storekeeper_activity_search"/>
+            <field name="context">{
+                'search_default_filter_this_week': 1,
+                'search_default_group_keeper': 1,
+                'search_default_group_activity': 1,
+                'pivot_measures': ['quantity', '__count'],
+            }</field>
+        </record>
+
+        <record id="action_wms_storekeeper_activity_monthly" model="ir.actions.act_window">
+            <field name="name">Monthly summary</field>
+            <field name="res_model">wms.storekeeper.activity</field>
+            <field name="view_mode">pivot,list,graph</field>
+            <field name="search_view_id" ref="view_wms_storekeeper_activity_search"/>
+            <field name="context">{
+                'search_default_filter_this_month': 1,
+                'search_default_group_week': 1,
+                'search_default_group_keeper': 1,
+                'pivot_measures': ['quantity', '__count'],
+            }</field>
+        </record>
+
+        <record id="action_wms_storekeeper_activity_yearly" model="ir.actions.act_window">
+            <field name="name">Yearly summary</field>
+            <field name="res_model">wms.storekeeper.activity</field>
+            <field name="view_mode">pivot,graph,list</field>
+            <field name="search_view_id" ref="view_wms_storekeeper_activity_search"/>
+            <field name="context">{
+                'search_default_filter_this_year': 1,
+                'search_default_group_month': 1,
+                'search_default_group_activity': 1,
+                'pivot_measures': ['quantity', '__count'],
+            }</field>
+        </record>
+
+    </data>
+</odoo>

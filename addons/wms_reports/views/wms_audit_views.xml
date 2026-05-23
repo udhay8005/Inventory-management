@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- Sequence for AUDIT/NNNN names -->
+        <record id="seq_wms_audit" model="ir.sequence">
+            <field name="name">WMS Audit</field>
+            <field name="code">wms.audit</field>
+            <field name="prefix">AUDIT/</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="view_wms_audit_form" model="ir.ui.view">
+            <field name="name">wms.audit.form</field>
+            <field name="model">wms.audit</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button name="action_start" type="object"
+                                string="Start audit"
+                                class="oe_highlight"
+                                invisible="state != 'draft'"/>
+                        <button name="action_submit" type="object"
+                                string="Submit"
+                                class="oe_highlight"
+                                invisible="state != 'in_progress'"/>
+                        <button name="action_review_accept" type="object"
+                                string="Accept counts"
+                                class="oe_highlight"
+                                invisible="state != 'submitted'"
+                                groups="wms_location.group_wms_manager"/>
+                        <button name="action_reject" type="object"
+                                string="Reject + re-open"
+                                invisible="state != 'submitted'"
+                                groups="wms_location.group_wms_manager"/>
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="draft,in_progress,submitted,reviewed"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1><field name="name" readonly="1"/></h1>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="auditor_user_id"
+                                       readonly="state != 'draft'"/>
+                                <field name="storekeeper_id"
+                                       readonly="state in ('submitted','reviewed','rejected')"/>
+                                <field name="group_wms_user_id" invisible="1"/>
+                            </group>
+                            <group>
+                                <field name="started_at"/>
+                                <field name="submitted_at"/>
+                                <field name="reviewed_by"/>
+                                <field name="reviewed_at"/>
+                            </group>
+                        </group>
+                        <group string="Summary">
+                            <field name="line_count"/>
+                            <field name="variance_count"/>
+                        </group>
+                        <notebook>
+                            <page string="Lines" name="lines">
+                                <field name="line_ids"
+                                       readonly="state in ('submitted','reviewed','rejected')">
+                                    <list editable="bottom"
+                                          decoration-warning="variance != 0"
+                                          decoration-danger="variance &lt; 0">
+                                        <field name="location_id" readonly="1"/>
+                                        <field name="product_id" readonly="1"/>
+                                        <field name="expected_qty" readonly="1"/>
+                                        <field name="counted_qty"/>
+                                        <field name="variance" readonly="1"/>
+                                        <field name="note"/>
+                                        <field name="state" invisible="1"/>
+                                    </list>
+                                </field>
+                            </page>
+                            <page string="Notes" name="notes">
+                                <field name="note"/>
+                            </page>
+                        </notebook>
+                    </sheet>
+                    <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_audit_tree" model="ir.ui.view">
+            <field name="name">wms.audit.tree</field>
+            <field name="model">wms.audit</field>
+            <field name="arch" type="xml">
+                <list decoration-info="state == 'in_progress'"
+                      decoration-success="state == 'reviewed'"
+                      decoration-warning="state == 'submitted'"
+                      decoration-muted="state == 'rejected'">
+                    <field name="name"/>
+                    <field name="auditor_user_id"/>
+                    <field name="storekeeper_id"/>
+                    <field name="started_at"/>
+                    <field name="submitted_at"/>
+                    <field name="line_count"/>
+                    <field name="variance_count"/>
+                    <field name="state"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_audit" model="ir.actions.act_window">
+            <field name="name">Inventory audits</field>
+            <field name="res_model">wms.audit</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No audit yet. Click <b>New</b> to plan a fresh walk.
+                </p>
+                <p>
+                    Each audit snapshots the current stock-quant table,
+                    asks the Store Keeper to count every slot, and
+                    auto-applies the corrections when the Admin
+                    accepts the submission.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>
