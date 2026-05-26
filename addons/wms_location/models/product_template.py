@@ -301,7 +301,15 @@ class ProductTemplate(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         # 1. Stamp SKU before super so the variant gets created with
-        #    its default_code already in place.
+        #    its default_code already in place. Also force sale_ok=False
+        #    for WMS products: the Trust buys and uses inventory but
+        #    never sells it — the default ``sale_ok = True`` from
+        #    upstream Odoo would otherwise wrongly expose every
+        #    medicine / feed / tool on the Sales-side Pricelists,
+        #    quotations, and invoicing. Admin can still flip the
+        #    boolean back on a per-product basis if a one-off resale
+        #    ever happens (excess construction material to a neighbour
+        #    trust, for example).
         for vals in vals_list:
             kind = vals.get("wms_product_kind")
             code = (vals.get("default_code") or "").strip()
@@ -311,6 +319,8 @@ class ProductTemplate(models.Model):
                     new_sku = self.env["ir.sequence"].next_by_code(seq_code)
                     if new_sku:
                         vals["default_code"] = new_sku
+            if kind and "sale_ok" not in vals:
+                vals["sale_ok"] = False
         templates = super().create(vals_list)
 
         # 2. After super().create(), each template has at least one

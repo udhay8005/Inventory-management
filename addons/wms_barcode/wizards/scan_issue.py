@@ -28,8 +28,27 @@ class WmsScanIssue(models.TransientModel):
         "stock.location",
         required=True,
         domain=[("usage", "in", ("customer", "production", "internal"))],
-        default=lambda s: s.env.ref("stock.stock_location_customers"),
+        default=lambda s: s._default_destination_id(),
+        help="Where the issued stock goes. Defaults to the trust's "
+        "'Trust internal use' location since the trust uses inventory "
+        "internally rather than selling it. Admin can pick any other "
+        "internal location (Cow Shed, Pooja Room, etc.) on the day "
+        "without changing the default.",
     )
+
+    @api.model
+    def _default_destination_id(self):
+        """The Trust uses stock internally rather than selling it.
+
+        Prefer the seeded ``wms_location.stock_location_trust_use``;
+        fall back to ``stock.stock_location_customers`` only if the
+        WMS data file hasn't loaded yet (e.g. mid-install).
+        """
+        trust = self.env.ref("wms_location.stock_location_trust_use", raise_if_not_found=False)
+        if trust:
+            return trust
+        return self.env.ref("stock.stock_location_customers", raise_if_not_found=False)
+
     last_scan = fields.Char()
     requested_qty = fields.Float(default=1.0)
     feedback = fields.Char(readonly=True)
