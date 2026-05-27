@@ -64,30 +64,104 @@ $wms-page-bg:        #FAF7F0;       // very faint warm cream — keeps the
 }
 
 // ----- Top navigation bar ---------------------------------------------------
-// Charcoal nav with saffron accent on the active app — matches the
-// public site's dark header band.
+// One consistent charcoal band across the WHOLE navbar — Odoo's
+// default skin shows the secondary-section block in its own lighter
+// indigo/purple (rgb(113, 99, 158)), which fights the trust palette.
+// Force every container AND every button inside the navbar to be
+// either charcoal or transparent (so it inherits the charcoal from
+// its parent), punctuated only by the 3 px saffron underline.
 .o_main_navbar {
     background-color: $wms-charcoal !important;
-    border-bottom: 3px solid $wms-saffron;
+    background-image: none !important;
+    border-bottom: 3px solid $wms-saffron !important;
+    border-top-color: transparent !important;
+    border-left-color: transparent !important;
+    border-right-color: transparent !important;
+}
 
-    .o_menu_brand,
-    .o_navbar_apps_menu > button,
-    .o_nav_entry,
-    .dropdown-toggle {
-        color: #FFFFFF !important;
-        font-family: "Open Sans", sans-serif;
-        font-weight: 600;
-        letter-spacing: 0.2px;
+// Every direct + descendant container: charcoal background
+.o_main_navbar > *,
+.o_main_navbar .o_menu_sections,
+.o_main_navbar .o_menu_systray,
+.o_main_navbar .o_navbar_apps_menu,
+.o_main_navbar .o_menu_brand,
+.o_main_navbar .o_navbar_breadcrumbs,
+.o_main_navbar .o_user_menu {
+    background-color: $wms-charcoal !important;
+    background-image: none !important;
+    border-color: transparent !important;
+}
+
+// CRITICAL: kill the purple on the dropdown BUTTONS themselves —
+// they're direct children of .o_menu_sections and ship with Odoo's
+// own purple. Transparent so they inherit the parent's charcoal.
+.o_main_navbar button,
+.o_main_navbar .o-dropdown,
+.o_main_navbar .o-dropdown.dropdown-toggle,
+.o_main_navbar .o_menu_sections > button,
+.o_main_navbar .o_menu_sections > a,
+.o_main_navbar .o_menu_sections .dropdown-toggle,
+.o_main_navbar .o_menu_systray > button,
+.o_main_navbar .o_menu_systray .dropdown-toggle,
+.o_main_navbar .o_user_menu > button,
+.o_main_navbar .o_user_menu .dropdown-toggle {
+    background-color: transparent !important;
+    background-image: none !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+// Every label / icon / dropdown header inside the navbar reads white.
+.o_main_navbar .o_menu_brand,
+.o_main_navbar .o_nav_entry,
+.o_main_navbar .o_menu_sections .dropdown-toggle,
+.o_main_navbar .o_user_menu .dropdown-toggle,
+.o_main_navbar button,
+.o_main_navbar > * > .fa,
+.o_main_navbar .o_menu_brand .fa {
+    color: #FFFFFF !important;
+    font-family: "Open Sans", sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+// Hover / active section — saffron text + faint white wash, no
+// purple/blue tint anywhere.
+.o_main_navbar .o_menu_sections .o_nav_entry:hover,
+.o_main_navbar .o_menu_sections .dropdown-toggle:hover,
+.o_main_navbar .o_menu_sections .show > .dropdown-toggle,
+.o_main_navbar .o_menu_sections .o_nav_entry.active,
+.o_main_navbar .o_menu_sections > button:hover,
+.o_main_navbar .o_menu_systray > button:hover,
+.o_main_navbar .o_user_menu > button:hover {
+    color: $wms-saffron !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+.o_main_navbar .o_menu_sections .show > .dropdown-toggle {
+    border-bottom: 2px solid $wms-saffron !important;
+}
+
+// Dropdown panels that float out of the navbar (apps menu, user
+// menu, messaging) — white background, charcoal text. Without
+// this the panel would inherit the navbar's charcoal and the
+// menu items would disappear into the surface.
+.o_popover.o-dropdown--menu,
+.o_main_navbar + * .dropdown-menu,
+.o_main_navbar .dropdown-menu {
+    background-color: #FFFFFF !important;
+    border: 1px solid rgba($wms-charcoal, 0.12) !important;
+
+    .dropdown-item,
+    .o-dropdown-item {
+        color: $wms-charcoal !important;
+        font-weight: 500;
     }
-    .o_menu_sections .o_nav_entry:hover,
-    .o_menu_sections .dropdown-toggle:hover,
-    .o_menu_sections .show > .dropdown-toggle {
-        color: $wms-saffron !important;
-        background-color: rgba(255, 255, 255, 0.04);
-    }
-    // Active section underline
-    .o_menu_sections .show > .dropdown-toggle {
-        border-bottom: 2px solid $wms-saffron;
+    .dropdown-item:hover,
+    .dropdown-item:focus,
+    .o-dropdown-item:hover,
+    .o-dropdown-item:focus {
+        background-color: rgba($wms-saffron, 0.18) !important;
+        color: $wms-charcoal !important;
     }
 }
 
