@@ -136,6 +136,46 @@
         </record>
 
         <!--
+            Sales side is dead weight for this Trust — the warehouse buys
+            and uses inventory, it never sells. Hide every sales-flavoured
+            field that ships in the upstream product form so the form is
+            calmer and there is no chance of accidentally putting a tin
+            of ghee onto an outbound quotation.
+
+            What gets hidden:
+              * `sale_ok` checkbox at the top of the form (the "Sales"
+                tickbox next to Purchase).
+              * `list_price` (Sales Price) — the trust doesn't quote.
+              * `taxes_id` (Sales Taxes) and its "Incl. Taxes" hint.
+              * `standard_price` (Cost) stays visible — Purchase still
+                wants it for vendor-bill matching and the buying-
+                recommendations report.
+
+            Purchase-side fields (`purchase_ok`, `purchase_taxes`,
+            vendor pricelists) all stay because the trust DOES still
+            need to receive RFQs and post vendor bills.
+        -->
+        <record id="view_product_template_form_hide_sales" model="ir.ui.view">
+            <field name="name">product.template.form.hide.sales</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <field name="sale_ok" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+                <field name="list_price" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+                <field name="taxes_id" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+                <field name="tax_string" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+            </field>
+        </record>
+
+        <!--
             Show the kind on the product list view so the Admin can spot
             unclassified products at a glance and the Store Keeper can
             filter the catalogue by kind.
