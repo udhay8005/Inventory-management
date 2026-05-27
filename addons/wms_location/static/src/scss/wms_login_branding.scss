@@ -1,0 +1,96 @@
+// Login screen brand — applied only on /web/login.
+//
+// Mirrors the dakshinvrindavan.org hero: warm saffron call-to-action,
+// charcoal text, Lora serif title above the form. Logo (uploaded by
+// the Admin under Settings → Companies) sits at the top of the card
+// since favicon.py already serves /web/binary/company_logo.
+
+$wms-saffron:        #EAAF00;
+$wms-saffron-dark:   #C99700;
+$wms-charcoal:       #232220;
+$wms-page-bg:        #FAF7F0;
+
+// Google Fonts are injected via the ``wms_branding_head`` XML template
+// into <head>, NOT via @import — Odoo's SCSS bundler splits @import
+// rules across the bundle and breaks the rest of the CSS file.
+
+// Page background — soft cream, same as the backend app shell.
+body.o_login_layout_html_modifier,
+body[class*="login"],
+.oe_website_login_container {
+    background-color: $wms-page-bg !important;
+    font-family: "Open Sans", sans-serif !important;
+    color: $wms-charcoal;
+}
+
+// Centered card
+.oe_login_form,
+.o_database_list {
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    background-color: #FFFFFF;
+    padding: 2rem 2.5rem 2.5rem !important;
+    border-top: 4px solid $wms-saffron;
+
+    h1, h2 {
+        font-family: "Lora", serif;
+        font-weight: 700;
+        color: $wms-charcoal;
+        text-align: center;
+        margin-bottom: 1.5rem;
+    }
+
+    label {
+        font-weight: 600;
+        color: $wms-charcoal;
+        font-size: 0.85rem;
+        letter-spacing: 0.3px;
+    }
+
+    .form-control:focus {
+        border-color: $wms-saffron;
+        box-shadow: 0 0 0 0.2rem rgba($wms-saffron, 0.25);
+    }
+
+    button[type="submit"],
+    .btn-primary {
+        background-color: $wms-saffron !important;
+        border-color: $wms-saffron !important;
+        color: $wms-charcoal !important;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        padding: 0.65rem 1.5rem;
+        border-radius: 4px;
+        transition: background-color 0.15s ease;
+
+        &:hover,
+        &:focus,
+        &:active {
+            background-color: $wms-saffron-dark !important;
+            border-color: $wms-saffron-dark !important;
+            color: #FFFFFF !important;
+        }
+    }
+
+    .alert-danger {
+        border-color: rgba($wms-saffron, 0.6);
+        background-color: rgba($wms-saffron, 0.12);
+        color: $wms-charcoal;
+    }
+}
+
+// Forgot-password / sign-up links — saffron-dark, not Odoo's default blue
+.oe_login_form a,
+.o_database_list a {
+    color: $wms-saffron-dark;
+    font-weight: 600;
+    text-decoration: none;
+
+    &:hover {
+        color: $wms-charcoal;
+        text-decoration: underline;
+    }
+}
+
+// Bottom "Powered by Odoo" already hidden via security/wms_security.xml;
+// nothing to do here for that.

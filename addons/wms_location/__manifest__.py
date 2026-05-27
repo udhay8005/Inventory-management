@@ -1,6 +1,6 @@
 {
     "name": "WMS — Location (Rack / Compartment / Slot)",
-    "version": "19.0.2.7.2",
+    "version": "19.0.2.8.0",
     "summary": "Model warehouse storage as Rack → Compartment (multi-shelf-spannable) → Slot on top of stock.location",
     "description": """
 WMS Location
@@ -35,6 +35,7 @@ Key features:
         "views/wms_zone_generator_views.xml",
         "views/menus.xml",
         "views/favicon_override.xml",
+        "views/branding_head.xml",
         "views/login_layout_override.xml",
         "views/backup_menus.xml",
         "data/wms_data.xml",
@@ -46,14 +47,19 @@ Key features:
     ],
     "assets": {
         "web.assets_backend": [
+            # Brand skin first so component SCSS picks up the new
+            # CSS variables (--o-brand-primary etc.) when it loads.
+            "wms_location/static/src/scss/wms_branding.scss",
             "wms_location/static/src/components/rack_builder/rack_builder.js",
             "wms_location/static/src/components/rack_builder/rack_builder.xml",
             "wms_location/static/src/components/rack_builder/rack_builder.scss",
         ],
         # Loaded on /web/login. Patches UserSwitch to drop `admin`
         # from the "Choose a user" picker so privileged logins are
-        # not advertised on the login page.
+        # not advertised on the login page, plus paints the form in
+        # the trust's saffron palette.
         "web.assets_frontend": [
+            "wms_location/static/src/scss/wms_login_branding.scss",
             "wms_location/static/src/js/hide_admin_from_user_switch.js",
         ],
     },
