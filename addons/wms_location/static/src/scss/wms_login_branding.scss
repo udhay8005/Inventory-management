@@ -88,15 +88,50 @@ main > .container > .card {
     }
 
     // Field labels (Email, Password, etc.)
+    //
+    // Odoo emits the Email label as
+    //   <label class="d-flex justify-content-between">
+    //       Email <button class="o_user_switch_btn">Choose a user</button>
+    //   </label>
+    // and the Password label the same way with "Reset Password" on the
+    // right. Use flex/space-between so the label stays on the left and
+    // the action link floats to the right edge — overriding with
+    // ``display: block`` here would push "Choose a user" awkwardly
+    // back next to the "Email" text on the LEFT.
     label,
     .form-label {
         font-weight: 600 !important;
         color: $wms-charcoal !important;
         font-size: 0.85rem !important;
         letter-spacing: 0.3px !important;
-        display: block !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
         margin-bottom: 0.35rem !important;
         text-align: left !important;
+    }
+
+    // The right-side action button inside a label ("Choose a user",
+    // "Reset Password") — saffron-dark text, no underline by default,
+    // small font so it doesn't overpower the label.
+    label .btn-link,
+    label .o_user_switch_btn,
+    .form-label .btn-link,
+    .form-label .o_user_switch_btn,
+    .form-label a {
+        color: $wms-saffron-dark !important;
+        font-weight: 600 !important;
+        font-size: 0.78rem !important;
+        text-decoration: none !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+        white-space: nowrap !important;
+
+        &:hover {
+            color: $wms-charcoal !important;
+            text-decoration: underline !important;
+        }
     }
 
     // ----- Inputs -----------------------------------------------------------
