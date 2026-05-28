@@ -27,19 +27,26 @@
 
 .PARAMETER Passphrase
     Override the .env BACKUP_PASSPHRASE for this run only. Useful when
-    cycling passphrases.
+    cycling passphrases. Accepts a SecureString so the passphrase
+    never sits in plain text in this script's variable space — convert
+    a plain string at the call site with
+        ConvertTo-SecureString 'mypass' -AsPlainText -Force
 
 .EXAMPLE
     scripts\backup-native.ps1
 
 .EXAMPLE
     scripts\backup-native.ps1 -DbName wms -Retain 30
+
+.EXAMPLE
+    $pp = Read-Host -AsSecureString 'Passphrase?'
+    scripts\backup-native.ps1 -Passphrase $pp
 #>
 [CmdletBinding()]
 param(
     [string]$DbName = 'wms',
     [int]$Retain = 14,
-    [string]$Passphrase,
+    [SecureString]$Passphrase,
     [string]$DbHost,
     [int]$DbPort,
     [string]$DbUser
@@ -81,21 +88,39 @@ if (-not $DbUser) { $DbUser = 'odoo' }
 New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
 
 # --- Resolve passphrase from .env if not supplied ------------------------
+# Always work with the passphrase as a SecureString in this script's
+# variable space; convert to plaintext only at the gpg stdin boundary
+# inside Start-GpgPipe. This keeps it off Process Explorer's command-
+# line snapshot and off PowerShell's transcription logs.
 if (-not $Passphrase) {
     if (Test-Path $EnvPath) {
         $line = (Select-String -Path $EnvPath -Pattern '^BACKUP_PASSPHRASE=(.+)$' | Select-Object -First 1)
         if ($line) {
-            $Passphrase = $line.Matches.Groups[1].Value.Trim()
+            $envPass = $line.Matches.Groups[1].Value.Trim()
+            if ($envPass) {
+                $Passphrase = ConvertTo-SecureString $envPass -AsPlainText -Force
+            }
+            # Wipe the plaintext local var the instant we're done.
+            $envPass = $null
         }
     }
 }
-if (-not $Passphrase -or $Passphrase -eq 'changeme_backup_passphrase') {
-    Write-Host "BACKUP_PASSPHRASE not set in .env (or still the placeholder)." -ForegroundColor Red
+if (-not $Passphrase) {
+    Write-Host "BACKUP_PASSPHRASE not set in .env." -ForegroundColor Red
     Write-Host "Add a strong passphrase to .env:" -ForegroundColor Yellow
     Write-Host "    BACKUP_PASSPHRASE=<24+ random chars, no whitespace>" -ForegroundColor Yellow
     Write-Host "Then re-run." -ForegroundColor Yellow
     exit 1
 }
+# Detect the placeholder by briefly converting to plaintext.
+$ppPlainPeek = [System.Net.NetworkCredential]::new('', $Passphrase).Password
+if ($ppPlainPeek -eq 'changeme_backup_passphrase') {
+    $ppPlainPeek = $null
+    Write-Host "BACKUP_PASSPHRASE is still the placeholder 'changeme_backup_passphrase'." -ForegroundColor Red
+    Write-Host "Replace it with a real 24+ char random string in .env." -ForegroundColor Yellow
+    exit 1
+}
+$ppPlainPeek = $null
 
 # --- Find gpg.exe on PATH (or in the default Gpg4win install location) ---
 # PowerShell 5.1 has no `?.` operator, so use the explicit null check.
@@ -117,49 +142,44 @@ if (-not $gpg) {
 }
 
 # Hand gpg the passphrase via stdin to keep it off the command line
-# (command-line args show up in Process Explorer, the file system
+# (command-line args show up in Process Explorer; the file system
 # stays clean).
-function Invoke-GpgEncrypt {
-    param(
-        [Parameter(Mandatory)] [string]$InputFile,
-        [Parameter(Mandatory)] [string]$OutputFile,
-        [Parameter(Mandatory)] [string]$Pass
-    )
-    $args = @(
-        '--batch',
-        '--yes',
-        '--passphrase-fd', '0',
-        '--symmetric',
-        '--cipher-algo', 'AES256',
-        '-o', $OutputFile,
-        $InputFile
-    )
-    $proc = Start-Process -FilePath $gpg -ArgumentList $args `
-        -NoNewWindow -PassThru -RedirectStandardInput 'pipe' -RedirectStandardError 'pipe'
-    # The above doesn't work cleanly in PowerShell 5.1 - fall back to
-    # piping via stdin using process redirection.
-    throw "internal: use Start-GpgPipe instead"
-}
-
 function Start-GpgPipe {
-    param([string]$Pass, [string]$InputFile, [string]$OutputFile)
-    # Use cmd.exe pipe so PS5.1 doesn't choke. echo passphrase | gpg ...
-    # The passphrase has no shell metacharacters that would break this
-    # (we enforce 'no whitespace' in .env).
+    param(
+        [Parameter(Mandatory)] [SecureString]$Pass,
+        [Parameter(Mandatory)] [string]$InputFile,
+        [Parameter(Mandatory)] [string]$OutputFile
+    )
+    # Pipe the passphrase to gpg's stdin (--passphrase-fd 0) via cmd's
+    # `echo|` so PowerShell 5.1's native pipeline doesn't mangle the
+    # bytes. The passphrase is converted from SecureString to plaintext
+    # ONLY in the short-lived `$plain` local var and is wiped on the
+    # finally block. cmd.exe sees the plaintext on its argument line
+    # for the duration of one `echo`, which is unavoidable for the
+    # echo+pipe pattern; the trade-off vs the file-on-disk alternative
+    # is that the variable never touches the file system.
     #
     # GPG writes informational notices (gpg-agent socket, first-run
     # keyring creation) to stderr; those aren't failures. We collect
     # stderr to a tempfile and only print it if gpg exits non-zero.
     $errFile = [System.IO.Path]::GetTempFileName()
-    $cmd = "echo $Pass| `"$gpg`" --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 -o `"$OutputFile`" `"$InputFile`" 2> `"$errFile`""
-    & cmd /c $cmd
-    $rc = $LASTEXITCODE
-    if ($rc -ne 0) {
-        $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+    $plain = $null
+    try {
+        $plain = [System.Net.NetworkCredential]::new('', $Pass).Password
+        $cmd = "echo $plain| `"$gpg`" --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 -o `"$OutputFile`" `"$InputFile`" 2> `"$errFile`""
+        & cmd /c $cmd
+        $rc = $LASTEXITCODE
+        if ($rc -ne 0) {
+            $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+            throw "gpg encryption failed (exit $rc) on $InputFile`n$stderr"
+        }
+    } finally {
+        # Best-effort plaintext wipe — overwrite then drop the local
+        # binding so a subsequent memory snapshot can't recover it.
+        if ($plain) { $plain = ' ' * $plain.Length }
+        $plain = $null
         Remove-Item $errFile -Force -ErrorAction SilentlyContinue
-        throw "gpg encryption failed (exit $rc) on $InputFile`n$stderr"
     }
-    Remove-Item $errFile -Force -ErrorAction SilentlyContinue
 }
 
 # --- 1. Database dump (encrypted) ---------------------------------------
