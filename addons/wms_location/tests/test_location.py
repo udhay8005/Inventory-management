@@ -486,6 +486,26 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(plan2[1][0].product_id.id, batch_a.id)
         self.assertEqual(plan2[1][1], 5.0)
 
+    def test_overuse_cap_fields_default_to_zero(self):
+        """``wms_max_per_issue`` and ``wms_daily_cap`` exist on
+        product.template, default to 0 (no cap), and can be set
+        per-product. Cap enforcement itself lives in the Scan Issue
+        wizard (wms_barcode), so we only assert the schema here."""
+        p = self.env["product.template"].create(
+            {
+                "name": "Cap Test",
+                "type": "consu",
+                "is_storable": True,
+                "wms_product_kind": "tool",
+            }
+        )
+        self.assertEqual(p.wms_max_per_issue, 0.0)
+        self.assertEqual(p.wms_daily_cap, 0.0)
+        # Admin sets a cap.
+        p.write({"wms_max_per_issue": 3.0, "wms_daily_cap": 10.0})
+        self.assertEqual(p.wms_max_per_issue, 3.0)
+        self.assertEqual(p.wms_daily_cap, 10.0)
+
     def test_fifo_unchanged_for_non_expiry_kinds(self):
         """Tool / spare / consumable / etc. stay strict FIFO — the FEFO
         path should only kick in for expiry-sensitive kinds."""

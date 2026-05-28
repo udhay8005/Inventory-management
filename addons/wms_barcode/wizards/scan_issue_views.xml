@@ -95,6 +95,20 @@
                                        options="{'no_create': True, 'no_open': True}"
                                        placeholder="Select on-duty Store Keeper"/>
                             </div>
+                            <!--
+                                Mandatory usage note — what is the stock
+                                going to be used for? Validates accountability
+                                + helps reconcile against monthly cow-care
+                                plans. Required at the model layer so
+                                clicking Validate without a note throws
+                                a UserError.
+                            -->
+                            <div class="col-12 mt-2">
+                                <label for="usage_note" class="fw-bold"/>
+                                <field name="usage_note"
+                                       nolabel="1"
+                                       placeholder="Why is this stock being taken? (e.g. 'morning feed for shed B', 'replacing broken pump', 'monthly vaccination round')"/>
+                            </div>
                         </div>
                     </sheet>
                     <footer>

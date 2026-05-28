@@ -1,6 +1,6 @@
 from markupsafe import Markup
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 class WmsDamage(models.Model):
@@ -46,7 +46,28 @@ class WmsDamage(models.Model):
         default="broken",
         required=True,
     )
-    note = fields.Text()
+    note = fields.Text(
+        help="Free-text explanation of the damage event. Mandatory when "
+        "reason='other' so the audit trail isn't a black hole — for "
+        "broken/expired/contaminated the reason field already explains "
+        "what happened.",
+    )
+
+    # Enforce note when reason='other' so picking "Other" doesn't bypass
+    # the accountability requirement. The constraint runs at create/write
+    # and on action_confirm so the damage can't escape draft state
+    # without explanatory text when one is needed.
+    @api.constrains("reason", "note")
+    def _check_note_required_for_other(self):
+        for rec in self:
+            if rec.reason == "other" and not (rec.note or "").strip():
+                raise ValidationError(
+                    "Reason 'Other' needs a note explaining what happened. "
+                    "Pick a specific reason (Broken / Expired / "
+                    "Contaminated) if the explanation fits one of those, "
+                    "otherwise type a short sentence in the Note field."
+                )
+
     picking_id = fields.Many2one("stock.picking", readonly=True, copy=False)
     warehouse_id = fields.Many2one(
         "stock.warehouse",

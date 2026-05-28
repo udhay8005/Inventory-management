@@ -290,6 +290,45 @@ class ProductTemplate(models.Model):
         "drill / coupling across damage, repair, scrap events.",
     )
 
+    # ---- Overuse / abuse-prevention limits ---------------------------------
+    #
+    # The trust runs on shared stock — one rogue request can drain a
+    # whole shelf if nobody catches it at the desk. These two caps let
+    # the Admin define product-level limits that Scan Issue checks at
+    # validate-time:
+    #
+    #   wms_max_per_issue : single-issue HARD cap.
+    #     0 = no cap. If the requested qty for this product in one
+    #     Scan Issue wizard exceeds this, the issue is blocked with
+    #     a clear UserError naming the cap and the configured value.
+    #     Use for tools (1 hammer at a time), medicine (1 dose), etc.
+    #
+    #   wms_daily_cap : 24h rolling HARD cap (across ALL keepers and
+    #     ALL pickings). 0 = no cap. The check sums every "done"
+    #     stock.move.line for this product in the last 24 hours and
+    #     blocks if the new issue would push the total past the cap.
+    #     Use for feed (50 kg / day), oil (5 L / day), etc.
+    #
+    # Both default to 0 (no cap) so existing products are unaffected.
+    # Admin sets them on the WMS Classification tab.
+    wms_max_per_issue = fields.Float(
+        string="Max per issue",
+        default=0.0,
+        help="Hard cap on how many units of this product can leave the "
+        "warehouse in a single Scan Issue. Set 0 for no cap. "
+        "Example: medicine = 1 (one dose at a time), tool = 1, "
+        "consumable bolt = 50.",
+    )
+    wms_daily_cap = fields.Float(
+        string="Daily cap (24h rolling)",
+        default=0.0,
+        help="Hard cap on the total units of this product that can leave "
+        "across ALL store keepers and ALL issue tickets in any rolling "
+        "24-hour window. Set 0 for no cap. Example: feed = 50 (kg), "
+        "veterinary syringe = 5. Counted from stock.move.line on done "
+        "out-pickings.",
+    )
+
     # ---- Structured SKU: <PREFIX>-<NNNNN> --------------------------------
     #
     # When a product is created with a wms_product_kind, the

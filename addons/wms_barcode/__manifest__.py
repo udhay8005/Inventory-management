@@ -1,6 +1,6 @@
 {
     "name": "WMS — Barcode scan & print",
-    "version": "19.0.1.5.1",
+    "version": "19.0.1.6.0",
     "summary": "Receive/Issue scan wizards, carton aliases, label printing.",
     "depends": ["wms_location", "wms_fifo", "stock", "barcodes", "mail"],
     "author": "WMS",

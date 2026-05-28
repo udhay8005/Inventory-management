@@ -130,6 +130,31 @@
                                invisible="wms_product_kind not in ('tool', 'spare')">
                             <field name="wms_serial_number"/>
                         </group>
+
+                        <!--
+                            Overuse / abuse-prevention limits — always
+                            visible on every WMS product so the Admin
+                            can lock down anything sensitive (medicine,
+                            feed, fluid, expensive tools) without
+                            hunting through kind-conditional groups.
+                            0 = no cap (default), so legacy products
+                            stay unaffected.
+                        -->
+                        <group string="Usage limits (0 = no cap)">
+                            <field name="wms_max_per_issue"/>
+                            <field name="wms_daily_cap"/>
+                        </group>
+                        <div class="alert alert-info" role="alert"
+                             invisible="not wms_product_kind">
+                            <b>How the caps work.</b> Scan Issue blocks any
+                            single ticket asking for more than <i>Max per issue</i>,
+                            and refuses any ticket that would push the
+                            rolling 24-hour total past <i>Daily cap</i>
+                            (summed across all keepers and all pickings).
+                            Leave at 0 for no enforcement. A typical cow-shed
+                            setup: medicine dose = 1 per issue + 5 per day,
+                            feed = 50 kg per day, hammer = 1 per issue.
+                        </div>
                     </page>
                 </xpath>
             </field>

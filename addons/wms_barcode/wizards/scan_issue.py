@@ -83,6 +83,21 @@ class WmsScanIssue(models.TransientModel):
         "validating.",
     )
 
+    # Mandatory free-text reason for taking the stock. The taken_by /
+    # ordered_by fields capture WHO; this captures WHY. The trust uses
+    # it to reconcile against monthly cow-care plans and to spot
+    # patterns (one team consistently over-pulling soap, for example).
+    # Required = True so an issue can never go through without
+    # accountability text.
+    usage_note = fields.Text(
+        string="Reason / usage note",
+        required=True,
+        help="Why is this stock being taken? Examples: 'morning feed for "
+        "shed B', 'replacing broken pump in plumbing room', 'monthly "
+        "vaccination round for calves'. Required — no issue without "
+        "an explanation. Copied to the resulting picking's audit log.",
+    )
+
     # Photo capture. Binary + widget="image" gives mobile browsers an
     # <input type="file" accept="image/*" capture="environment"> which
     # opens the camera directly (and is dismissed automatically once the
@@ -119,6 +134,110 @@ class WmsScanIssue(models.TransientModel):
         """
         self.last_scan = barcode
         return self.action_plan()
+
+    # ---- Overuse / abuse-prevention -----------------------------------------
+    def _enforce_overuse_caps(self):
+        """Block any issue that would breach a product's configured caps.
+
+        Two checks per product appearing in plan_line_ids:
+
+          1. **Max per issue** — sum the take across all plan lines for
+             this product (a single Scan Issue can plan from multiple
+             slots/batches for the same product when FEFO crosses
+             batches). If the total > wms_max_per_issue and the cap is
+             non-zero, raise UserError naming the cap.
+
+          2. **Daily cap (24h rolling)** — sum every done outbound
+             stock.move.line for this product in the last 24 hours,
+             add the about-to-issue qty, and compare to wms_daily_cap.
+             If the post-issue total would exceed the cap, raise
+             UserError naming the cap and the current 24h total.
+
+        Both checks skip when the corresponding cap is 0 (no
+        enforcement, the default for every product).
+        """
+        self.ensure_one()
+        if not self.plan_line_ids:
+            return
+
+        # Group requested qty by product (FEFO can split across siblings)
+        by_product = {}
+        for line in self.plan_line_ids:
+            by_product.setdefault(line.product_id, 0.0)
+            by_product[line.product_id] += line.take
+
+        from datetime import datetime, timedelta
+
+        now = datetime.now()
+        cutoff = now - timedelta(hours=24)
+
+        for product, requested_qty in by_product.items():
+            tmpl = product.product_tmpl_id
+            cap_issue = tmpl.wms_max_per_issue or 0.0
+            cap_daily = tmpl.wms_daily_cap or 0.0
+
+            # 1. Per-issue cap
+            if cap_issue > 0 and requested_qty > cap_issue:
+                raise UserError(
+                    "Per-issue cap exceeded for %s.\n\n"
+                    "Requested: %g\n"
+                    "Maximum per issue: %g\n\n"
+                    "Reduce the quantity or split into multiple tickets. "
+                    "If the cap is wrong, ask the Admin to adjust the "
+                    "'Max per issue' field on the product (WMS "
+                    "Classification tab)." % (product.display_name, requested_qty, cap_issue)
+                )
+
+            # 2. Daily cap (24h rolling)
+            if cap_daily > 0:
+                # Count every done outbound move.line for this product
+                # in the last 24h. We use stock.move.line.create_date
+                # (when the picking was validated) rather than
+                # picking_id.date_done so quants that came back via
+                # Scan Return aren't double-counted (returns are
+                # internal transfers, not outbound).
+                # Filter by picking.origin starting with "Barcode FIFO"
+                # — that's the marker every Scan Issue stamps on its
+                # resulting picking. We can't filter by destination
+                # usage anymore because the "Trust internal use"
+                # location has usage=internal, so an inbound-vs-
+                # outbound filter would also catch the outbound moves
+                # that go there. Filtering by origin is precise: only
+                # previous Scan Issue pickings count toward the rolling
+                # 24h total; Scan Receipt moves and manual stock
+                # adjustments don't.
+                lines = (
+                    self.env["stock.move.line"]
+                    .sudo()
+                    .search(
+                        [
+                            ("product_id", "=", product.id),
+                            ("state", "=", "done"),
+                            ("create_date", ">=", cutoff),
+                            ("picking_id.origin", "=ilike", "Barcode FIFO%"),
+                        ]
+                    )
+                )
+                used_24h = sum(lines.mapped("quantity"))
+                projected = used_24h + requested_qty
+                if projected > cap_daily:
+                    raise UserError(
+                        "Daily cap exceeded for %s.\n\n"
+                        "Already issued in last 24h: %g\n"
+                        "Trying to issue now: %g\n"
+                        "Total would be: %g\n"
+                        "Daily cap: %g\n\n"
+                        "Wait for the rolling window to clear or ask "
+                        "the Admin to raise the 'Daily cap (24h "
+                        "rolling)' on this product."
+                        % (
+                            product.display_name,
+                            used_24h,
+                            requested_qty,
+                            projected,
+                            cap_daily,
+                        )
+                    )
 
     def action_plan(self):
         self.ensure_one()
@@ -228,6 +347,11 @@ class WmsScanIssue(models.TransientModel):
                 "This item is measured (liters / kg / etc.). "
                 "Please attach a photo of what's being issued before validating."
             )
+        # ---- Overuse / abuse-prevention checks ------------------------------
+        # Hard-block any single-issue qty over wms_max_per_issue and any
+        # request that would push the rolling-24h total over wms_daily_cap.
+        # 0 on either field = no cap. See product.template for the rationale.
+        self._enforce_overuse_caps()
 
         # Pick a picking type via warehouse-level m2o so we don't get bitten
         # by Odoo 19 archiving the internal type for 1-step warehouses.
@@ -288,17 +412,23 @@ class WmsScanIssue(models.TransientModel):
             "Taken by <b>%s</b>; ordered by <b>%s</b>; "
             "Store Keeper on duty: <b>%s</b>; "
             "logged in as: <b>%s</b>.</p>"
+            "<p><b>Reason / usage note:</b><br/>%s</p>"
         ) % (
             picking.wms_taken_by or "(unspecified)",
             picking.wms_ordered_by or "(unspecified)",
             picking.wms_storekeeper_id.name or "(unknown)",
             self.env.user.display_name or "(system)",
+            (self.usage_note or "").replace("\n", "<br/>") or "(missing — should never happen)",
         )
         picking.message_post(
             body=audit_body,
             subject="Issue audit",
             message_type="notification",
         )
+        # Copy usage_note onto the picking's `note` so it shows up in
+        # the form view, not just the chatter.
+        if "note" in picking._fields:
+            picking.note = self.usage_note
 
         # Attach the photo (if any) so it's visible from the picking's
         # history and survives in the audit trail. We always store it
