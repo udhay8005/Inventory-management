@@ -1,7 +1,7 @@
 numpy>=1.26,<2.0
 pandas>=2.0,<3.0
 statsmodels>=0.14
-python-barcode>=0.15
+python-barcode>=0.16.1
 Pillow>=10.0
 reportlab>=4.0
 # reportlab 4.x ships without a built-in renderPM backend; without one,
