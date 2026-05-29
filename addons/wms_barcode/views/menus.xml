@@ -1,28 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!--
+            Scan / catalog menus are gated by per-keeper capability
+            sub-groups instead of the broad group_wms_user role. An
+            Admin can grant or revoke each from the Store Keeper form.
+            Users without the matching capability never see the menu.
+        -->
         <menuitem id="menu_wms_scan_receipt"
                   name="Scan Receipt"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_scan_receipt"
+                  groups="wms_location.group_wms_can_scan_receive"
                   sequence="20"/>
 
         <menuitem id="menu_wms_scan_return"
                   name="Scan Return"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_scan_return"
+                  groups="wms_location.group_wms_can_scan_receive"
                   sequence="22"/>
 
         <menuitem id="menu_wms_scan_issue"
                   name="Scan Issue (FIFO)"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_scan_issue"
+                  groups="wms_location.group_wms_can_scan_issue"
                   sequence="25"/>
 
         <menuitem id="menu_wms_barcode_alias"
                   name="Carton Barcodes"
                   parent="wms_location.menu_wms_config"
                   action="action_wms_barcode_alias"
+                  groups="wms_location.group_wms_can_manage_catalog"
                   sequence="30"/>
+
+        <!--
+            Onboard Products wizard.
+
+            Lives under Operations (where the daily flow is) rather
+            than Configuration, because trustees onboard new items
+            multiple times a week as the trust grows. Sequence 5 so
+            it sits at the very top of Operations - the first thing
+            the Admin needs is to GET items into the system, then
+            Scan Receipt / Issue work on them.
+        -->
+        <menuitem id="menu_wms_product_onboard"
+                  name="Onboard Products"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_product_onboard"
+                  groups="wms_location.group_wms_manager"
+                  sequence="5"/>
     </data>
 </odoo>

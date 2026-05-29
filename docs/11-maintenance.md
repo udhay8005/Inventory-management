@@ -4,9 +4,9 @@
 
 | Cadence | Task |
 |---|---|
-| Daily | Verify `backup.sh` ran (size sanity check) |
-| Weekly | `docker compose pull && docker compose build --no-cache && docker compose up -d` for security patches |
-| Monthly | Restore-drill from a recent backup into a scratch DB |
+| Daily | Verify `scripts\backup-native.ps1` ran (size sanity check on the latest .dump in `backups\`) |
+| Weekly | `cd .odoo && git pull origin 19.0 && cd .. && .venv\Scripts\pip install -r .odoo\requirements.txt --upgrade` then `scripts\start-native.ps1` to pick up Odoo CE security patches |
+| Monthly | Restore-drill from a recent backup into a scratch DB (`pg_restore` into `wms_drill` and start Odoo against it briefly) |
 | Quarterly | Review `wms.forecast` accuracy report; retune safety stock |
 | Yearly | Major Odoo CE upgrade (see below) |
 
@@ -16,11 +16,10 @@
    - `stock.quant` field changes
    - `stock.location` removal-strategy hooks
    - `mail.thread` decoration
-2. Spin up a parallel stack on a new compose file, attach a copy of the DB
-   (`pg_dump | pg_restore`).
-3. Run each module's tests: `odoo -i wms_* --test-enable --stop-after-init`.
+2. Clone the new Odoo version alongside (`git clone -b 20.0 https://github.com/odoo/odoo .odoo-v20`), create a parallel venv, install deps. Restore a copy of the DB into `wms_v20_test` via `pg_restore`.
+3. Run each module's tests: `.venv\Scripts\python .odoo-v20\odoo-bin -d wms_v20_test -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports --test-enable --stop-after-init`.
 4. Fix what breaks in a feature branch, never on prod.
-5. Cut over: stop old stack, swap volumes, start new stack.
+5. Cut over: `scripts\stop-native.ps1`, point `config\odoo.native.conf`'s `addons_path` at the new `.odoo-v20`, `scripts\start-native.ps1`.
 
 ## Tuning the FIFO query
 

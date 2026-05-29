@@ -38,15 +38,19 @@
 
 ## CI
 
-GitHub Actions / GitLab CI snippet (host runner, docker compose):
+GitHub Actions native runner (Ubuntu + Postgres service + venv) — see
+`.github/workflows/ci.yml` for the full pipeline. Inner test invocation:
 
 ```yaml
-- run: docker compose build
 - run: |
-    docker compose run --rm odoo \
-      odoo --test-enable --stop-after-init -d ci_test \
-           --init wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
-           --log-level=test
+    git clone --depth 1 -b 19.0 https://github.com/odoo/odoo.git $HOME/odoo
+    python -m venv $HOME/venv
+    $HOME/venv/bin/pip install -r $HOME/odoo/requirements.txt -r requirements.txt
+    $HOME/venv/bin/python $HOME/odoo/odoo-bin --test-enable --stop-after-init \
+        -d ci_test --db_host=localhost --db_user=odoo --db_password=odoo_ci_password \
+        --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
+        -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
+        --without-demo=all --test-tags wms --log-level=test
 ```
 
 ## Performance benchmarks

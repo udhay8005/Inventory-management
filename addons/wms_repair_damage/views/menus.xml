@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!--
+            Damages menu is gated by the per-keeper capability
+            'Can file Damage events'. Repair Orders stay manager-only
+            because the Admin authorises every repair start/finish.
+        -->
         <menuitem id="menu_wms_damage"
                   name="Damages"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_damage"
+                  groups="wms_location.group_wms_can_file_damage"
                   sequence="40"/>
 
         <menuitem id="menu_wms_repair"
                   name="Repair Orders"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_repair"
+                  groups="wms_location.group_wms_manager"
                   sequence="45"/>
     </data>
 </odoo>

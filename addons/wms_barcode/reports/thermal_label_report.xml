@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Paper format tuned to the trust's actual hardware:
+
+              * Label roll:    True-Ally 100 × 25 mm direct-thermal
+                               (1000 stickers / roll). The earlier 102 mm
+                               was a 4-inch approximation; the True-Ally
+                               sticker is **exactly 100 mm** edge-to-edge,
+                               so the wkhtmltopdf page must match or the
+                               printer either clips the right edge or
+                               mis-feeds onto the next sticker.
+              * Printer:       TSC TE244 desktop thermal-transfer / direct-
+                               thermal, 203 DPI, USB. The 203 DPI here
+                               matches the print head so wkhtmltopdf's
+                               raster matches what the printer renders.
+              * Margins zero:  the TE244 has its own ~1 mm hardware
+                               margin; setting CSS margins to 0 lets the
+                               Admin position barcodes / logos right up
+                               to the edge of the printable area via
+                               Configuration → Label Settings.
+
+            Orientation stays Portrait — wkhtmltopdf swaps width/height
+            when orientation=Landscape, which would push the label into
+            a 25 × 100 mm portrait page (label squashed at the top).
+        -->
+        <record id="paperformat_wms_thermal_4x1" model="report.paperformat">
+            <field name="name">WMS Thermal Label 100×25 mm</field>
+            <field name="format">custom</field>
+            <field name="page_width">100</field>
+            <field name="page_height">25</field>
+            <field name="orientation">Portrait</field>
+            <field name="margin_top">0</field>
+            <field name="margin_bottom">0</field>
+            <field name="margin_left">0</field>
+            <field name="margin_right">0</field>
+            <field name="header_line">False</field>
+            <field name="header_spacing">0</field>
+            <field name="dpi">203</field>
+        </record>
+
+        <!--
+            Thermal product label — one sticker per product, suitable
+            for printing on a 4×1 inch roll printer. Layout is driven
+            by the Admin's wms.label.config (Configuration → Label
+            Settings) so the barcode / logo / text can be placed
+            anywhere on the sticker.
+        -->
+        <record id="action_report_wms_product_label_thermal" model="ir.actions.report">
+            <field name="name">WMS Product Label (Thermal 100×25mm)</field>
+            <field name="model">product.product</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">wms_barcode.report_product_label_thermal</field>
+            <field name="report_file">wms_barcode.report_product_label_thermal</field>
+            <field name="print_report_name">'Thermal-product-labels-%d' % len(docs)</field>
+            <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
+            <field name="binding_model_id" ref="product.model_product_product"/>
+            <field name="binding_type">report</field>
+        </record>
+
+        <record id="action_report_wms_location_label_thermal" model="ir.actions.report">
+            <field name="name">WMS Location Label (Thermal 100×25mm)</field>
+            <field name="model">stock.location</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">wms_barcode.report_location_label_thermal</field>
+            <field name="report_file">wms_barcode.report_location_label_thermal</field>
+            <field name="print_report_name">'Thermal-location-labels-%d' % len(docs)</field>
+            <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
+            <field name="binding_model_id" ref="stock.model_stock_location"/>
+            <field name="binding_type">report</field>
+        </record>
+
+    </data>
+</odoo>

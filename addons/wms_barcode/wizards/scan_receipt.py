@@ -1,3 +1,4 @@
+from markupsafe import Markup
 from odoo import fields, models
 from odoo.exceptions import UserError
 
@@ -208,19 +209,20 @@ class WmsScanReceipt(models.TransientModel):
         picking.button_validate()
 
         # Audit-trail message — matches the Scan Issue chatter pattern.
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        audit_body = Markup(
+            "<p><b>%(kind)s.</b> "
+            "Delivered by <b>%(delivered)s</b>; "
+            "Store Keeper on duty: <b>%(keeper)s</b>; "
+            "logged in as: <b>%(login)s</b>.</p>"
+        ) % {
+            "kind": "Return received" if self.is_return else "Receipt received",
+            "delivered": picking.wms_taken_by or "(unspecified)",
+            "keeper": self.storekeeper_id.name or "(unknown)",
+            "login": self.env.user.display_name or "(system)",
+        }
         picking.message_post(
-            body=(
-                "<p><b>%(kind)s.</b> "
-                "Delivered by <b>%(delivered)s</b>; "
-                "Store Keeper on duty: <b>%(keeper)s</b>; "
-                "logged in as: <b>%(login)s</b>.</p>"
-            )
-            % {
-                "kind": "Return received" if self.is_return else "Receipt received",
-                "delivered": picking.wms_taken_by or "(unspecified)",
-                "keeper": self.storekeeper_id.name or "(unknown)",
-                "login": self.env.user.display_name or "(system)",
-            },
+            body=audit_body,
             subject="Receipt audit",
             message_type="notification",
         )

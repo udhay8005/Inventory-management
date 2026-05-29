@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_wms_label_config_form" model="ir.ui.view">
+            <field name="name">wms.label.config.form</field>
+            <field name="model">wms.label.config</field>
+            <field name="arch" type="xml">
+                <form string="Thermal label layout">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1>
+                                <field name="name" placeholder="e.g. Standard sticker"/>
+                            </h1>
+                        </div>
+                        <div class="alert alert-info" role="alert">
+                            All measurements are in millimetres. The default
+                            layout is 102 × 25 mm (4 × 1 inch) — a standard
+                            thermal roll. Change any value and re-print to see
+                            it move. Set a width or height to <b>0</b> to hide
+                            that element entirely.
+                        </div>
+                        <group>
+                            <group string="Sticker size">
+                                <field name="paper_width_mm"/>
+                                <field name="paper_height_mm"/>
+                                <field name="active"/>
+                                <field name="company_id" groups="base.group_multi_company"/>
+                            </group>
+                            <group string="Barcode">
+                                <field name="barcode_x_mm"/>
+                                <field name="barcode_y_mm"/>
+                                <field name="barcode_width_mm"/>
+                                <field name="barcode_height_mm"/>
+                                <field name="show_human_readable"/>
+                                <field name="human_readable_size_pt"
+                                       invisible="not show_human_readable"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group string="Logo">
+                                <field name="logo" widget="image" nolabel="1"/>
+                                <field name="logo_x_mm"/>
+                                <field name="logo_y_mm"/>
+                                <field name="logo_width_mm"/>
+                                <field name="logo_height_mm"/>
+                            </group>
+                            <group string="Product / location name">
+                                <field name="show_title"/>
+                                <field name="title_x_mm" invisible="not show_title"/>
+                                <field name="title_y_mm" invisible="not show_title"/>
+                                <field name="title_width_mm" invisible="not show_title"/>
+                                <field name="title_size_pt" invisible="not show_title"/>
+                                <field name="title_bold" invisible="not show_title"/>
+                            </group>
+                        </group>
+                        <group string="SKU / sub-line">
+                            <group>
+                                <field name="show_subtitle"/>
+                                <field name="subtitle_x_mm" invisible="not show_subtitle"/>
+                                <field name="subtitle_y_mm" invisible="not show_subtitle"/>
+                            </group>
+                            <group>
+                                <field name="subtitle_width_mm" invisible="not show_subtitle"/>
+                                <field name="subtitle_size_pt" invisible="not show_subtitle"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_label_config_list" model="ir.ui.view">
+            <field name="name">wms.label.config.list</field>
+            <field name="model">wms.label.config</field>
+            <field name="arch" type="xml">
+                <list>
+                    <field name="name"/>
+                    <field name="paper_width_mm"/>
+                    <field name="paper_height_mm"/>
+                    <field name="active" widget="boolean_toggle"/>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_label_config" model="ir.actions.act_window">
+            <field name="name">Label Settings</field>
+            <field name="res_model">wms.label.config</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No label profile yet.</p>
+                <p>Create one profile to control where the barcode, logo and text
+                appear on every thermal sticker. The defaults match a 4 × 1 inch
+                roll printer at 203 DPI — adjust to taste.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_label_config"
+                  name="Label Settings"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_label_config"
+                  sequence="40"/>
+
+    </data>
+</odoo>

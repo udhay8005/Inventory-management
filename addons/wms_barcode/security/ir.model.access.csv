@@ -1,10 +1,14 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_wms_barcode_alias_user,wms.barcode.alias user,model_wms_barcode_alias,wms_location.group_wms_user,1,0,0,0
-access_wms_barcode_alias_mgr,wms.barcode.alias manager,model_wms_barcode_alias,wms_location.group_wms_manager,1,1,1,1
+access_wms_barcode_alias_mgr,wms.barcode.alias manager,model_wms_barcode_alias,wms_location.group_wms_manager,1,1,1,0
 access_wms_scan_receipt_user,wms.scan.receipt user,model_wms_scan_receipt,wms_location.group_wms_user,1,1,1,1
 access_wms_scan_receipt_line,wms.scan.receipt.line user,model_wms_scan_receipt_line,wms_location.group_wms_user,1,1,1,1
 access_wms_scan_issue_user,wms.scan.issue user,model_wms_scan_issue,wms_location.group_wms_user,1,1,1,1
 access_wms_scan_issue_plan,wms.scan.issue.plan user,model_wms_scan_issue_plan,wms_location.group_wms_user,1,1,1,1
 access_wms_demo_seeder,wms.demo.seeder mgr,model_wms_demo_seeder,wms_location.group_wms_manager,1,1,1,1
+access_wms_product_onboard,wms.product.onboard mgr,model_wms_product_onboard,wms_location.group_wms_manager,1,1,1,1
+access_wms_product_onboard_line,wms.product.onboard.line mgr,model_wms_product_onboard_line,wms_location.group_wms_manager,1,1,1,1
 access_wms_storekeeper_user,wms.storekeeper user,model_wms_storekeeper,wms_location.group_wms_user,1,0,0,0
-access_wms_storekeeper_mgr,wms.storekeeper mgr,model_wms_storekeeper,wms_location.group_wms_manager,1,1,1,1
+access_wms_storekeeper_mgr,wms.storekeeper mgr,model_wms_storekeeper,wms_location.group_wms_manager,1,1,1,0
+access_wms_label_config_user,wms.label.config user,model_wms_label_config,wms_location.group_wms_user,1,0,0,0
+access_wms_label_config_mgr,wms.label.config mgr,model_wms_label_config,wms_location.group_wms_manager,1,1,1,0

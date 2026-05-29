@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="view_wms_expiry_alert_tree" model="ir.ui.view">
+            <field name="name">wms.expiry.alert.tree</field>
+            <field name="model">wms.expiry.alert</field>
+            <field name="arch" type="xml">
+                <list create="0" delete="0" edit="0"
+                      decoration-danger="status == 'expired'"
+                      decoration-warning="status == 'urgent'"
+                      decoration-info="status == 'soon'"
+                      decoration-muted="status == 'ok'">
+                    <field name="product_id"/>
+                    <field name="wms_product_kind"/>
+                    <field name="expiry_date"/>
+                    <field name="days_to_expiry"/>
+                    <field name="on_hand"/>
+                    <field name="batch_number"/>
+                    <field name="status"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_expiry_alert_search" model="ir.ui.view">
+            <field name="name">wms.expiry.alert.search</field>
+            <field name="model">wms.expiry.alert</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="batch_number"/>
+                    <filter name="f_expired"  string="Expired"
+                            domain="[('status', '=', 'expired')]"/>
+                    <filter name="f_urgent"   string="Within 30 days"
+                            domain="[('status', '=', 'urgent')]"/>
+                    <filter name="f_soon"     string="Within 90 days"
+                            domain="[('status', '=', 'soon')]"/>
+                    <separator/>
+                    <filter name="f_in_stock" string="On hand &gt; 0"
+                            domain="[('on_hand', '>', 0)]"/>
+                    <separator/>
+                    <filter name="g_kind"  string="Kind"
+                            context="{'group_by': 'wms_product_kind'}"/>
+                    <filter name="g_status" string="Status"
+                            context="{'group_by': 'status'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_expiry_alert" model="ir.actions.act_window">
+            <field name="name">Expiry alerts</field>
+            <field name="res_model">wms.expiry.alert</field>
+            <field name="view_mode">list</field>
+            <field name="search_view_id" ref="view_wms_expiry_alert_search"/>
+            <field name="context">{
+                'search_default_f_expired': 1,
+                'search_default_f_urgent': 1,
+                'search_default_f_soon': 1,
+            }</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Nothing expiring. Set an <b>Expiry date</b> on perishable
+                    products (medicine, feed, ghee, oil) to see them here.
+                </p>
+            </field>
+        </record>
+
+    </data>
+</odoo>

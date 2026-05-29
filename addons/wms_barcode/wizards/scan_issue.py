@@ -1,3 +1,4 @@
+from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -27,8 +28,27 @@ class WmsScanIssue(models.TransientModel):
         "stock.location",
         required=True,
         domain=[("usage", "in", ("customer", "production", "internal"))],
-        default=lambda s: s.env.ref("stock.stock_location_customers"),
+        default=lambda s: s._default_destination_id(),
+        help="Where the issued stock goes. Defaults to the trust's "
+        "'Trust internal use' location since the trust uses inventory "
+        "internally rather than selling it. Admin can pick any other "
+        "internal location (Cow Shed, Pooja Room, etc.) on the day "
+        "without changing the default.",
     )
+
+    @api.model
+    def _default_destination_id(self):
+        """The Trust uses stock internally rather than selling it.
+
+        Prefer the seeded ``wms_location.stock_location_trust_use``;
+        fall back to ``stock.stock_location_customers`` only if the
+        WMS data file hasn't loaded yet (e.g. mid-install).
+        """
+        trust = self.env.ref("wms_location.stock_location_trust_use", raise_if_not_found=False)
+        if trust:
+            return trust
+        return self.env.ref("stock.stock_location_customers", raise_if_not_found=False)
+
     last_scan = fields.Char()
     requested_qty = fields.Float(default=1.0)
     feedback = fields.Char(readonly=True)
@@ -61,6 +81,21 @@ class WmsScanIssue(models.TransientModel):
         "roster the Admin maintains under Configuration → Store Keepers. "
         "If the name you want isn't here, ask the Admin to add it before "
         "validating.",
+    )
+
+    # Mandatory free-text reason for taking the stock. The taken_by /
+    # ordered_by fields capture WHO; this captures WHY. The trust uses
+    # it to reconcile against monthly cow-care plans and to spot
+    # patterns (one team consistently over-pulling soap, for example).
+    # Required = True so an issue can never go through without
+    # accountability text.
+    usage_note = fields.Text(
+        string="Reason / usage note",
+        required=True,
+        help="Why is this stock being taken? Examples: 'morning feed for "
+        "shed B', 'replacing broken pump in plumbing room', 'monthly "
+        "vaccination round for calves'. Required — no issue without "
+        "an explanation. Copied to the resulting picking's audit log.",
     )
 
     # Photo capture. Binary + widget="image" gives mobile browsers an
@@ -100,6 +135,110 @@ class WmsScanIssue(models.TransientModel):
         self.last_scan = barcode
         return self.action_plan()
 
+    # ---- Overuse / abuse-prevention -----------------------------------------
+    def _enforce_overuse_caps(self):
+        """Block any issue that would breach a product's configured caps.
+
+        Two checks per product appearing in plan_line_ids:
+
+          1. **Max per issue** — sum the take across all plan lines for
+             this product (a single Scan Issue can plan from multiple
+             slots/batches for the same product when FEFO crosses
+             batches). If the total > wms_max_per_issue and the cap is
+             non-zero, raise UserError naming the cap.
+
+          2. **Daily cap (24h rolling)** — sum every done outbound
+             stock.move.line for this product in the last 24 hours,
+             add the about-to-issue qty, and compare to wms_daily_cap.
+             If the post-issue total would exceed the cap, raise
+             UserError naming the cap and the current 24h total.
+
+        Both checks skip when the corresponding cap is 0 (no
+        enforcement, the default for every product).
+        """
+        self.ensure_one()
+        if not self.plan_line_ids:
+            return
+
+        # Group requested qty by product (FEFO can split across siblings)
+        by_product = {}
+        for line in self.plan_line_ids:
+            by_product.setdefault(line.product_id, 0.0)
+            by_product[line.product_id] += line.take
+
+        from datetime import datetime, timedelta
+
+        now = datetime.now()
+        cutoff = now - timedelta(hours=24)
+
+        for product, requested_qty in by_product.items():
+            tmpl = product.product_tmpl_id
+            cap_issue = tmpl.wms_max_per_issue or 0.0
+            cap_daily = tmpl.wms_daily_cap or 0.0
+
+            # 1. Per-issue cap
+            if cap_issue > 0 and requested_qty > cap_issue:
+                raise UserError(
+                    "Per-issue cap exceeded for %s.\n\n"
+                    "Requested: %g\n"
+                    "Maximum per issue: %g\n\n"
+                    "Reduce the quantity or split into multiple tickets. "
+                    "If the cap is wrong, ask the Admin to adjust the "
+                    "'Max per issue' field on the product (WMS "
+                    "Classification tab)." % (product.display_name, requested_qty, cap_issue)
+                )
+
+            # 2. Daily cap (24h rolling)
+            if cap_daily > 0:
+                # Count every done outbound move.line for this product
+                # in the last 24h. We use stock.move.line.create_date
+                # (when the picking was validated) rather than
+                # picking_id.date_done so quants that came back via
+                # Scan Return aren't double-counted (returns are
+                # internal transfers, not outbound).
+                # Filter by picking.origin starting with "Barcode FIFO"
+                # — that's the marker every Scan Issue stamps on its
+                # resulting picking. We can't filter by destination
+                # usage anymore because the "Trust internal use"
+                # location has usage=internal, so an inbound-vs-
+                # outbound filter would also catch the outbound moves
+                # that go there. Filtering by origin is precise: only
+                # previous Scan Issue pickings count toward the rolling
+                # 24h total; Scan Receipt moves and manual stock
+                # adjustments don't.
+                lines = (
+                    self.env["stock.move.line"]
+                    .sudo()
+                    .search(
+                        [
+                            ("product_id", "=", product.id),
+                            ("state", "=", "done"),
+                            ("create_date", ">=", cutoff),
+                            ("picking_id.origin", "=ilike", "Barcode FIFO%"),
+                        ]
+                    )
+                )
+                used_24h = sum(lines.mapped("quantity"))
+                projected = used_24h + requested_qty
+                if projected > cap_daily:
+                    raise UserError(
+                        "Daily cap exceeded for %s.\n\n"
+                        "Already issued in last 24h: %g\n"
+                        "Trying to issue now: %g\n"
+                        "Total would be: %g\n"
+                        "Daily cap: %g\n\n"
+                        "Wait for the rolling window to clear or ask "
+                        "the Admin to raise the 'Daily cap (24h "
+                        "rolling)' on this product."
+                        % (
+                            product.display_name,
+                            used_24h,
+                            requested_qty,
+                            projected,
+                            cap_daily,
+                        )
+                    )
+
     def action_plan(self):
         self.ensure_one()
         if not self.last_scan:
@@ -117,16 +256,29 @@ class WmsScanIssue(models.TransientModel):
             parent_location_id=self.warehouse_id.lot_stock_id.id,
         )
 
+        # Was FEFO used? Decide the same way find_oldest_quants_for_product
+        # does, so the feedback text matches the planner's behaviour.
+        from odoo.addons.wms_location.models.product_template import EXPIRY_SENSITIVE_KINDS
+
+        kind = product.product_tmpl_id.wms_product_kind
+        used_fefo = (kind in EXPIRY_SENSITIVE_KINDS) or bool(
+            product.product_tmpl_id.wms_expiry_date
+        )
+
         # Clear previous plan
         self.plan_line_ids.unlink()
         for quant, take in plan:
+            # The planner may have picked a sibling batch (FEFO) — use
+            # the quant's own product, not the scanned one.
+            picked = quant.product_id
             self.env["wms.scan.issue.plan"].create(
                 {
                     "wizard_id": self.id,
-                    "product_id": product.id,
+                    "product_id": picked.id,
                     "quant_id": quant.id,
                     "location_id": quant.location_id.id,
                     "in_date": quant.in_date,
+                    "expiry_date": picked.product_tmpl_id.wms_expiry_date,
                     "available": quant.quantity - quant.reserved_quantity,
                     "take": take,
                 }
@@ -137,6 +289,7 @@ class WmsScanIssue(models.TransientModel):
         # the requested quantity, surface a STOCK OUT message so the
         # operator knows immediately to wait for a return or alert the
         # Admin — not a cryptic "short by 5".
+        rule = "FEFO" if used_fefo else "FIFO"
         if not plan and missing:
             self.feedback = (
                 "⚠ STOCK OUT — no %s available anywhere in the warehouse. "
@@ -145,14 +298,28 @@ class WmsScanIssue(models.TransientModel):
             ) % product.display_name
         elif missing:
             self.feedback = (
-                "⚠ Only %s × %s on hand — that's %s less than you asked for. "
-                "Reduce the quantity, or wait for the rest to come back via "
-                "Scan Return."
-            ) % (
-                qty - missing,
-                product.display_name,
-                missing,
-            )
+                "⚠ Only %s × %s on hand (%s plan) — that's %s less than "
+                "you asked for. Reduce the quantity, or wait for the rest "
+                "to come back via Scan Return."
+            ) % (qty - missing, product.display_name, rule, missing)
+        elif used_fefo:
+            # Make it obvious when the planner has crossed batches so the
+            # keeper doesn't think the wizard misread their scan.
+            picked_names = {ln.product_id.display_name for ln in self.plan_line_ids}
+            if len(picked_names) > 1 or (picked_names and product.display_name not in picked_names):
+                self.feedback = (
+                    "FEFO: planned %s × %s — taking from earlier-expiring "
+                    "batch(es): %s. Pick from the slot(s) below."
+                ) % (qty, product.display_name, ", ".join(sorted(picked_names)))
+            else:
+                self.feedback = (
+                    "FEFO: planned %s × %s across %d slot(s) — earliest expiry first."
+                    % (
+                        qty,
+                        product.display_name,
+                        len(plan),
+                    )
+                )
         else:
             self.feedback = "Planned %s × %s across %d slot(s)." % (
                 qty,
@@ -180,6 +347,11 @@ class WmsScanIssue(models.TransientModel):
                 "This item is measured (liters / kg / etc.). "
                 "Please attach a photo of what's being issued before validating."
             )
+        # ---- Overuse / abuse-prevention checks ------------------------------
+        # Hard-block any single-issue qty over wms_max_per_issue and any
+        # request that would push the rolling-24h total over wms_daily_cap.
+        # 0 on either field = no cap. See product.template for the rationale.
+        self._enforce_overuse_caps()
 
         # Pick a picking type via warehouse-level m2o so we don't get bitten
         # by Odoo 19 archiving the internal type for 1-step warehouses.
@@ -234,22 +406,29 @@ class WmsScanIssue(models.TransientModel):
         # Admin can scroll back through it later. Includes the Odoo
         # login (env.user) too — the on-duty roster name covers the
         # actual human; the login records which Odoo account was used.
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        audit_body = Markup(
+            "<p><b>Issued.</b> "
+            "Taken by <b>%s</b>; ordered by <b>%s</b>; "
+            "Store Keeper on duty: <b>%s</b>; "
+            "logged in as: <b>%s</b>.</p>"
+            "<p><b>Reason / usage note:</b><br/>%s</p>"
+        ) % (
+            picking.wms_taken_by or "(unspecified)",
+            picking.wms_ordered_by or "(unspecified)",
+            picking.wms_storekeeper_id.name or "(unknown)",
+            self.env.user.display_name or "(system)",
+            (self.usage_note or "").replace("\n", "<br/>") or "(missing — should never happen)",
+        )
         picking.message_post(
-            body=(
-                "<p><b>Issued.</b> "
-                "Taken by <b>%s</b>; ordered by <b>%s</b>; "
-                "Store Keeper on duty: <b>%s</b>; "
-                "logged in as: <b>%s</b>.</p>"
-            )
-            % (
-                picking.wms_taken_by or "(unspecified)",
-                picking.wms_ordered_by or "(unspecified)",
-                picking.wms_storekeeper_id.name or "(unknown)",
-                self.env.user.display_name or "(system)",
-            ),
+            body=audit_body,
             subject="Issue audit",
             message_type="notification",
         )
+        # Copy usage_note onto the picking's `note` so it shows up in
+        # the form view, not just the chatter.
+        if "note" in picking._fields:
+            picking.note = self.usage_note
 
         # Attach the photo (if any) so it's visible from the picking's
         # history and survives in the audit trail. We always store it
@@ -298,13 +477,21 @@ class WmsScanIssue(models.TransientModel):
 
 class WmsScanIssuePlan(models.TransientModel):
     _name = "wms.scan.issue.plan"
-    _description = "Planned deduction line (FIFO)"
-    _order = "in_date asc"
+    _description = "Planned deduction line (FIFO / FEFO)"
+    # No fixed _order: when the wizard does FEFO, lines are written in
+    # expiry order; for plain FIFO they're written in in_date order.
+    # Sorting in SQL by either column would re-shuffle the wrong cases.
 
     wizard_id = fields.Many2one("wms.scan.issue", ondelete="cascade", required=True)
     product_id = fields.Many2one("product.product", required=True)
     quant_id = fields.Many2one("stock.quant")
     location_id = fields.Many2one("stock.location", string="Slot")
     in_date = fields.Datetime()
+    expiry_date = fields.Date(
+        string="Expires",
+        help="Batch expiry date for medicine / feed / fluid / pooja. "
+        "When set, the planner sorts by this date (FEFO) — earliest "
+        "expiry first — instead of arrival date.",
+    )
     available = fields.Float()
     take = fields.Float()

@@ -26,11 +26,15 @@ INTERVAL = int(os.environ.get("FORECAST_INTERVAL_HOURS", "6")) * 3600
 
 def connect() -> tuple[int, xmlrpc.client.ServerProxy]:
     common = xmlrpc.client.ServerProxy(f"{URL}/xmlrpc/2/common")
+    # XML-RPC `authenticate` is typed as the broad _Marshallable union, but
+    # on Odoo it returns an int (user id) or False on bad creds. The `if not
+    # uid` above rules out False/None, so the cast here is safe at runtime
+    # and makes the declared return type honest for type-checkers.
     uid = common.authenticate(DB, USER, PASSWORD, {})
     if not uid:
         raise RuntimeError("auth failed")
     models = xmlrpc.client.ServerProxy(f"{URL}/xmlrpc/2/object")
-    return uid, models
+    return int(uid), models  # type: ignore[arg-type]
 
 
 def trigger_forecast(uid: int, models: xmlrpc.client.ServerProxy) -> None:

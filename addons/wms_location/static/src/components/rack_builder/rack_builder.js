@@ -5,15 +5,28 @@ import { registry } from "@web/core/registry";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 
 /**
- * WmsRackBuilder – a Text-field widget that renders an interactive rack
- * grid. Click cells to select. Merge / split / change slot count via the
- * side panel. Compartments are 2D rectangles on the grid: they can span
- * any number of shelves AND any number of columns (a corner-cabinet
- * compartment, a wide drawer, a tall column for bottles, …).
+ * WmsRackBuilder
+ * ==============
  *
- * Whatever the user does is serialised back into the field as JSON; the
- * server-side wms.rack.generator wizard reads that JSON to create the
- * actual stock.location records.
+ * Visual rack designer. Compartments are arbitrary 4-connected
+ * polyominoes -- each cell is a single (shelf, column) pair, and
+ * compartments are sets of cells.
+ *
+ * Two ways to grow a compartment:
+ *
+ *   1. Directional merge (↑ ↓ ← →) - rectangular bias. Consumes the
+ *      entire adjacent row/column that tiles the compartment's
+ *      current rectangular extent. Useful for tall bottle columns,
+ *      wide drawers, corner cabinets. Disabled when the compartment
+ *      is non-rectangular (use Add cell instead).
+ *
+ *   2. Add adjacent cell. Click the "+ Add cell" toggle, then click
+ *      ANY cell 4-adjacent to the current compartment. That single
+ *      cell joins. Click as many adjacent cells as needed to build an
+ *      L, a T, a U, or whatever the physical compartment looks like.
+ *
+ * Split breaks the compartment back into single-cell compartments
+ * covering the same cells.
  *
  * JSON schema:
  *   {
@@ -21,14 +34,29 @@ import { standardFieldProps } from "@web/views/fields/standard_field_props";
  *     "columns": 3,
  *     "compartments": [
  *       {
- *         "shelf_top": 1, "shelf_bottom": 1,
- *         "column_left": 1, "column_right": 1,
+ *         "id": 1,
+ *         "cells": [[1, 1]],
  *         "slot_count": 1,
  *         "label": null
  *       },
- *       ...
+ *       {
+ *         "id": 7,
+ *         "cells": [[2, 1], [3, 1], [3, 2]],
+ *         "slot_count": 1,
+ *         "label": "L-shape"
+ *       }
  *     ]
  *   }
+ *
+ * Backward read: old records with shelf_top/shelf_bottom/column_left/
+ * column_right are auto-converted to a cells array (expanded to every
+ * cell in the rectangle).
+ *
+ * Server-side: the wms.rack.generator wizard handles both shapes -
+ * for non-rectangular compartments it stores the bounding box on
+ * stock.location's wms_shelf_top/_bottom/_column_left/_right and the
+ * exact cell list in wms_cells_json so the warehouse-map renderer
+ * can draw the precise outline.
  */
 export class WmsRackBuilder extends Component {
     static template = "wms_location.RackBuilder";
@@ -41,13 +69,13 @@ export class WmsRackBuilder extends Component {
             columns: initial.columns,
             compartments: initial.compartments,
             selectedId: null,
+            addCellMode: false,   // when true, clicks add cells to selection
         });
-        // Persist the initial JSON in case the wizard was opened fresh
-        // so action_generate() always has something to read.
         this._commit();
     }
 
     // ------------------------------------------------------------- helpers
+
     _parseInitial(rawJson) {
         if (rawJson) {
             try {
@@ -55,13 +83,26 @@ export class WmsRackBuilder extends Component {
                 if (parsed.shelves && parsed.columns && Array.isArray(parsed.compartments)) {
                     parsed.compartments.forEach((c, idx) => {
                         if (!c.id) c.id = idx + 1;
-                        // Migrate legacy column_index → column_left/column_right
-                        if (c.column_left === undefined && c.column_index !== undefined) {
-                            c.column_left = c.column_index;
-                            c.column_right = c.column_index;
-                            delete c.column_index;
+                        if (!Array.isArray(c.cells) || c.cells.length === 0) {
+                            // Migrate legacy rectangle compartments
+                            const top = c.shelf_top || 1;
+                            const bot = c.shelf_bottom || top;
+                            const left = c.column_left ?? c.column_index ?? 1;
+                            const right = c.column_right ?? left;
+                            const cells = [];
+                            for (let s = top; s <= bot; s++) {
+                                for (let col = left; col <= right; col++) {
+                                    cells.push([s, col]);
+                                }
+                            }
+                            c.cells = cells;
                         }
-                        if (c.column_right === undefined) c.column_right = c.column_left;
+                        // Drop legacy keys; the canonical store is cells[].
+                        delete c.shelf_top;
+                        delete c.shelf_bottom;
+                        delete c.column_left;
+                        delete c.column_right;
+                        delete c.column_index;
                     });
                     return parsed;
                 }
@@ -79,10 +120,7 @@ export class WmsRackBuilder extends Component {
             for (let c = 1; c <= columns; c++) {
                 compartments.push({
                     id: id++,
-                    shelf_top: s,
-                    shelf_bottom: s,
-                    column_left: c,
-                    column_right: c,
+                    cells: [[s, c]],
                     slot_count: 1,
                     label: null,
                 });
@@ -95,38 +133,52 @@ export class WmsRackBuilder extends Component {
         const payload = {
             shelves: this.state.shelves,
             columns: this.state.columns,
-            compartments: this.state.compartments.map((c) => ({
-                shelf_top: c.shelf_top,
-                shelf_bottom: c.shelf_bottom,
-                column_left: c.column_left,
-                column_right: c.column_right,
-                slot_count: c.slot_count,
-                label: c.label || null,
-            })),
+            compartments: this.state.compartments.map((c) => {
+                const bbox = this._bbox(c.cells);
+                return {
+                    // canonical
+                    cells: c.cells.map((p) => [p[0], p[1]]),
+                    slot_count: c.slot_count,
+                    label: c.label || null,
+                    // legacy bounding-box fields - kept so the server-side
+                    // generator + the warehouse-map renderer keep working
+                    // without immediate refactor.
+                    shelf_top: bbox.top,
+                    shelf_bottom: bbox.bottom,
+                    column_left: bbox.left,
+                    column_right: bbox.right,
+                };
+            }),
         };
         await this.props.record.update({
             [this.props.name]: JSON.stringify(payload, null, 2),
         });
     }
 
+    _bbox(cells) {
+        let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
+        for (const [s, c] of cells) {
+            if (s < top) top = s;
+            if (s > bottom) bottom = s;
+            if (c < left) left = c;
+            if (c > right) right = c;
+        }
+        return { top, bottom, left, right };
+    }
+
     // -------------------------------------------------- shelf/column resize
+
     async onShelvesChange(ev) {
         const n = Math.max(1, Math.min(30, parseInt(ev.target.value || "0", 10) || 1));
         const grid = this._defaultGrid(n, this.state.columns);
-        this.state.shelves = grid.shelves;
-        this.state.columns = grid.columns;
-        this.state.compartments = grid.compartments;
-        this.state.selectedId = null;
+        Object.assign(this.state, grid, { selectedId: null, addCellMode: false });
         await this._commit();
     }
 
     async onColumnsChange(ev) {
         const n = Math.max(1, Math.min(20, parseInt(ev.target.value || "0", 10) || 1));
         const grid = this._defaultGrid(this.state.shelves, n);
-        this.state.shelves = grid.shelves;
-        this.state.columns = grid.columns;
-        this.state.compartments = grid.compartments;
-        this.state.selectedId = null;
+        Object.assign(this.state, grid, { selectedId: null, addCellMode: false });
         await this._commit();
     }
 
@@ -134,12 +186,17 @@ export class WmsRackBuilder extends Component {
         const grid = this._defaultGrid(this.state.shelves, this.state.columns);
         this.state.compartments = grid.compartments;
         this.state.selectedId = null;
+        this.state.addCellMode = false;
         await this._commit();
     }
 
-    // ------------------------------------------------------ selection / ops
-    selectCompartment(id) {
-        this.state.selectedId = id;
+    // ----------------------------------------------------- cell <-> compartment
+
+    /** Find which compartment owns the given (shelf, column) cell. */
+    _compartmentAt(shelf, col) {
+        return this.state.compartments.find((c) =>
+            c.cells.some((p) => p[0] === shelf && p[1] === col),
+        );
     }
 
     get selectedCompartment() {
@@ -147,180 +204,152 @@ export class WmsRackBuilder extends Component {
     }
 
     /**
-     * Smart-merge helpers. A single Merge click extends the selected
-     * compartment by one row/column, consuming **every** compartment in
-     * that adjacent strip — but only if those compartments together
-     * tile the strip exactly. The strip is
-     *
-     *   above:  one row at shelf=(shelf_top - 1), columns
-     *           column_left..column_right
-     *   below:  one row at shelf=(shelf_bottom + 1)
-     *   left:   one column at column=(column_left - 1), shelves
-     *           shelf_top..shelf_bottom
-     *   right:  one column at column=(column_right + 1)
-     *
-     * Candidates must lie **entirely** within that strip (no overhang
-     * into other rows/columns) so the result stays rectangular. Returns
-     * an array of compartments to consume, or null when the merge isn't
-     * possible.
+     * Click on a cell. Behaviour depends on mode:
+     *  - addCellMode OFF: select the compartment that owns the cell.
+     *  - addCellMode ON : if the cell belongs to another compartment AND
+     *    is 4-adjacent to the selected compartment, transfer that cell
+     *    into the selected compartment. The donor compartment is left
+     *    minus that cell; if it had only this cell, it's removed.
      */
-    _stripAbove(c) {
-        const targetShelf = c.shelf_top - 1;
-        if (targetShelf < 1) return null;
-        const candidates = this.state.compartments.filter(
-            (x) =>
-                x.shelf_top === targetShelf &&
-                x.shelf_bottom === targetShelf &&
-                x.column_left >= c.column_left &&
-                x.column_right <= c.column_right,
-        );
-        return this._tilesRange(candidates, "column_left", "column_right", c.column_left, c.column_right);
-    }
-
-    _stripBelow(c) {
-        const targetShelf = c.shelf_bottom + 1;
-        if (targetShelf > this.state.shelves) return null;
-        const candidates = this.state.compartments.filter(
-            (x) =>
-                x.shelf_top === targetShelf &&
-                x.shelf_bottom === targetShelf &&
-                x.column_left >= c.column_left &&
-                x.column_right <= c.column_right,
-        );
-        return this._tilesRange(candidates, "column_left", "column_right", c.column_left, c.column_right);
-    }
-
-    _stripLeft(c) {
-        const targetCol = c.column_left - 1;
-        if (targetCol < 1) return null;
-        const candidates = this.state.compartments.filter(
-            (x) =>
-                x.column_left === targetCol &&
-                x.column_right === targetCol &&
-                x.shelf_top >= c.shelf_top &&
-                x.shelf_bottom <= c.shelf_bottom,
-        );
-        return this._tilesRange(candidates, "shelf_top", "shelf_bottom", c.shelf_top, c.shelf_bottom);
-    }
-
-    _stripRight(c) {
-        const targetCol = c.column_right + 1;
-        if (targetCol > this.state.columns) return null;
-        const candidates = this.state.compartments.filter(
-            (x) =>
-                x.column_left === targetCol &&
-                x.column_right === targetCol &&
-                x.shelf_top >= c.shelf_top &&
-                x.shelf_bottom <= c.shelf_bottom,
-        );
-        return this._tilesRange(candidates, "shelf_top", "shelf_bottom", c.shelf_top, c.shelf_bottom);
-    }
-
-    /**
-     * Given a list of non-overlapping candidates and a required range
-     * [rangeStart, rangeEnd], return them sorted ASC if they tile the
-     * range exactly (no gaps), else null. lowKey / highKey are the
-     * property names that hold each candidate's range on this axis.
-     */
-    _tilesRange(candidates, lowKey, highKey, rangeStart, rangeEnd) {
-        if (candidates.length === 0) return null;
-        const sorted = [...candidates].sort((a, b) => a[lowKey] - b[lowKey]);
-        let cursor = rangeStart;
-        for (const x of sorted) {
-            if (x[lowKey] !== cursor) return null;
-            cursor = x[highKey] + 1;
+    onCellClick(shelf, col) {
+        const target = this._compartmentAt(shelf, col);
+        if (!target) return;
+        if (!this.state.addCellMode) {
+            this.state.selectedId = target.id;
+            return;
         }
-        return cursor - 1 === rangeEnd ? sorted : null;
+        const sel = this.selectedCompartment;
+        if (!sel) return;
+        if (target.id === sel.id) return;  // already mine
+
+        // Connectivity: the cell must be 4-adjacent to some cell of sel.
+        const adj = sel.cells.some(([s, c]) =>
+            (s === shelf && Math.abs(c - col) === 1) ||
+            (c === col && Math.abs(s - shelf) === 1),
+        );
+        if (!adj) return;
+
+        // Transfer the cell.
+        target.cells = target.cells.filter((p) => !(p[0] === shelf && p[1] === col));
+        sel.cells.push([shelf, col]);
+        // If donor compartment is now empty, remove it.
+        if (target.cells.length === 0) {
+            this.state.compartments = this.state.compartments.filter((c) => c.id !== target.id);
+        }
+        this._commit();
     }
 
-    canMergeUp() {
-        const c = this.selectedCompartment;
-        return !!(c && this._stripAbove(c));
-    }
-    canMergeDown() {
-        const c = this.selectedCompartment;
-        return !!(c && this._stripBelow(c));
-    }
-    canMergeLeft() {
-        const c = this.selectedCompartment;
-        return !!(c && this._stripLeft(c));
-    }
-    canMergeRight() {
-        const c = this.selectedCompartment;
-        return !!(c && this._stripRight(c));
-    }
-    canSplit() {
-        const c = this.selectedCompartment;
-        return !!(c && (c.shelf_bottom > c.shelf_top || c.column_right > c.column_left));
+    toggleAddCellMode() {
+        if (!this.selectedCompartment) return;
+        this.state.addCellMode = !this.state.addCellMode;
     }
 
-    _consume(c, strip, extentField, newValue) {
-        c[extentField] = newValue;
-        c.slot_count = strip.reduce((m, x) => Math.max(m, x.slot_count), c.slot_count);
-        const ids = new Set(strip.map((x) => x.id));
-        this.state.compartments = this.state.compartments.filter((x) => !ids.has(x.id));
+    // ----------------------------------------------- rectangle ops (legacy)
+
+    /** True iff the compartment's cells exactly tile a rectangle. */
+    _isRectangle(comp) {
+        const b = this._bbox(comp.cells);
+        const expected = (b.bottom - b.top + 1) * (b.right - b.left + 1);
+        return comp.cells.length === expected;
     }
 
-    async mergeUp() {
-        const c = this.selectedCompartment;
-        const strip = c && this._stripAbove(c);
-        if (!strip) return;
-        this._consume(c, strip, "shelf_top", strip[0].shelf_top);
-        await this._commit();
-    }
-
-    async mergeDown() {
-        const c = this.selectedCompartment;
-        const strip = c && this._stripBelow(c);
-        if (!strip) return;
-        this._consume(c, strip, "shelf_bottom", strip[0].shelf_bottom);
-        await this._commit();
-    }
-
-    async mergeLeft() {
-        const c = this.selectedCompartment;
-        const strip = c && this._stripLeft(c);
-        if (!strip) return;
-        this._consume(c, strip, "column_left", strip[0].column_left);
-        await this._commit();
-    }
-
-    async mergeRight() {
-        const c = this.selectedCompartment;
-        const strip = c && this._stripRight(c);
-        if (!strip) return;
-        this._consume(c, strip, "column_right", strip[strip.length - 1].column_right);
-        await this._commit();
-    }
+    canMergeUp()    { return this._canMergeDir("up");    }
+    canMergeDown()  { return this._canMergeDir("down");  }
+    canMergeLeft()  { return this._canMergeDir("left");  }
+    canMergeRight() { return this._canMergeDir("right"); }
+    canSplit()      { return !!(this.selectedCompartment && this.selectedCompartment.cells.length > 1); }
 
     /**
-     * Split a 2D-spanned compartment back into single-cell compartments
-     * covering the same rectangle. The original compartment shrinks to
-     * the top-left cell of its old rectangle.
+     * Direction merge: only allowed if THIS compartment is rectangular
+     * AND the strip's cells together tile the matching adjacent rectangle.
      */
+    _canMergeDir(dir) {
+        const c = this.selectedCompartment;
+        if (!c || !this._isRectangle(c)) return false;
+        const b = this._bbox(c.cells);
+        let stripCells = [];
+        if (dir === "up") {
+            if (b.top === 1) return false;
+            for (let col = b.left; col <= b.right; col++) stripCells.push([b.top - 1, col]);
+        } else if (dir === "down") {
+            if (b.bottom === this.state.shelves) return false;
+            for (let col = b.left; col <= b.right; col++) stripCells.push([b.bottom + 1, col]);
+        } else if (dir === "left") {
+            if (b.left === 1) return false;
+            for (let s = b.top; s <= b.bottom; s++) stripCells.push([s, b.left - 1]);
+        } else if (dir === "right") {
+            if (b.right === this.state.columns) return false;
+            for (let s = b.top; s <= b.bottom; s++) stripCells.push([s, b.right + 1]);
+        }
+        // Every strip cell must belong to a compartment that is wholly
+        // inside the strip (no half-cells overhanging into other rows).
+        const donorIds = new Set();
+        for (const [s, col] of stripCells) {
+            const owner = this._compartmentAt(s, col);
+            if (!owner) return false;
+            donorIds.add(owner.id);
+            // Each donor must have all its cells inside the strip range
+            // for the rectangle to stay rectangular post-merge.
+            for (const [ds, dc] of owner.cells) {
+                const inStrip = stripCells.some((p) => p[0] === ds && p[1] === dc);
+                if (!inStrip) return false;
+            }
+        }
+        return donorIds.size > 0;
+    }
+
+    _mergeDir(dir) {
+        const c = this.selectedCompartment;
+        if (!c || !this._canMergeDir(dir)) return;
+        const b = this._bbox(c.cells);
+        const cellsToAdd = [];
+        if (dir === "up") {
+            for (let col = b.left; col <= b.right; col++) cellsToAdd.push([b.top - 1, col]);
+        } else if (dir === "down") {
+            for (let col = b.left; col <= b.right; col++) cellsToAdd.push([b.bottom + 1, col]);
+        } else if (dir === "left") {
+            for (let s = b.top; s <= b.bottom; s++) cellsToAdd.push([s, b.left - 1]);
+        } else if (dir === "right") {
+            for (let s = b.top; s <= b.bottom; s++) cellsToAdd.push([s, b.right + 1]);
+        }
+        const donorIds = new Set();
+        for (const [s, col] of cellsToAdd) {
+            const owner = this._compartmentAt(s, col);
+            if (owner) donorIds.add(owner.id);
+        }
+        c.cells = c.cells.concat(cellsToAdd);
+        c.slot_count = Math.max(
+            c.slot_count,
+            ...this.state.compartments
+                .filter((x) => donorIds.has(x.id))
+                .map((x) => x.slot_count),
+        );
+        this.state.compartments = this.state.compartments.filter(
+            (x) => !donorIds.has(x.id) || x.id === c.id,
+        );
+        this._commit();
+    }
+
+    mergeUp()    { this._mergeDir("up");    }
+    mergeDown()  { this._mergeDir("down");  }
+    mergeLeft()  { this._mergeDir("left");  }
+    mergeRight() { this._mergeDir("right"); }
+
+    /** Split a multi-cell compartment back into one compartment per cell. */
     async split() {
         const c = this.selectedCompartment;
-        if (!this.canSplit()) return;
-        const oldTop = c.shelf_top;
-        const oldBottom = c.shelf_bottom;
-        const oldLeft = c.column_left;
-        const oldRight = c.column_right;
-        c.shelf_bottom = oldTop;
-        c.column_right = oldLeft;
-        let nextId = Math.max(...this.state.compartments.map((x) => x.id)) + 1;
-        for (let s = oldTop; s <= oldBottom; s++) {
-            for (let col = oldLeft; col <= oldRight; col++) {
-                if (s === oldTop && col === oldLeft) continue; // keep original
-                this.state.compartments.push({
-                    id: nextId++,
-                    shelf_top: s,
-                    shelf_bottom: s,
-                    column_left: col,
-                    column_right: col,
-                    slot_count: 1,
-                    label: null,
-                });
-            }
+        if (!c || c.cells.length <= 1) return;
+        const anchor = c.cells[0];  // keep the first cell on this compartment
+        const others = c.cells.slice(1);
+        c.cells = [anchor];
+        let nextId = Math.max(0, ...this.state.compartments.map((x) => x.id)) + 1;
+        for (const [s, col] of others) {
+            this.state.compartments.push({
+                id: nextId++,
+                cells: [[s, col]],
+                slot_count: 1,
+                label: null,
+            });
         }
         await this._commit();
     }
@@ -340,38 +369,70 @@ export class WmsRackBuilder extends Component {
     }
 
     // ------------------------------------------------------------- display
-    _pad(n) {
-        return String(n).padStart(2, "0");
+
+    _pad(n) { return String(n).padStart(2, "0"); }
+
+    /** Render all the (shelf,column) cells as a flat iterable for the
+     *  template -- each cell becomes a separate DOM element. */
+    get gridCells() {
+        const out = [];
+        for (let s = 1; s <= this.state.shelves; s++) {
+            for (let c = 1; c <= this.state.columns; c++) {
+                const owner = this._compartmentAt(s, c);
+                if (!owner) continue;  // shouldn't happen with default grid
+                const isAnchor =
+                    owner.cells[0][0] === s && owner.cells[0][1] === c;
+                // hide border between adjacent same-compartment cells
+                const sameUp    = owner.cells.some((p) => p[0] === s - 1 && p[1] === c);
+                const sameDown  = owner.cells.some((p) => p[0] === s + 1 && p[1] === c);
+                const sameLeft  = owner.cells.some((p) => p[0] === s && p[1] === c - 1);
+                const sameRight = owner.cells.some((p) => p[0] === s && p[1] === c + 1);
+                out.push({
+                    shelf: s,
+                    column: c,
+                    compartmentId: owner.id,
+                    isAnchor,
+                    label: isAnchor ? this.compartmentLabel(owner) : null,
+                    slotBadge: isAnchor && owner.slot_count > 1
+                        ? owner.slot_count + " slots"
+                        : null,
+                    selected: this.state.selectedId === owner.id,
+                    multiCell: owner.cells.length > 1,
+                    borderTop: !sameUp,
+                    borderBottom: !sameDown,
+                    borderLeft: !sameLeft,
+                    borderRight: !sameRight,
+                });
+            }
+        }
+        return out;
     }
 
-    cellLabel(c) {
-        const shelfPart =
-            c.shelf_top === c.shelf_bottom
-                ? "SH" + this._pad(c.shelf_top)
-                : "SH" + this._pad(c.shelf_top) + "-" + this._pad(c.shelf_bottom);
-        const colPart =
-            c.column_left === c.column_right
-                ? "C" + this._pad(c.column_left)
-                : "C" + this._pad(c.column_left) + "-" + this._pad(c.column_right);
-        return shelfPart + " " + colPart;
+    compartmentLabel(c) {
+        if (c.label) return c.label;
+        if (c.cells.length === 1) {
+            const [s, col] = c.cells[0];
+            return "SH" + this._pad(s) + " C" + this._pad(col);
+        }
+        // For rectangular multi-cell compartments use the range form;
+        // for polyominoes show the anchor + count.
+        if (this._isRectangle(c)) {
+            const b = this._bbox(c.cells);
+            const shelfPart = b.top === b.bottom
+                ? "SH" + this._pad(b.top)
+                : "SH" + this._pad(b.top) + "-" + this._pad(b.bottom);
+            const colPart = b.left === b.right
+                ? "C" + this._pad(b.left)
+                : "C" + this._pad(b.left) + "-" + this._pad(b.right);
+            return shelfPart + " " + colPart;
+        }
+        const [s, col] = c.cells[0];
+        return "SH" + this._pad(s) + " C" + this._pad(col) +
+               " (+" + (c.cells.length - 1) + ")";
     }
 
-    cellStyle(c) {
-        return (
-            "grid-row: " +
-            c.shelf_top +
-            " / " +
-            (c.shelf_bottom + 1) +
-            "; grid-column: " +
-            c.column_left +
-            " / " +
-            (c.column_right + 1) +
-            ";"
-        );
-    }
-
-    isSpan(c) {
-        return c.shelf_bottom > c.shelf_top || c.column_right > c.column_left;
+    cellStyle(cell) {
+        return "grid-row: " + cell.shelf + "; grid-column: " + cell.column + ";";
     }
 
     gridStyle() {

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Strip the "Manage Databases | Powered by Odoo" footer from the
+        login page.
+
+        Two reasons:
+
+        1. SECURITY. The "Manage Databases" link sends the user to
+           /web/database/manager which exposes Drop / Backup / Duplicate
+           buttons protected only by the master password. A Store
+           Keeper (or any logged-out visitor on the LAN) sitting at the
+           desk could wipe the whole DB with one click + one
+           credentials guess. We also set `list_db = False` in
+           odoo.native.conf so the controller route is dead even if
+           someone types the URL by hand - but hiding the link is
+           defence-in-depth.
+
+        2. Branding. The trust prints its own footer once the system
+           is live - the stock "Powered by Odoo" line just confuses
+           the trustees on the dashboard.
+
+        We target the footer div by class `border-top` inside the
+        login card. `position="replace"` strips the entire element so
+        no empty space is left behind.
+    -->
+    <template id="login_layout_no_footer"
+              inherit_id="web.login_layout"
+              priority="1"
+              name="WMS: hide Manage Databases + Powered by Odoo footer">
+        <xpath expr="//div[hasclass('border-top')]" position="replace">
+            <!-- Intentionally empty. The login card now ends at the
+                 user list / form, no footer at all. -->
+        </xpath>
+    </template>
+</odoo>

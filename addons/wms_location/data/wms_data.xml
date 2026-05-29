@@ -12,5 +12,33 @@
                       [ref('stock.stock_location_stock')],
                       {'removal_strategy_id': ref('stock.removal_fifo')}
                   ]"/>
+
+        <!--
+            "Trust internal use" location — destination for Scan Issue.
+
+            The trust never sells from the warehouse. It only buys (Scan
+            Receipt) and uses (Scan Issue) inventory internally — feed
+            to the cow shed, medicine to the vet, ghee to the pooja
+            room, etc. The default Scan Issue destination of "Customers"
+            is therefore misleading, and the Sales-side accounting it
+            triggers (taxable delivery, invoicing) doesn't apply here.
+
+            Seed a single internal-usage location that every Scan Issue
+            defaults to. Admin can rename it or add sub-locations under
+            it later (Cow Shed, Pooja Room, Field) without changing the
+            wizard default.
+        -->
+        <!--
+            Why no parent_id: this is a top-level location like
+            ``stock.stock_location_customers`` (Customers). Keeping it
+            sibling-of-warehouse means Scan Issue moves stock OUT of
+            WH/Stock and into "Trust internal use" cleanly, mirroring
+            how Customers works in upstream Odoo.
+        -->
+        <record id="stock_location_trust_use" model="stock.location">
+            <field name="name">Trust internal use</field>
+            <field name="usage">internal</field>
+            <field name="company_id" ref="base.main_company"/>
+        </record>
     </data>
 </odoo>

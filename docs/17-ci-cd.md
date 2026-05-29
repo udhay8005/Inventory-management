@@ -4,14 +4,18 @@ End-to-end automation that protects `main` from broken code. Every push and
 pull-request triggers five jobs, and a single `ci_status` check gates the
 merge button.
 
+The pipeline runs **native** — Ubuntu runner with a postgres:16 service
+container, Python 3.12, and a clone of Odoo 19.0 source. Mirrors the local
+Windows setup exactly (just on Linux instead of Windows for speed + cost).
+
 ## Pipeline overview
 
 ```
-git push  ─►  GitHub Actions  ─►  ┌─ lint          (≈ 1 min)
-                                  ├─ security      (≈ 1 min, needs: lint)
-                                  ├─ odoo_tests    (≈ 4 min, needs: lint)
-                                  ├─ compose_smoke (≈ 2 min, needs: odoo_tests)
-                                  └─ ci_status     (rolls everything up)
+git push  ─►  GitHub Actions  ─►  ┌─ lint           (≈ 1 min)
+                                  ├─ security       (≈ 1 min, needs: lint)
+                                  ├─ odoo_tests     (≈ 5 min, needs: lint)
+                                  ├─ native_smoke   (≈ 3 min, needs: odoo_tests)
+                                  └─ ci_status      (rolls everything up)
                                                     │
                                   branch protection: ci_status must be green
                                                     │
@@ -52,32 +56,36 @@ Reports uploaded as artifact `security-reports` (retained 30 days).
 
 The real test:
 
-1. Spin up `postgres:16-alpine` as a service container.
-2. Build the Odoo image from our `Dockerfile` (with Docker layer caching).
-3. Create a fresh DB.
-4. Install every WMS module with `-i wms_location,wms_fifo,...`
-5. Run `--test-enable --stop-after-init`. Every `tests/test_*.py` in each
-   module runs.
-6. Fail the job if the Odoo log shows any test failure marker.
+1. Spin up `postgres:16` as a **service container** (background, port-mapped to localhost:5432) — same role as the Windows `postgresql-x64-16` service does for local dev.
+2. Install system packages: `postgresql-client`, `wkhtmltopdf`, `libldap2-dev`, `libsasl2-dev`, fonts.
+3. Grant `CREATEDB` to the `odoo` Postgres role.
+4. Clone Odoo 19.0 source.
+5. Create a Python venv + `pip install -r odoo/requirements.txt -r requirements.txt`.
+6. `createdb wms_ci`.
+7. Run `odoo-bin -i wms_location,... --test-enable --stop-after-init --without-demo=all --test-tags wms`.
+8. Fail the job if the Odoo log shows any test failure marker, OR if zero tests ran (catches missing `@tagged('wms')` decorators).
 
-Matrix-ready — flip on Odoo 20 by adding `"20.0"` to the matrix list once
-upstream ships it. Currently locked to `19.0`.
+Artifact: full `odoo_test.log` (kept 14 days).
 
-Artifacts: full `odoo_test.log` per matrix combination (kept 14 days).
+## Job 4 — `native_smoke`
 
-## Job 4 — `compose_smoke`
+The end-to-end "does it actually start" check. Same install as job 3, but
+instead of running tests:
 
-Goes further: builds the full `docker-compose.yml` stack with `db` + `odoo`,
-waits up to 90 s for `/web/database/manager` to return 200, then tears it
-down. Catches issues that unit tests can't — missing env vars, port binds,
-volume mount problems, `__manifest__.py` data ordering bugs.
+1. Run `odoo-bin -d wms_smoke -i wms_location --http-port=8069 &` in the background.
+2. Curl `http://localhost:8069/web/login` every 3 s for 2 min.
+3. Pass if HTTP 200 or 303 (login page or redirect); fail otherwise.
+4. Kill the Odoo process at the end.
+
+Catches issues unit tests can't — broken module dependencies, view-file parse
+errors at load time, missing data records, port binding problems.
 
 ## Job 5 — `ci_status`
 
-A no-op job that depends on everyone else. Single check name to require in
-branch protection — set it once in **Settings → Branches → main → Require
-status checks → `CI status`** and you don't have to update the rule each
-time you add a job.
+A no-op aggregator that depends on every other job. Single check name to
+require in branch protection — set it once in **Settings → Branches → main
+→ Require status checks → `CI status`** and you don't have to update the
+rule each time you add a job.
 
 ## Release automation
 
@@ -93,12 +101,15 @@ No manual tagging step.
 
 ## Dependabot
 
-[`.github/dependabot.yml`](../.github/dependabot.yml) keeps three ecosystems
+[`.github/dependabot.yml`](../.github/dependabot.yml) keeps two ecosystems
 patched without you remembering:
 
 - `pip` — our `requirements.txt` and the `ai_worker` deps
-- `docker` — the `postgres:16-alpine`, `odoo:19.0` base images
 - `github-actions` — the workflow actions themselves
+
+(Docker was previously listed; removed when the project moved to native
+install. The Odoo source clone is pinned to branch `19.0` and tracks upstream
+automatically.)
 
 Opens a PR each Monday morning if anything is behind. The CI pipeline you
 just read runs against the PR — if green, you merge with one click.
@@ -120,30 +131,34 @@ Config: [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
 
 ```bash
 make help            # list available targets
-make up              # docker compose up -d
-make logs            # tail odoo logs
+make install         # clone Odoo + venv + pip install (one-shot setup)
+make start           # run odoo against local Postgres
+make logs            # tail .runtime/logs/odoo.log
 make lint            # same checks CI runs
 make test            # full test suite (slow)
 make test-fast MOD=wms_location   # just one module
 make format          # auto-fix formatting
 make security        # bandit + pip-audit
-make backup          # run scripts/backup.sh
+make backup          # pg_dump + filestore tar
 make shell           # odoo shell against wms DB
 make psql            # psql against wms DB
 make ci              # lint + test (everything CI runs)
 ```
 
+Windows-native equivalents (PowerShell):
+
+```powershell
+scripts\install-native.ps1
+scripts\start-native.ps1
+scripts\stop-native.ps1
+scripts\backup-native.ps1
+```
+
 ## What CI does NOT do (yet)
 
-- **Coverage report**: not generated. Adding `coverage` to the test runner
-  produces a `.coverage` file we could upload to Codecov — straightforward
-  but optional.
-- **Deploy step**: this repo has no auto-deploy. Production push is manual
-  (`docker compose pull && docker compose up -d`). For a real deploy you'd
-  add an `environments:` block + an `ssh` runner — kept off for now since
-  the warehouse runs on a single host.
-- **Performance benchmarks**: not measured per-PR. Easy to add a `pytest-bench`
-  job once tests cover the slow paths.
+- **Coverage report**: not generated. Adding `coverage` to the test runner produces a `.coverage` file we could upload to Codecov — straightforward but optional.
+- **Deploy step**: this repo has no auto-deploy. Production push is manual (`git pull && scripts\start-native.ps1 -Upgrade all`). For a real deploy you'd add an `environments:` block + an `ssh`/WinRM runner — kept off for now since the warehouse runs on a single host.
+- **Performance benchmarks**: not measured per-PR. Easy to add a `pytest-bench` job once tests cover the slow paths.
 
 ## Recommended branch protection rules
 
@@ -166,6 +181,20 @@ duck under it.
 |---|---|---|
 | Lint fails on formatting only | You forgot to run `make format` | `make format && git commit --amend --no-edit` |
 | Odoo tests pass locally, fail in CI | Demo data difference (CI uses `--without-demo=all`) | Make tests independent of demo data |
-| compose_smoke times out at 90 s | New module slow to load | Bump the `for i in {1..30}` loop or investigate slow startup |
+| native_smoke times out at 120 s | New module slow to load OR view parse error | Check the step log — Odoo prints the failing view name on load |
+| psycopg2 install fails in CI | Wheel mismatch | The CI uses `psycopg2` (Linux wheels work fine); Windows local install rewrites it to `psycopg2-binary` |
 | Security job flagged a CVE | Real or false positive | Read the report; update dep or add an ignore with a `# nosec: B###` comment |
 | Release didn't fire | Manifest version didn't actually increase | Bump the highest version across all addons |
+
+## Migrating from the old Docker CI
+
+If you have an older clone with the Docker-based `ci.yml`:
+
+```bash
+git fetch origin
+git checkout main
+git pull
+# .github/workflows/ci.yml is now the native version.
+# The old docker-compose.yml, Dockerfile, and scripts/init-db.sh have been removed.
+# Re-run scripts/install-native.ps1 (or `make install`) to set up the local environment.
+```

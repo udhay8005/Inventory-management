@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Per-kind SKU sequences. The product.template.create()
+            override in models/product_template.py picks the right
+            sequence based on wms_product_kind and stamps the
+            default_code as <PREFIX>-<NNNNN>.
+
+            noupdate="1" so existing sequences keep their running
+            counter on module upgrade - we don't want a module
+            reload to reset TOOL-00042 back to TOOL-00001.
+
+            Width 5 covers ~100k items per kind. Plenty for a single
+            trust; bump padding later if needed without re-seeding.
+        -->
+
+        <record id="seq_sku_raw_material" model="ir.sequence">
+            <field name="name">WMS SKU - Raw Material</field>
+            <field name="code">wms.sku.raw_material</field>
+            <field name="prefix">RM-</field>
+            <field name="padding">5</field>
+            <field name="implementation">standard</field>
+        </record>
+
+        <record id="seq_sku_packaging" model="ir.sequence">
+            <field name="name">WMS SKU - Packaging</field>
+            <field name="code">wms.sku.packaging</field>
+            <field name="prefix">PK-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_fluid" model="ir.sequence">
+            <field name="name">WMS SKU - Fluid</field>
+            <field name="code">wms.sku.fluid</field>
+            <field name="prefix">FL-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_finished_good" model="ir.sequence">
+            <field name="name">WMS SKU - Finished Good</field>
+            <field name="code">wms.sku.finished_good</field>
+            <field name="prefix">FG-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_wip" model="ir.sequence">
+            <field name="name">WMS SKU - Work in Progress</field>
+            <field name="code">wms.sku.wip</field>
+            <field name="prefix">WIP-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_consumable" model="ir.sequence">
+            <field name="name">WMS SKU - Consumable</field>
+            <field name="code">wms.sku.consumable</field>
+            <field name="prefix">CONS-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_tool" model="ir.sequence">
+            <field name="name">WMS SKU - Tool / Equipment</field>
+            <field name="code">wms.sku.tool</field>
+            <field name="prefix">TOOL-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_spare" model="ir.sequence">
+            <field name="name">WMS SKU - Spare Part</field>
+            <field name="code">wms.sku.spare</field>
+            <field name="prefix">SPARE-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <!--
+            Trust-specific SKU sequences. Order matches the entries
+            added in WMS_KIND_SELECTION inside
+            models/product_template.py. To add another kind later:
+              1. Append entry to WMS_KIND_SELECTION + the four dicts
+                 in product_template.py.
+              2. Append a matching <record> block below.
+              3. Restart Odoo with `-u wms_location`.
+        -->
+        <record id="seq_sku_medicine" model="ir.sequence">
+            <field name="name">WMS SKU - Medicine (veterinary)</field>
+            <field name="code">wms.sku.medicine</field>
+            <field name="prefix">MED-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_feed" model="ir.sequence">
+            <field name="name">WMS SKU - Feed / Grass / Bran</field>
+            <field name="code">wms.sku.feed</field>
+            <field name="prefix">FEED-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_sanitation" model="ir.sequence">
+            <field name="name">WMS SKU - Sanitation / Handwash</field>
+            <field name="code">wms.sku.sanitation</field>
+            <field name="prefix">SAN-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_construction" model="ir.sequence">
+            <field name="name">WMS SKU - Construction materials</field>
+            <field name="code">wms.sku.construction</field>
+            <field name="prefix">CONST-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_plumbing" model="ir.sequence">
+            <field name="name">WMS SKU - Plumbing</field>
+            <field name="code">wms.sku.plumbing</field>
+            <field name="prefix">PLMB-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_electrical" model="ir.sequence">
+            <field name="name">WMS SKU - Electrical / Electronics</field>
+            <field name="code">wms.sku.electrical</field>
+            <field name="prefix">ELEC-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_textile" model="ir.sequence">
+            <field name="name">WMS SKU - Textile / Cloth</field>
+            <field name="code">wms.sku.textile</field>
+            <field name="prefix">TEXT-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_stationery" model="ir.sequence">
+            <field name="name">WMS SKU - Stationery (calendar / book / photo)</field>
+            <field name="code">wms.sku.stationery</field>
+            <field name="prefix">STAT-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_safety" model="ir.sequence">
+            <field name="name">WMS SKU - Safety equipment</field>
+            <field name="code">wms.sku.safety</field>
+            <field name="prefix">SAFE-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <record id="seq_sku_pooja" model="ir.sequence">
+            <field name="name">WMS SKU - Pooja items</field>
+            <field name="code">wms.sku.pooja</field>
+            <field name="prefix">POOJA-</field>
+            <field name="padding">5</field>
+        </record>
+
+        <!--
+            Secondary EAN-13 barcode sequence.
+
+            The primary barcode on a product is the SKU itself
+            (TOOL-00001) printed as Code128 - human-readable and
+            scannable by the trust's USB scanners. A second numeric
+            EAN-13 is also generated and stored as a wms.barcode.alias
+            so the same product can ALSO be read by any retail/POS
+            scanner that only understands EAN-13.
+
+            Prefix 89011110 is in the GS1 Indian non-retail range and
+            is not assigned to any registered manufacturer, so we can
+            use it privately without colliding with vendor packaging.
+
+            Format: 89011110-NNNN-C
+              - 89011110 = 8-digit private prefix
+              - NNNN     = 4-digit sequence number (0001..9999)
+              - C        = EAN-13 checksum (computed at insert time)
+
+            The 4-digit sequence covers 9999 unique products, more
+            than enough for a single trust. If we exceed that we
+            switch prefix and reset.
+        -->
+        <record id="seq_barcode_ean13" model="ir.sequence">
+            <field name="name">WMS Barcode - EAN-13</field>
+            <field name="code">wms.barcode.ean13</field>
+            <field name="prefix">89011110</field>
+            <field name="padding">4</field>
+            <field name="implementation">standard</field>
+        </record>
+    </data>
+</odoo>

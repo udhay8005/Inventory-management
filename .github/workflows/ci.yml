@@ -6,6 +6,12 @@ name: CI
 #   - Manual via `workflow_dispatch`.
 # Workflow: push code to `test` → CI runs → if green, PR to `main` → merge.
 # Concurrency: cancel an in-flight run if a newer commit lands on the same ref.
+#
+# Native (no Docker) build — mirrors the local Windows setup: PostgreSQL +
+# Python venv + Odoo source clone. We run on Ubuntu because GitHub Actions
+# Linux runners are faster and cheaper than Windows runners; the WMS code
+# itself is platform-agnostic.
+
 on:
   push:
     branches: [main, test]
@@ -16,6 +22,11 @@ on:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+# Versions are hardcoded below rather than using top-level `env:` because
+# GitHub Actions' `services:` block does not support the `env` context
+# (the postgres:16 image tag has to be a literal). Keep these in sync:
+#   Odoo: 19.0   |   Python: 3.12   |   PostgreSQL: 16
 
 jobs:
   # -------------------------------------------------------------------------
@@ -29,7 +40,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: 3.12
           cache: pip
 
       - name: Install lint deps
@@ -63,7 +74,7 @@ jobs:
         # Config is in `.flake8` at the repo root — passing CLI flags here
         # OVERRIDES the config (passing --extend-ignore on the CLI replaces
         # the file's value rather than merging). Stay silent and let the
-        # config drive, so local `make lint` matches CI exactly.
+        # config drive, so local lint matches CI exactly.
         run: flake8 addons/
 
       - name: Pylint-Odoo (manifest + Odoo conventions)
@@ -88,7 +99,7 @@ jobs:
           echo "✔ All XML files parse cleanly."
 
   # -------------------------------------------------------------------------
-  # 2) Security scan — bandit (Python) + safety (deps).
+  # 2) Security scan — bandit (Python) + pip-audit (deps).
   # -------------------------------------------------------------------------
   security:
     name: Security scan
@@ -99,12 +110,11 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: 3.12
           cache: pip
 
       - name: Install
-        run: |
-          pip install bandit safety pip-audit
+        run: pip install bandit pip-audit
 
       - name: Bandit (code-level CVEs)
         run: |
@@ -124,73 +134,91 @@ jobs:
           retention-days: 30
 
   # -------------------------------------------------------------------------
-  # 3) Odoo test run — spin up Postgres, install every WMS module with
-  #    --test-enable, fail the build if any test fails.
+  # 3) Odoo test run — native install on the Ubuntu runner. Mirrors the
+  #    install-native.ps1 layout: PostgreSQL service + Python venv + Odoo
+  #    source clone.
   # -------------------------------------------------------------------------
   odoo_tests:
-    name: Odoo ${{ matrix.odoo_version }} module tests
+    name: Odoo 19.0 module tests
     runs-on: ubuntu-latest
     needs: lint
-    strategy:
-      fail-fast: false
-      matrix:
-        odoo_version: ["19.0"]
+    services:
+      # GitHub's PostgreSQL service container — equivalent to the Windows
+      # postgresql-x64-16 service the local install uses.
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo_ci_password
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare .env for compose
-        run: |
-          cp .env.example .env
-          # Make sure DB_PASSWORD matches whatever the dev .env uses so
-          # docker-compose.yml's bake-in is consistent.
-          sed -i 's|^DB_PASSWORD=.*|DB_PASSWORD=odoo_ci_password|' .env
-          cat .env
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+          cache: pip
 
-      - name: Bring up db + odoo via compose
-        # Uses the same docker-compose.yml that runs locally; gives us the
-        # private bridge network, working Postgres connection, and the
-        # bake-in odoo.conf the local devs use. Far fewer moving parts
-        # than reproducing the same env via raw `docker run`.
+      - name: System packages required by Odoo
         run: |
-          docker compose up -d --build db
-          # Wait for db health
-          for i in {1..30}; do
-            if docker compose exec -T db pg_isready -U odoo > /dev/null 2>&1; then
-              echo "db is healthy"; break;
-            fi
-            sleep 2
-          done
-          docker compose build odoo
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              postgresql-client \
+              wkhtmltopdf \
+              libldap2-dev libsasl2-dev \
+              fonts-dejavu-core
+          # wkhtmltopdf in Ubuntu repos isn't the patched-Qt build Odoo prefers
+          # for PDF reports, but it's fine for module-test purposes (we don't
+          # test PDF generation here).
+
+      - name: Grant odoo role CREATEDB
+        run: |
+          PGPASSWORD=odoo_ci_password psql -h localhost -U odoo -d postgres \
+              -c "ALTER ROLE odoo WITH CREATEDB;"
+
+      - name: Clone Odoo 19.0 source
+        run: |
+          git clone --depth 1 -b 19.0 \
+              https://github.com/odoo/odoo.git $HOME/odoo
+
+      - name: Install Odoo + project Python deps
+        run: |
+          python -m venv $HOME/venv
+          $HOME/venv/bin/pip install --upgrade pip setuptools wheel
+          $HOME/venv/bin/pip install -r $HOME/odoo/requirements.txt
+          $HOME/venv/bin/pip install -r requirements.txt
 
       - name: Create CI database
         run: |
-          docker compose exec -T db psql -U odoo -d postgres \
-              -c "CREATE DATABASE wms_ci OWNER odoo;"
+          PGPASSWORD=odoo_ci_password createdb -h localhost -U odoo wms_ci
 
       - name: Run WMS module tests
-        shell: bash --noprofile --norc {0}
+        shell: bash
         run: |
           set +e
-          # `docker compose run --rm` shares the compose network, so the db
-          # hostname resolves natively. Output flows to the job stdout AND
-          # tee'd into odoo_test.log for the artifact + step summary.
-          docker compose run --rm --no-deps \
-            -e PYTHONUNBUFFERED=1 \
-            odoo \
-            odoo --stop-after-init \
-                 -d wms_ci \
-                 --db_host=db --db_user=odoo --db_password=odoo_ci_password \
-                 --addons-path=/usr/lib/python3/dist-packages/odoo/addons,/mnt/extra-addons \
-                 -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
-                 --without-demo=all \
-                 --test-enable \
-                 --test-tags wms \
-                 --log-level=info \
-                 --logfile=/dev/stdout \
-            2>&1 | tee odoo_test.log
+          $HOME/venv/bin/python $HOME/odoo/odoo-bin \
+              --stop-after-init \
+              -d wms_ci \
+              --db_host=localhost --db_port=5432 \
+              --db_user=odoo --db_password=odoo_ci_password \
+              --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
+              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
+              --without-demo=all \
+              --test-enable \
+              --test-tags wms \
+              --log-level=info \
+              --logfile=/dev/stdout \
+              2>&1 | tee odoo_test.log
           rc=${PIPESTATUS[0]}
-          echo "=== docker compose run exit code: $rc ==="
+          echo "=== odoo-bin exit code: $rc ==="
           echo "log size: $(wc -c < odoo_test.log) bytes"
 
           # Publish the log to the step summary so failures are visible
@@ -204,7 +232,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "$rc" -ne 0 ]; then
-            echo "::error::docker compose run exited with $rc"
+            echo "::error::odoo-bin exited with $rc"
             exit "$rc"
           fi
           if grep -qE "ERROR wms_ci odoo\.tests\.result:.*(failed|error)" odoo_test.log; then
@@ -217,55 +245,97 @@ jobs:
           fi
           echo "✔ WMS test suite passed."
 
-      - name: Tear down
-        if: always()
-        run: docker compose down -v
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: odoo-test-log-${{ matrix.odoo_version }}
+          name: odoo-test-log-19.0
           path: odoo_test.log
           retention-days: 14
 
   # -------------------------------------------------------------------------
-  # 4) Docker compose verification — build the full stack and run a
-  #    smoke check (Odoo answers /web/login from inside the network).
+  # 4) Native smoke — start Odoo, hit /web/login, confirm HTTP 200/303.
+  #    Lighter than the old docker compose smoke; same intent.
   # -------------------------------------------------------------------------
-  compose_smoke:
-    name: docker compose smoke
+  native_smoke:
+    name: Native smoke
     runs-on: ubuntu-latest
     needs: [lint, odoo_tests]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo_ci_password
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare .env
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+          cache: pip
+
+      - name: System packages
         run: |
-          cp .env.example .env
-          sed -i 's/^ODOO_PORT=.*/ODOO_PORT=8069/' .env
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              postgresql-client wkhtmltopdf libldap2-dev libsasl2-dev fonts-dejavu-core
 
-      - name: Build images
-        run: docker compose build --pull
+      - name: Grant CREATEDB
+        run: |
+          PGPASSWORD=odoo_ci_password psql -h localhost -U odoo -d postgres \
+              -c "ALTER ROLE odoo WITH CREATEDB;"
 
-      - name: Bring up stack
-        run: docker compose up -d db odoo
+      - name: Clone Odoo + install deps
+        run: |
+          git clone --depth 1 -b 19.0 https://github.com/odoo/odoo.git $HOME/odoo
+          python -m venv $HOME/venv
+          $HOME/venv/bin/pip install --upgrade pip setuptools wheel
+          $HOME/venv/bin/pip install -r $HOME/odoo/requirements.txt
+          $HOME/venv/bin/pip install -r requirements.txt
+
+      - name: Init wms_smoke DB
+        run: |
+          PGPASSWORD=odoo_ci_password createdb -h localhost -U odoo wms_smoke
+
+      - name: Start Odoo in the background
+        run: |
+          $HOME/venv/bin/python $HOME/odoo/odoo-bin \
+              -d wms_smoke \
+              --db_host=localhost --db_port=5432 \
+              --db_user=odoo --db_password=odoo_ci_password \
+              --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
+              --without-demo=all \
+              -i wms_location \
+              --http-port=8069 \
+              --logfile=/dev/stdout &
+          echo $! > odoo.pid
 
       - name: Wait for Odoo to answer
         run: |
-          for i in {1..30}; do
-            if curl -fsS http://localhost:8069/web/database/manager > /dev/null; then
-              echo "✔ Odoo responding on :8069"
+          for i in {1..40}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8069/web/login || true)
+            if [ "$code" = "200" ] || [ "$code" = "303" ]; then
+              echo "✔ Odoo responding on :8069 (HTTP $code)"
               exit 0
             fi
             sleep 3
           done
-          echo "❌ Odoo did not respond within 90 s"
-          docker compose logs odoo | tail -100
+          echo "❌ Odoo did not respond within 120 s"
           exit 1
 
-      - name: Tear down
+      - name: Stop Odoo
         if: always()
-        run: docker compose down -v
+        run: |
+          if [ -f odoo.pid ]; then kill $(cat odoo.pid) || true; fi
 
   # -------------------------------------------------------------------------
   # 5) Status summary — single required check for branch protection.
@@ -273,14 +343,14 @@ jobs:
   ci_status:
     name: CI status
     runs-on: ubuntu-latest
-    needs: [lint, security, odoo_tests, compose_smoke]
+    needs: [lint, security, odoo_tests, native_smoke]
     if: always()
     steps:
       - name: Aggregate status
         run: |
           if [[ "${{ needs.lint.result }}" != "success" \
              || "${{ needs.odoo_tests.result }}" != "success" \
-             || "${{ needs.compose_smoke.result }}" != "success" ]]; then
+             || "${{ needs.native_smoke.result }}" != "success" ]]; then
             echo "❌ One or more required jobs failed."
             exit 1
           fi
