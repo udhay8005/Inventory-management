@@ -78,12 +78,17 @@ class TestAuditTrailInvariant(TransactionCase):
     def test_db_check_allows_legacy_flag(self):
         """Rows flagged wms_audit_legacy=TRUE are grandfathered — the
         CHECK accepts them even without a storekeeper. This is how the
-        pre-migration preserves historical data."""
+        pre-migration preserves historical data.
+
+        Note: we set state AND wms_audit_legacy in ONE SQL UPDATE rather
+        than writing legacy via the ORM first. ORM writes go to a cache
+        that is not flushed before raw cr.execute(), so a two-step
+        approach would see the legacy column still FALSE when the
+        UPDATE's CHECK fires.
+        """
         pk = self._make_picking("Barcode FIFO-LEGACY-003")
-        pk.wms_audit_legacy = True
-        # SQL UPDATE to state='done' must succeed because legacy=TRUE.
         self.env.cr.execute(
-            "UPDATE stock_picking SET state=%s WHERE id=%s",
+            "UPDATE stock_picking SET state=%s, wms_audit_legacy=TRUE WHERE id=%s",
             ("done", pk.id),
         )
         self.env.cr.execute(
@@ -96,16 +101,17 @@ class TestAuditTrailInvariant(TransactionCase):
 
     def test_db_check_allows_done_with_storekeeper(self):
         """The happy path: a WMS picking WITH a storekeeper anchor can
-        legitimately be marked done."""
+        legitimately be marked done. Set state AND storekeeper in one
+        SQL UPDATE to avoid the ORM-cache-flush gap."""
         keeper = self.env["wms.storekeeper"].search([], limit=1)
         if not keeper:
             keeper = self.env["wms.storekeeper"].create({"name": "WMS-TEST-KEEPER"})
+        # Make sure the keeper row is in the DB before our raw SQL.
+        self.env.flush_all()
         pk = self._make_picking("Barcode FIFO-TEST-004")
-        pk.wms_storekeeper_id = keeper.id
-        # SQL UPDATE must succeed because storekeeper is now non-NULL.
         self.env.cr.execute(
-            "UPDATE stock_picking SET state=%s WHERE id=%s",
-            ("done", pk.id),
+            "UPDATE stock_picking SET state=%s, wms_storekeeper_id=%s WHERE id=%s",
+            ("done", keeper.id, pk.id),
         )
         self.env.cr.execute("SELECT state FROM stock_picking WHERE id=%s", (pk.id,))
         self.assertEqual(self.env.cr.fetchone()[0], "done")

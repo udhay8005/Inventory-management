@@ -77,10 +77,11 @@ class TestStockLocationDeleteGuard(TransactionCase):
         """A protected location with stock.move history must refuse
         delete — the audit trail's location pointer would be orphaned.
 
-        Uses raw SQL to insert a synthetic stock_move row so we don't
-        have to satisfy Odoo's stock.move workflow validations (which
-        require move_lines, picking_type, etc.). The @api.ondelete only
-        reads from stock_move, so a raw row is sufficient to trip it."""
+        Uses ORM create with the DEFAULT 'draft' state to avoid Odoo's
+        stricter validations on 'done' moves (move_lines, picking_type,
+        etc.). The @api.ondelete's history check counts ANY stock.move
+        row referencing the location regardless of state, which is the
+        correct policy — even cancelled/draft moves are audit history."""
         floor = self._make_floor("WMS-TEST-FLOOR-H")
         product = self.env["product.product"].create(
             {
@@ -89,36 +90,16 @@ class TestStockLocationDeleteGuard(TransactionCase):
                 "is_storable": True,
             }
         )
-        uom_id = product.uom_id.id
-        company_id = self.env.company.id
-        # Bypass Odoo's move-create validation — we only need a row that
-        # references our test floor as location_id so the guard's
-        # history check counts it.
-        self.env.cr.execute(
-            """
-            INSERT INTO stock_move
-                (name, product_id, product_uom, product_uom_qty,
-                 location_id, location_dest_id, state, company_id,
-                 create_uid, create_date, write_uid, write_date)
-            VALUES
-                (%s, %s, %s, %s, %s, %s, %s, %s,
-                 %s, NOW(), %s, NOW())
-            """,
-            (
-                "WMS-TEST-MOVE-H",
-                product.id,
-                uom_id,
-                1.0,
-                floor.id,
-                self.stock.id,
-                "done",
-                company_id,
-                self.env.uid,
-                self.env.uid,
-            ),
+        self.env["stock.move"].create(
+            {
+                "product_id": product.id,
+                "product_uom": product.uom_id.id,
+                "product_uom_qty": 1.0,
+                "location_id": floor.id,
+                "location_dest_id": self.stock.id,
+                # state defaults to 'draft'
+            }
         )
-        # Invalidate the ORM cache so the @api.ondelete sees the new row.
-        self.env["stock.move"].invalidate_model()
         with self.assertRaises(UserError):
             floor.unlink()
 

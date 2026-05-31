@@ -60,10 +60,15 @@ class StockPicking(models.Model):
     _sql_constraints = [
         (
             "wms_audit_triplet_on_done",
+            # NOTE: 'Barcode%%' (doubled %) is intentional. Odoo runs
+            # this CHECK string through psycopg2's %-formatting path at
+            # install/upgrade time; a single % silently collapses the
+            # wildcard so the constraint becomes `LIKE 'Barcode'` and
+            # never fires on real origins like 'Barcode FIFO-001'.
             "CHECK ("
             "state != 'done' "
             "OR origin IS NULL "
-            "OR origin NOT LIKE 'Barcode%' "
+            "OR origin NOT LIKE 'Barcode%%' "
             "OR wms_storekeeper_id IS NOT NULL "
             "OR wms_audit_legacy = TRUE"
             ")",
