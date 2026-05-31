@@ -57,24 +57,20 @@ class StockPicking(models.Model):
         "filter target: search for wms_audit_legacy=True to review.",
     )
 
-    _sql_constraints = [
-        (
-            "wms_audit_triplet_on_done",
-            # NOTE: 'Barcode%%' (doubled %) is intentional. Odoo runs
-            # this CHECK string through psycopg2's %-formatting path at
-            # install/upgrade time; a single % silently collapses the
-            # wildcard so the constraint becomes `LIKE 'Barcode'` and
-            # never fires on real origins like 'Barcode FIFO-001'.
-            "CHECK ("
-            "state != 'done' "
-            "OR origin IS NULL "
-            "OR origin NOT LIKE 'Barcode%%' "
-            "OR wms_storekeeper_id IS NOT NULL "
-            "OR wms_audit_legacy = TRUE"
-            ")",
-            "WMS-originated pickings must record the storekeeper before being marked done.",
-        ),
-    ]
+    # Declarative DB constraint (Odoo 19 idiom — the old list-of-tuples
+    # `_sql_constraints` is silently ignored on inherited models in 19).
+    # The CHECK string is applied directly as a DDL fragment (NOT through
+    # psycopg2 %-formatting), so the LIKE wildcard is a single '%'.
+    _wms_audit_triplet_on_done = models.Constraint(
+        "CHECK ("
+        "state != 'done' "
+        "OR origin IS NULL "
+        "OR origin NOT LIKE 'Barcode%' "
+        "OR wms_storekeeper_id IS NOT NULL "
+        "OR wms_audit_legacy = TRUE"
+        ")",
+        "WMS-originated pickings must record the storekeeper before being marked done.",
+    )
 
     @api.constrains("state", "origin", "wms_storekeeper_id", "wms_audit_legacy")
     def _check_wms_audit_trail_on_done(self):
