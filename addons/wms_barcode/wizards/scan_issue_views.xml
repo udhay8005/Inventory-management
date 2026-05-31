@@ -7,7 +7,7 @@
             <field name="arch" type="xml">
                 <form string="Scan Issue (FIFO)">
                     <sheet>
-                        <div class="alert alert-info" role="alert">
+                        <div class="alert alert-info">
                             <strong>Set qty, then scan.</strong>
                             FIFO pulls the oldest stock first across all slots.
                             Scan a carton barcode to use its preset count.

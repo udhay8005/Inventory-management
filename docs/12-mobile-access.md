@@ -4,7 +4,7 @@ Three independent ways to reach the WMS from a phone. Pick whichever fits.
 
 | Method | URL example | Works on mobile data? | Stable? | Setup time |
 |---|---|---|---|---|
-| WiFi (same network) | `http://192.168.1.50:8169` | ❌ WiFi only | as long as your IP stays | 2 min |
+| WiFi (same network) | `http://192.168.1.50:8069` | ❌ WiFi only | as long as your IP stays | 2 min |
 | Cloudflare quick tunnel | `https://abc-xyz-def.trycloudflare.com` | ✅ | URL changes per restart | 1 min |
 | Cloudflare named tunnel | `https://wms.your-domain.com` | ✅ | permanent | 10 min |
 
@@ -26,14 +26,14 @@ Look for an address like `192.168.x.x` or `10.0.x.x` — that's the LAN IP.
 ### 2. Open the port in Windows Firewall
 
 ```powershell
-New-NetFirewallRule -DisplayName "WMS Odoo 8169" -Direction Inbound `
-    -LocalPort 8169 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "WMS Odoo 8069" -Direction Inbound `
+    -LocalPort 8069 -Protocol TCP -Action Allow
 ```
 
 ### 3. Visit from the phone
 
 ```
-http://<host-IP>:8169
+http://<host-IP>:8069
 ```
 
 Note: the camera widget will refuse to open over plain HTTP on a non-localhost
@@ -128,7 +128,7 @@ proof-of-handover or damage documentation.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Phone can't reach `http://192.168.x.x:8169` | Windows firewall blocking | Run the firewall command in section A.2 |
+| Phone can't reach `http://192.168.x.x:8069` | Windows firewall blocking | Run the firewall command in section A.2 |
 | Camera doesn't open | Browser blocks getUserMedia over HTTP | Use a Cloudflare tunnel (HTTPS) |
 | Quick tunnel URL keeps changing | That's by design | Switch to a named tunnel |
 | Login page loads but actions fail | Wrong host IP / mixed http/https | Always pick one URL per session |

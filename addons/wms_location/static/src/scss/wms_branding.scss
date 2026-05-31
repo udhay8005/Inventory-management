@@ -289,8 +289,9 @@ h1, h2, h3,
 }
 
 // ----- Rack Builder integration --------------------------------------------
-// The Visual Builder grid in Create Rack already uses local SCSS; tint
-// the active-cell border to saffron so it matches the rest of the app.
-.o_wms_rack_builder .cell.--selected {
+// Tint the active-cell border to saffron so the Visual Builder grid in
+// Create Rack matches the rest of the brand. Selector must match the
+// BEM class emitted by rack_builder.xml.
+.o_wms_rack_builder .o_wms_rack_builder__cell--selected {
     outline: 2px solid $wms-saffron !important;
 }

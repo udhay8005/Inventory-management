@@ -13,7 +13,7 @@
             <field name="arch" type="xml">
                 <form string="Onboard new products">
                     <sheet>
-                        <div class="alert alert-info" role="alert">
+                        <div class="alert alert-info">
                             <strong>Tip:</strong> paste a column of names from
                             Excel/Google Sheets directly into the table to
                             add many rows at once. Each row gets an

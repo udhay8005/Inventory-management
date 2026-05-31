@@ -256,7 +256,7 @@ class WmsProductOnboardLine(models.TransientModel):
         "stock.location",
         string="Slot",
         domain="[('usage', '=', 'internal'), "
-        "('wms_location_type', 'in', ('slot', 'floor_zone'))]",
+        "('wms_location_type', 'in', ('slot', 'floor'))]",
         help="Where the initial stock goes. Required when initial qty > 0.",
     )
     location_scan = fields.Char(
