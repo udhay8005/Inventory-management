@@ -13,19 +13,23 @@ class TestStockLocationDeleteGuard(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.Location = cls.env["stock.location"]
-        cls.parent = cls.Location.create({
-            "name": "WMS-TEST-RACK",
-            "usage": "internal",
-            "wms_location_type": "rack",
-        })
+        cls.parent = cls.Location.create(
+            {
+                "name": "WMS-TEST-RACK",
+                "usage": "internal",
+                "wms_location_type": "rack",
+            }
+        )
 
     def _make_slot(self, name, parent=None):
-        return self.Location.create({
-            "name": name,
-            "usage": "internal",
-            "location_id": (parent or self.parent).id,
-            "wms_location_type": "slot",
-        })
+        return self.Location.create(
+            {
+                "name": name,
+                "usage": "internal",
+                "location_id": (parent or self.parent).id,
+                "wms_location_type": "slot",
+            }
+        )
 
     def test_delete_rack_with_children_blocks(self):
         self._make_slot("WMS-TEST-SLOT-A")
@@ -39,35 +43,43 @@ class TestStockLocationDeleteGuard(TransactionCase):
 
     def test_delete_slot_with_live_quants_blocks(self):
         slot = self._make_slot("WMS-TEST-SLOT-Q")
-        product = self.env["product.product"].create({
-            "name": "WMS-TEST-PRODUCT-Q",
-            "type": "consu",
-            "is_storable": True,
-        })
-        self.env["stock.quant"].create({
-            "product_id": product.id,
-            "location_id": slot.id,
-            "quantity": 5.0,
-        })
+        product = self.env["product.product"].create(
+            {
+                "name": "WMS-TEST-PRODUCT-Q",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        self.env["stock.quant"].create(
+            {
+                "product_id": product.id,
+                "location_id": slot.id,
+                "quantity": 5.0,
+            }
+        )
         with self.assertRaises(UserError):
             slot.unlink()
 
     def test_delete_slot_with_move_history_blocks(self):
         slot = self._make_slot("WMS-TEST-SLOT-H")
-        product = self.env["product.product"].create({
-            "name": "WMS-TEST-PRODUCT-H",
-            "type": "consu",
-            "is_storable": True,
-        })
-        self.env["stock.move"].create({
-            "name": "WMS-TEST-MOVE-H",
-            "product_id": product.id,
-            "product_uom": product.uom_id.id,
-            "product_uom_qty": 1.0,
-            "location_id": slot.id,
-            "location_dest_id": self.env.ref("stock.stock_location_stock").id,
-            "state": "done",
-        })
+        product = self.env["product.product"].create(
+            {
+                "name": "WMS-TEST-PRODUCT-H",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        self.env["stock.move"].create(
+            {
+                "name": "WMS-TEST-MOVE-H",
+                "product_id": product.id,
+                "product_uom": product.uom_id.id,
+                "product_uom_qty": 1.0,
+                "location_id": slot.id,
+                "location_dest_id": self.env.ref("stock.stock_location_stock").id,
+                "state": "done",
+            }
+        )
         with self.assertRaises(UserError):
             slot.unlink()
 

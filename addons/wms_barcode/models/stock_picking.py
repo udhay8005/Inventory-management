@@ -51,21 +51,21 @@ class StockPicking(models.Model):
         readonly=True,
         index=False,
         help="Internal: set True by the 19.0.1.7.0 migration on pre-existing "
-             "WMS-originated pickings that pre-date the audit-trail CHECK "
-             "constraint. Allows the CHECK to grandfather historical rows "
-             "while enforcing the invariant on every new row. Admin-readable "
-             "filter target: search for wms_audit_legacy=True to review.",
+        "WMS-originated pickings that pre-date the audit-trail CHECK "
+        "constraint. Allows the CHECK to grandfather historical rows "
+        "while enforcing the invariant on every new row. Admin-readable "
+        "filter target: search for wms_audit_legacy=True to review.",
     )
 
     _sql_constraints = [
         (
             "wms_audit_triplet_on_done",
             "CHECK ("
-                "state != 'done' "
-                "OR origin IS NULL "
-                "OR origin NOT LIKE 'Barcode%' "
-                "OR wms_storekeeper_id IS NOT NULL "
-                "OR wms_audit_legacy = TRUE"
+            "state != 'done' "
+            "OR origin IS NULL "
+            "OR origin NOT LIKE 'Barcode%' "
+            "OR wms_storekeeper_id IS NOT NULL "
+            "OR wms_audit_legacy = TRUE"
             ")",
             "WMS-originated pickings must record the storekeeper before being marked done.",
         ),
@@ -86,8 +86,11 @@ class StockPicking(models.Model):
             if rec.wms_audit_legacy:
                 continue
             if not rec.wms_storekeeper_id:
-                raise ValidationError(_(
-                    "Picking %(name)s is WMS-originated but has no storekeeper "
-                    "recorded. Re-run the scan wizard to record who handled "
-                    "this transfer before marking it done."
-                ) % {"name": rec.name})
+                raise ValidationError(
+                    _(
+                        "Picking %(name)s is WMS-originated but has no storekeeper "
+                        "recorded. Re-run the scan wizard to record who handled "
+                        "this transfer before marking it done."
+                    )
+                    % {"name": rec.name}
+                )

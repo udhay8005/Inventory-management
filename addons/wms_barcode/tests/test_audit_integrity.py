@@ -6,11 +6,10 @@ on the same conditions. Without these, a manager-side form save or any
 XML-RPC client could silently mark a Barcode-originated picking 'done'
 with no storekeeper anchor.
 """
-from psycopg2 import IntegrityError
-
 from odoo.exceptions import ValidationError
 from odoo.tests import TransactionCase, tagged
 from odoo.tools import mute_logger
+from psycopg2 import IntegrityError
 
 
 @tagged("post_install", "-at_install", "wms", "wms_audit")
@@ -21,17 +20,17 @@ class TestAuditTrailInvariant(TransactionCase):
         cls.Picking = cls.env["stock.picking"]
         cls.picking_type = cls.env.ref("stock.picking_type_internal")
         cls.src = cls.env.ref("stock.stock_location_stock")
-        cls.dst = cls.env["stock.location"].search(
-            [("usage", "=", "internal")], limit=1
-        )
+        cls.dst = cls.env["stock.location"].search([("usage", "=", "internal")], limit=1)
 
     def _make_picking(self, origin):
-        return self.Picking.create({
-            "picking_type_id": self.picking_type.id,
-            "location_id": self.src.id,
-            "location_dest_id": self.dst.id,
-            "origin": origin,
-        })
+        return self.Picking.create(
+            {
+                "picking_type_id": self.picking_type.id,
+                "location_id": self.src.id,
+                "location_dest_id": self.dst.id,
+                "origin": origin,
+            }
+        )
 
     def test_done_without_storekeeper_blocks_via_constrains(self):
         """ORM write to state='done' fires @api.constrains."""
