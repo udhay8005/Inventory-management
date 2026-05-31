@@ -13,6 +13,13 @@ what we actually rely on for security; layer 2 is a UX enhancement and
 is harder to test reliably because stock.picking's own button_validate
 workflow runs many other checks before the field write reaches our
 constraint.
+
+Note on cursor handling: TransactionCase rolls back the whole test at
+tearDown. We therefore (a) never call cr.commit() (it breaks the test
+fixture isolation Odoo guards against), and (b) wrap constraint-
+violating UPDATEs in self.env.cr.savepoint() so the aborted-transaction
+state from the IntegrityError is rolled back to a clean savepoint
+before tearDown runs.
 """
 from odoo.tests import TransactionCase, tagged
 from odoo.tools import mute_logger
@@ -44,11 +51,13 @@ class TestAuditTrailInvariant(TransactionCase):
         storekeeper anchor MUST raise IntegrityError. This is the
         security guarantee — nothing can bypass it."""
         pk = self._make_picking("Barcode FIFO-TEST-001")
-        with self.assertRaises(IntegrityError), mute_logger("odoo.sql_db"):
-            self.env.cr.execute(
-                "UPDATE stock_picking SET state=%s WHERE id=%s",
-                ("done", pk.id),
-            )
+        with mute_logger("odoo.sql_db"):
+            with self.assertRaises(IntegrityError):
+                with self.env.cr.savepoint():
+                    self.env.cr.execute(
+                        "UPDATE stock_picking SET state=%s WHERE id=%s",
+                        ("done", pk.id),
+                    )
 
     def test_db_check_allows_non_barcode_origin(self):
         """Non-WMS pickings (PO-..., MO-..., manual entry) are not
@@ -60,7 +69,9 @@ class TestAuditTrailInvariant(TransactionCase):
             "UPDATE stock_picking SET state=%s WHERE id=%s",
             ("done", pk.id),
         )
-        self.env.cr.commit()  # confirm DB accepted the write
+        # Verify within the same transaction (no commit — TransactionCase
+        # rolls back at tearDown, which is exactly what we want for test
+        # isolation).
         self.env.cr.execute("SELECT state FROM stock_picking WHERE id=%s", (pk.id,))
         self.assertEqual(self.env.cr.fetchone()[0], "done")
 
@@ -69,14 +80,12 @@ class TestAuditTrailInvariant(TransactionCase):
         CHECK accepts them even without a storekeeper. This is how the
         pre-migration preserves historical data."""
         pk = self._make_picking("Barcode FIFO-LEGACY-003")
-        # Flag as legacy first (via ORM, which the @api.constrains allows).
         pk.wms_audit_legacy = True
-        # Now the SQL UPDATE to state='done' must succeed.
+        # SQL UPDATE to state='done' must succeed because legacy=TRUE.
         self.env.cr.execute(
             "UPDATE stock_picking SET state=%s WHERE id=%s",
             ("done", pk.id),
         )
-        self.env.cr.commit()
         self.env.cr.execute(
             "SELECT state, wms_audit_legacy FROM stock_picking WHERE id=%s",
             (pk.id,),
@@ -98,6 +107,5 @@ class TestAuditTrailInvariant(TransactionCase):
             "UPDATE stock_picking SET state=%s WHERE id=%s",
             ("done", pk.id),
         )
-        self.env.cr.commit()
         self.env.cr.execute("SELECT state FROM stock_picking WHERE id=%s", (pk.id,))
         self.assertEqual(self.env.cr.fetchone()[0], "done")
