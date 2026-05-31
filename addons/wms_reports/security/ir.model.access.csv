@@ -11,3 +11,4 @@ access_wms_audit_user,wms.audit user,model_wms_audit,wms_location.group_wms_user
 access_wms_audit_mgr,wms.audit mgr,model_wms_audit,wms_location.group_wms_manager,1,1,1,0
 access_wms_audit_line_user,wms.audit.line user,model_wms_audit_line,wms_location.group_wms_user,1,1,1,1
 access_wms_audit_line_mgr,wms.audit.line mgr,model_wms_audit_line,wms_location.group_wms_manager,1,1,1,1
+access_wms_backup_audit_mgr,wms.backup.audit mgr,model_wms_backup_audit,wms_location.group_wms_manager,1,0,0,0
