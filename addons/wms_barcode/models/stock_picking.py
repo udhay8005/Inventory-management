@@ -62,12 +62,19 @@ class StockPicking(models.Model):
     # The CHECK string is applied directly as a DDL fragment (NOT through
     # psycopg2 %-formatting), so the LIKE wildcard is a single '%'.
     _wms_audit_triplet_on_done = models.Constraint(
+        # COALESCE on wms_audit_legacy is essential: a raw SQL INSERT that
+        # omits the column leaves it NULL (Odoo applies default=False only
+        # via the ORM, not at the DB level). Without COALESCE the whole OR
+        # evaluates to NULL when legacy is NULL + storekeeper is NULL, and
+        # PostgreSQL PASSES a CHECK that is NULL — silently defeating the
+        # SQL-bypass protection. COALESCE(..., FALSE) forces that operand
+        # to FALSE so the OR resolves to FALSE and the CHECK fires.
         "CHECK ("
         "state != 'done' "
         "OR origin IS NULL "
         "OR origin NOT LIKE 'Barcode%' "
         "OR wms_storekeeper_id IS NOT NULL "
-        "OR wms_audit_legacy = TRUE"
+        "OR COALESCE(wms_audit_legacy, FALSE) = TRUE"
         ")",
         "WMS-originated pickings must record the storekeeper before being marked done.",
     )

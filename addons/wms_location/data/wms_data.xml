@@ -40,5 +40,17 @@
             <field name="usage">internal</field>
             <field name="company_id" ref="base.main_company"/>
         </record>
+
+        <!--
+            Internal system: NO public self-registration. UAT found the
+            "Don't have an account?" link on the login page (auth_signup
+            defaults to 'b2c' = anyone can sign up). Force invite-only
+            ('b2b') so only an admin can create logins. We use set_param
+            (idempotent upsert) rather than a <record>, because auth_signup
+            already owns this ir.config_parameter row and a fresh record
+            would collide on its unique key.
+        -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="['auth_signup.invitation_scope', 'b2b']"/>
     </data>
 </odoo>

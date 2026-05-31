@@ -94,7 +94,13 @@ class WmsDemoSeeder(models.TransientModel):
                 product = Product.create(
                     {
                         "name": name,
-                        "default_code": code,
+                        # NOTE: deliberately NOT setting default_code. The
+                        # hardcoded demo SKUs (e.g. 'SCRW-M4-20') predate the
+                        # _check_sku_prefix constraint and violate it (a CONS
+                        # product must start 'CONS-'). Leaving the SKU empty
+                        # lets the catalog assign a correct one; the demo's
+                        # barcode + carton alias below are what the scan
+                        # flows actually use.
                         "barcode": barcode,
                         "list_price": price,
                         # Odoo 19: storable = consu + is_storable
