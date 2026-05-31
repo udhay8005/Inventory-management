@@ -43,11 +43,13 @@ class WmsRepairOrder(models.Model):
         # live in slots OR floor zones, so a repair can originate from
         # either.
         domain=[("wms_location_type", "in", ("slot", "floor"))],
+        ondelete="restrict",
         help="Where the item came from; default destination after repair.",
     )
     return_slot_id = fields.Many2one(
         "stock.location",
         domain=[("wms_location_type", "in", ("slot", "floor"))],
+        ondelete="restrict",
         help="Where the item goes after repair completes. Defaults to original.",
     )
     warehouse_id = fields.Many2one(

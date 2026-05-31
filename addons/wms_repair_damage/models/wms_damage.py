@@ -35,6 +35,7 @@ class WmsDamage(models.Model):
         domain=[("wms_location_type", "in", ("slot", "floor"))],
         required=True,
         tracking=True,
+        ondelete="restrict",
     )
     reason = fields.Selection(
         [
