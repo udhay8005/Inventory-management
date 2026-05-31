@@ -232,28 +232,38 @@ $started = Get-Date
 $exitCode = $EXIT_OK
 
 try {
-    # --- Decrypt via process stdin (NO cmd.exe argv leak) -----------------
+    # --- Decrypt via cmd /c echo | gpg (matches backup-native.ps1) --------
+    # IMPORTANT: this MUST match the encryption-time stdin byte stream
+    # exactly. backup-native.ps1 uses 'cmd /c "echo $plain| gpg ..."' on
+    # Windows, where cmd's echo writes in the console's OEM codepage and
+    # appends CRLF. Reproducing those same bytes via
+    # Process.StandardInput.Write loses fidelity (StreamWriter encoding
+    # quirks → "Bad session key" on decrypt). Using the same cmd pattern
+    # guarantees byte-for-byte parity.
+    #
+    # Security note: the passphrase appears briefly on cmd.exe's
+    # command-line argv during the echo (visible to Process Explorer
+    # under SeDebugPrivilege for ~50ms). This is the same exposure
+    # profile as backup-native.ps1 and restore-native.ps1 — accepted
+    # trade-off for a single-host trust install where the alternative
+    # (writing to a temp passphrase file) has its own exposure window.
     Write-Drill 'INFO' "Decrypting backup to temp file..."
+    $errFile = [System.IO.Path]::GetTempFileName()
     $plain = [System.Net.NetworkCredential]::new('', $Passphrase).Password
     try {
-        $psi = New-Object System.Diagnostics.ProcessStartInfo
-        $psi.FileName = $gpg
-        $psi.Arguments = "--batch --yes --quiet --passphrase-fd 0 --decrypt -o `"$decrypted`" `"$BackupPath`""
-        $psi.UseShellExecute = $false
-        $psi.RedirectStandardInput = $true
-        $psi.RedirectStandardError = $true
-        $psi.CreateNoWindow = $true
-        $proc = [System.Diagnostics.Process]::Start($psi)
-        $proc.StandardInput.Write($plain)
-        $proc.StandardInput.Close()
-        $stderr = $proc.StandardError.ReadToEnd()
-        $proc.WaitForExit()
-        if ($proc.ExitCode -ne 0) {
-            throw "gpg decrypt exit $($proc.ExitCode): $stderr"
+        $cmd = "echo $plain| `"$gpg`" --batch --yes --passphrase-fd 0 --decrypt -o `"$decrypted`" `"$BackupPath`" 2> `"$errFile`""
+        & cmd /c $cmd
+        $rc = $LASTEXITCODE
+        if ($rc -ne 0) {
+            $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+            throw "gpg decrypt exit ${rc}: $stderr"
         }
     } finally {
+        # Best-effort plaintext wipe — overwrite then drop the local
+        # binding so a subsequent memory snapshot cannot recover it.
         if ($plain) { $plain = ' ' * $plain.Length }
         $plain = $null
+        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
     }
     if (-not (Test-Path -LiteralPath $decrypted)) {
         throw "Decrypted file missing after gpg success."
