@@ -14,6 +14,5 @@
 
 # Critical files — require an extra review
 .github/workflows/                      @udhay8005
-Dockerfile                              @udhay8005
-docker-compose.yml                      @udhay8005
 scripts/                                @udhay8005
+config/                                 @udhay8005

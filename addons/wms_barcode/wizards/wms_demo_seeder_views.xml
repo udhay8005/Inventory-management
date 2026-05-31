@@ -6,7 +6,7 @@
             <field name="model">wms.demo.seeder</field>
             <field name="arch" type="xml">
                 <form string="Seed demo products and stock">
-                    <div class="alert alert-info" role="alert">
+                    <div class="alert alert-info">
                         Creates 5 demo products with barcodes, 3 carton aliases,
                         and (optionally) spreads stock across slots in the
                         chosen rack with mixed in-dates so FIFO has data to

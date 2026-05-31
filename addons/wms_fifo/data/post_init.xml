@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<odoo>
-    <data noupdate="1">
-        <!-- placeholder so __manifest__.py 'data' isn't empty;
-             real work happens in post_init_hook -->
-    </data>
-</odoo>

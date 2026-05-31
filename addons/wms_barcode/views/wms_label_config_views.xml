@@ -13,7 +13,7 @@
                                 <field name="name" placeholder="e.g. Standard sticker"/>
                             </h1>
                         </div>
-                        <div class="alert alert-info" role="alert">
+                        <div class="alert alert-info">
                             All measurements are in millimetres. The default
                             layout is 102 × 25 mm (4 × 1 inch) — a standard
                             thermal roll. Change any value and re-print to see

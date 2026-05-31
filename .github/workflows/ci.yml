@@ -114,16 +114,16 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install bandit pip-audit
+        run: pip install bandit==1.7.10 pip-audit==2.7.3
 
       - name: Bandit (code-level CVEs)
         run: |
           # -ll = low+, skip test files. Emits SARIF for the Security tab.
-          bandit -r addons/ -ll --format json --output bandit-report.json || true
-          bandit -r addons/ -ll || true
+          bandit -r addons/ -ll --format json --output bandit-report.json
+          bandit -r addons/ -ll
 
       - name: pip-audit (dependency CVEs)
-        run: pip-audit -r requirements.txt --strict || true
+        run: pip-audit -r requirements.txt --strict
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -213,7 +213,7 @@ jobs:
               -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
               --without-demo=all \
               --test-enable \
-              --test-tags wms \
+              --test-tags wms,wms_audit,wms_delete \
               --log-level=info \
               --logfile=/dev/stdout \
               2>&1 | tee odoo_test.log
@@ -349,6 +349,7 @@ jobs:
       - name: Aggregate status
         run: |
           if [[ "${{ needs.lint.result }}" != "success" \
+             || "${{ needs.security.result }}" != "success" \
              || "${{ needs.odoo_tests.result }}" != "success" \
              || "${{ needs.native_smoke.result }}" != "success" ]]; then
             echo "❌ One or more required jobs failed."

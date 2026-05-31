@@ -73,17 +73,164 @@ function Write-Skip($msg) {
     Write-Host "    [skip] $msg" -ForegroundColor DarkGray
 }
 
-# Resolve DB password from .env if not supplied.
-if (-not $DbPassword) {
-    if (Test-Path $EnvPath) {
-        $envLine = (Select-String -Path $EnvPath -Pattern '^DB_PASSWORD=(.+)$' | Select-Object -First 1)
-        if ($envLine) {
-            $DbPassword = $envLine.Matches.Groups[1].Value.Trim()
+# === 0. Secrets pipeline (.env loader -> validator -> generator) ==========
+# All credential resolution flows through this block. Goals:
+#   1. Read .env once into a hashtable instead of re-grepping per key.
+#   2. Reject known placeholder values ("changeme*", "admin", etc.) and
+#      regenerate them so re-running the installer cannot weaken security.
+#   3. Persist any auto-generated values back to .env (with a .bak copy
+#      first) so the next install reads the same passwords -- no drift
+#      between Postgres role, odoo.conf, and .env.
+#   4. Constrain passwords to a SQL-safe alphabet so the raw -c psql
+#      invocations on lines 180/183 cannot be exploited via a quote in
+#      the password. Generated hex is naturally safe; user-supplied
+#      values must match the same alphabet.
+
+function Read-DotEnv {
+    param([string]$Path)
+    $bag = @{}
+    if (-not (Test-Path -LiteralPath $Path)) { return $bag }
+    foreach ($line in (Get-Content -LiteralPath $Path -Encoding utf8)) {
+        if ($line -match '^\s*#') { continue }
+        if ($line -match '^\s*$') { continue }
+        if ($line -match '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$') {
+            $k = $matches[1]
+            $v = $matches[2].Trim()
+            if ($v -match '^"(.*)"$' -or $v -match "^'(.*)'$") { $v = $matches[1] }
+            $bag[$k] = $v
         }
     }
-    if (-not $DbPassword) {
-        $DbPassword = 'odoo_local_dev_pw'
+    return $bag
+}
+
+# Conservative placeholder set: only well-known defaults. A real password
+# won't match. Pattern matches are anchored to avoid false positives on
+# substrings (a password ending in "admin" stays valid).
+$Script:PlaceholderPatterns = @(
+    '^$',
+    '^changeme.*',
+    '^admin$',
+    '^password$',
+    '^local_master_pw$',
+    '^odoo_local_dev_pw$',
+    '^example.*',
+    '^test$',
+    '^demo$',
+    '^secret$',
+    '^pass$'
+)
+
+function Test-IsPlaceholderSecret {
+    param([string]$Value)
+    if (-not $Value) { return $true }
+    foreach ($pat in $Script:PlaceholderPatterns) {
+        if ($Value -match $pat) { return $true }
     }
+    return $false
+}
+
+function Test-IsSqlSafePassword {
+    # Alphanumeric + . _ - only. No quotes, no whitespace, no shell meta.
+    # 16+ chars enforces minimum entropy.
+    param([string]$Value)
+    return ($Value -and $Value -match '^[A-Za-z0-9._\-]{16,}$')
+}
+
+function New-SecurePassword {
+    # 32 hex chars from .NET's CSPRNG. Hex is naturally SQL/shell-safe.
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $bytes = New-Object byte[] 16
+        $rng.GetBytes($bytes)
+        return -join ($bytes | ForEach-Object { '{0:x2}' -f $_ })
+    } finally {
+        $rng.Dispose()
+    }
+}
+
+function Save-DotEnv {
+    # Rewrite .env preserving comments + ordering. Keys we own get the
+    # new value; everything else passes through verbatim. A .bak-<ts>
+    # snapshot is taken first so the previous file is recoverable.
+    param([string]$Path, [hashtable]$Vars)
+    if (Test-Path -LiteralPath $Path) {
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+        Copy-Item -LiteralPath $Path -Destination "$Path.bak-$stamp" -Force
+        Write-Host "    [bak] .env preserved at $Path.bak-$stamp" -ForegroundColor DarkGray
+    }
+    $lines = @()
+    $seen = @{}
+    if (Test-Path -LiteralPath $Path) {
+        foreach ($line in (Get-Content -LiteralPath $Path -Encoding utf8)) {
+            if ($line -match '^\s*([A-Z_][A-Z0-9_]*)\s*=') {
+                $k = $matches[1]
+                if ($Vars.ContainsKey($k)) {
+                    $lines += "$k=$($Vars[$k])"
+                    $seen[$k] = $true
+                    continue
+                }
+            }
+            $lines += $line
+        }
+    }
+    foreach ($k in $Vars.Keys) {
+        if (-not $seen[$k]) { $lines += "$k=$($Vars[$k])" }
+    }
+    [System.IO.File]::WriteAllText(
+        $Path,
+        ($lines -join [Environment]::NewLine) + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
+$DotEnv = Read-DotEnv -Path $EnvPath
+$DotEnvDirty = $false
+
+# DB password: CLI arg wins, else .env, else generate.
+if (-not $DbPassword) {
+    $envDb = $DotEnv['DB_PASSWORD']
+    if (-not (Test-IsPlaceholderSecret $envDb)) {
+        $DbPassword = $envDb
+    } else {
+        $DbPassword = New-SecurePassword
+        Write-Host "    [!] DB_PASSWORD in .env was missing or a placeholder - generated a fresh 32-char password." -ForegroundColor Yellow
+        $DotEnv['DB_PASSWORD'] = $DbPassword
+        $DotEnvDirty = $true
+    }
+}
+
+# Odoo master password: gates /web/database/manager + odoo-bin restore.
+# Reusing the placeholder 'local_master_pw' silently exposed every
+# install with the same publicly-known credential -- never again.
+$AdminPasswd = $DotEnv['ODOO_ADMIN_PASSWD']
+if (Test-IsPlaceholderSecret $AdminPasswd) {
+    $AdminPasswd = New-SecurePassword
+    Write-Host "    [!] ODOO_ADMIN_PASSWD in .env was missing or a placeholder - generated a fresh 32-char master password." -ForegroundColor Yellow
+    $DotEnv['ODOO_ADMIN_PASSWD'] = $AdminPasswd
+    $DotEnvDirty = $true
+}
+
+# Persist any generated secrets so re-installs are idempotent. A missing
+# .env file is a warning, not a hard fail (single-session install).
+if ($DotEnvDirty) {
+    if (Test-Path -LiteralPath $EnvPath) {
+        Save-DotEnv -Path $EnvPath -Vars $DotEnv
+        Write-Host "    [OK] Wrote generated secrets to .env (previous file backed up)." -ForegroundColor Green
+    } else {
+        Write-Host "    [!] No .env file - generated secrets exist only for this session." -ForegroundColor Yellow
+        Write-Host "        Copy .env.example to .env and re-run for persistence." -ForegroundColor Yellow
+    }
+}
+
+# Final gate: both passwords must be SQL-safe alphanumeric. Catches
+# user-supplied values containing quotes, spaces, or shell metacharacters
+# that would either break the psql -c invocations below or open an
+# injection path. Generated hex passes trivially.
+if (-not (Test-IsSqlSafePassword $DbPassword)) {
+    throw "DB_PASSWORD must be 16+ chars from [A-Za-z0-9._-]. Got something with quotes / whitespace / shell metacharacters."
+}
+if (-not (Test-IsSqlSafePassword $AdminPasswd)) {
+    throw "ODOO_ADMIN_PASSWD must be 16+ chars from [A-Za-z0-9._-]. Got something with quotes / whitespace / shell metacharacters."
 }
 
 # === Reset if requested ====================================================
@@ -275,12 +422,34 @@ foreach ($d in @($DataDir, $LogDir)) {
 # === 6. Native odoo.conf ===================================================
 Write-Step "Writing native odoo.conf (config/odoo.native.conf)"
 
+# Back up any existing conf before regenerating. A hand-edited setting
+# (e.g. proxy_mode tweaked for a reverse-proxy install) can be
+# cherry-picked back from the .bak-<ts> file if the regenerated baseline
+# loses it. Re-running this script can never silently destroy the prior
+# config without leaving a recoverable copy on disk.
+if (Test-Path -LiteralPath $ConfPath) {
+    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    Copy-Item -LiteralPath $ConfPath -Destination "$ConfPath.bak-$stamp" -Force
+    Write-Host "    [bak] Existing conf preserved at $ConfPath.bak-$stamp" -ForegroundColor DarkGray
+}
+
 $confBody = @"
 [options]
 ; Native (no-Docker) configuration. Generated by scripts/install-native.ps1.
-; Re-run that script to regenerate.
+; Re-run that script to regenerate (the previous conf is backed up first).
 
-admin_passwd = local_master_pw
+; Master password for /web/database/manager + odoo-bin restore.
+; Auto-generated on install if .env's ODOO_ADMIN_PASSWD was missing or a
+; placeholder. Rotate by editing .env and re-running install-native.ps1.
+admin_passwd = $AdminPasswd
+
+; SECURITY: the database manager web UI MUST stay disabled in production.
+; list_db = False        hides the DB picker on /web/login
+; db_listing = False     hides /web/database/manager + /web/database/selector
+; Database create / drop / restore must go through odoo-bin with the
+; master password above, never via HTTP.
+list_db = False
+db_listing = False
 
 addons_path = $($OdooSrc -replace '\\','/')/addons,$($ProjectRoot -replace '\\','/')/addons
 data_dir = $($DataDir -replace '\\','/')
@@ -311,7 +480,7 @@ logfile = $($LogDir -replace '\\','/')/odoo.log
 # Set-Content -Encoding utf8 prepends a BOM that Python's configparser
 # can't read (raises MissingSectionHeaderError on the first [options]).
 [System.IO.File]::WriteAllText($ConfPath, $confBody, [System.Text.UTF8Encoding]::new($false))
-Write-OK "Wrote $ConfPath"
+Write-OK "Wrote $ConfPath (admin_passwd from .env, list_db=False, db_listing=False)"
 
 # === 7. First-time DB initialisation =======================================
 Write-Step "Initialising the Odoo database (first run only)"

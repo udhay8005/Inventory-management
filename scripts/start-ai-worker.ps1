@@ -24,10 +24,16 @@
 
 .PARAMETER User
     Odoo login the worker authenticates as. Needs read access to
-    stock.move + write to wms.forecast. Default: admin.
+    stock.move + write to wms.forecast. REQUIRED -- pass via -User or
+    set ODOO_USER in .env. The script refuses to start as 'admin' or any
+    other known placeholder (the worker must run as a low-privilege
+    service account so its XML-RPC calls inherit minimal scope).
 
 .PARAMETER Password
-    Odoo password for -User. Default: admin (or ODOO_USER_PASSWORD from .env).
+    Odoo password for -User. REQUIRED -- pass via -Password or set
+    ODOO_USER_PASSWORD in .env (the worker itself reads ODOO_PASSWORD;
+    the script maps one to the other). Placeholders like 'changeme*',
+    'admin', or 'password' are rejected at startup.
 
 .PARAMETER IntervalHours
     Hours between retraining cycles. Default: 6.
@@ -69,6 +75,7 @@ if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
         if ($_ -match '^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.+?)\s*$') {
             $name = $matches[1]; $value = $matches[2]
+            if ($value -match '^"(.*)"$' -or $value -match "^'(.*)'$") { $value = $matches[1] }
             if (-not [Environment]::GetEnvironmentVariable($name)) {
                 Set-Item -Path "env:$name" -Value $value
             }
@@ -76,19 +83,70 @@ if (Test-Path $EnvFile) {
     }
 }
 
-# Apply CLI overrides + sane defaults. The worker reads ODOO_URL / ODOO_DB
-# / ODOO_USER / ODOO_PASSWORD / FORECAST_INTERVAL_HOURS, so we wire those.
-# Note: .env uses ODOO_USER_PASSWORD for the password (matches old docker
-# compose env-var mapping); the worker itself reads ODOO_PASSWORD. Map it.
-if ($OdooUrl)       { $env:ODOO_URL = $OdooUrl }       elseif (-not $env:ODOO_URL)      { $env:ODOO_URL = 'http://localhost:8069' }
-if ($DbName)        { $env:ODOO_DB = $DbName }         elseif (-not $env:ODOO_DB)       { $env:ODOO_DB = 'wms' }
-if ($User)          { $env:ODOO_USER = $User }         elseif (-not $env:ODOO_USER)     { $env:ODOO_USER = 'admin' }
-if ($Password)      { $env:ODOO_PASSWORD = $Password } elseif (-not $env:ODOO_PASSWORD) {
-    # Fall back to .env's ODOO_USER_PASSWORD (docker-compose convention).
-    $env:ODOO_PASSWORD = if ($env:ODOO_USER_PASSWORD) { $env:ODOO_USER_PASSWORD } else { 'admin' }
+# Placeholder detector mirrors install-native.ps1's. Kept inline (not
+# extracted into a shared module) so this script stays self-contained --
+# the cost of duplication here is one 8-line function; the benefit is
+# zero coupling, instant revert.
+$Script:PlaceholderPatterns = @(
+    '^$',
+    '^changeme.*',
+    '^admin$',
+    '^password$',
+    '^local_master_pw$',
+    '^example.*',
+    '^test$',
+    '^demo$',
+    '^secret$',
+    '^pass$'
+)
+function Test-IsPlaceholderSecret {
+    param([string]$Value)
+    if (-not $Value) { return $true }
+    foreach ($pat in $Script:PlaceholderPatterns) {
+        if ($Value -match $pat) { return $true }
+    }
+    return $false
+}
+
+# Apply CLI overrides, then resolve .env values. NO admin/admin fallback:
+# the worker MUST run as a dedicated low-privilege Odoo user, because it
+# connects via XML-RPC with whatever permissions that user has -- if it
+# runs as admin, every controller it hits bypasses every ACL.
+if ($OdooUrl) { $env:ODOO_URL = $OdooUrl } elseif (-not $env:ODOO_URL) { $env:ODOO_URL = 'http://localhost:8069' }
+if ($DbName)  { $env:ODOO_DB  = $DbName  } elseif (-not $env:ODOO_DB)  { $env:ODOO_DB  = 'wms' }
+if ($User)    { $env:ODOO_USER = $User }
+if ($Password) {
+    $env:ODOO_PASSWORD = $Password
+} elseif (-not $env:ODOO_PASSWORD) {
+    # .env uses ODOO_USER_PASSWORD (docker-compose convention); worker reads ODOO_PASSWORD.
+    if ($env:ODOO_USER_PASSWORD) { $env:ODOO_PASSWORD = $env:ODOO_USER_PASSWORD }
 }
 if ($IntervalHours -gt 0) { $env:FORECAST_INTERVAL_HOURS = "$IntervalHours" }
 elseif (-not $env:FORECAST_INTERVAL_HOURS) { $env:FORECAST_INTERVAL_HOURS = '6' }
+
+# Hard fail on missing or placeholder credentials. The worker must not
+# start with 'admin'/'admin' even in dev, because the env-var leak path
+# from a worker process to a misconfigured production install is the kind
+# of footgun that erases the entire two-role ACL design.
+if (Test-IsPlaceholderSecret $env:ODOO_USER) {
+    Write-Host ""
+    Write-Host "ERROR: ODOO_USER is missing or a known placeholder ('admin', 'changeme*', etc.)." -ForegroundColor Red
+    Write-Host "       The AI worker must run as a dedicated service user with minimal scope." -ForegroundColor Yellow
+    Write-Host "       Create one in Odoo (Settings -> Users), then set in .env:" -ForegroundColor Yellow
+    Write-Host "           ODOO_USER=svc_ai_forecast" -ForegroundColor White
+    Write-Host "       Override per-invocation with -User <name>." -ForegroundColor DarkGray
+    exit 1
+}
+if (Test-IsPlaceholderSecret $env:ODOO_PASSWORD) {
+    Write-Host ""
+    Write-Host "ERROR: ODOO_PASSWORD is missing or a known placeholder." -ForegroundColor Red
+    Write-Host "       Set in .env (the worker reads ODOO_USER_PASSWORD):" -ForegroundColor Yellow
+    Write-Host "           ODOO_USER_PASSWORD=<32+ random chars, no whitespace>" -ForegroundColor White
+    Write-Host "       Generate with:" -ForegroundColor Yellow
+    Write-Host "           -join ((1..32) | %{ '{0:x}' -f (Get-Random -Min 0 -Max 16) })" -ForegroundColor DarkGray
+    Write-Host "       Override per-invocation with -Password <pw>." -ForegroundColor DarkGray
+    exit 1
+}
 
 Write-Host "Starting AI forecast worker:" -ForegroundColor Cyan
 Write-Host "    Odoo URL:    $env:ODOO_URL" -ForegroundColor Gray

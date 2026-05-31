@@ -7,7 +7,7 @@
             <field name="model">wms.zone.generator</field>
             <field name="arch" type="xml">
                 <form string="Generate Zone">
-                    <div class="alert alert-info" role="alert">
+                    <div class="alert alert-info">
                         A <b>Zone</b> groups racks and floor areas under a
                         single named umbrella — e.g. "1st Floor",
                         "Ground Floor / East", "Outside Yard". Use this

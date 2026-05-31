@@ -99,19 +99,36 @@ Register-ScheduledTask -TaskName 'WMS nightly backup' -Action $action -Trigger $
 
 ### Restore
 
+> **Note:** Backups are encrypted with `BACKUP_PASSPHRASE` from `.env`. Losing
+> the passphrase = losing the backups. Store the passphrase OFF the server.
+
 ```powershell
 # Create an empty database first
 dropdb -U odoo -h localhost --if-exists wms_restore
 createdb -U odoo -h localhost wms_restore
 
-# Restore the dump
-pg_restore -U odoo -h localhost -d wms_restore -c .\backups\wms-20260520-091500.dump
-
-# Restore the filestore
-Expand-Archive .\backups\wms-20260520-091500-filestore.zip -DestinationPath .runtime\data\filestore\
+# Two-step encrypted restore: decrypts the .dump.gpg then runs pg_restore,
+# and expands the matching filestore archive.
+scripts\restore-native.ps1 `
+    -DumpFile .\backups\wms-20260520-091500.dump.gpg `
+    -TargetDb wms_restore
 ```
 
 Then start Odoo against `wms_restore` to verify before swapping over.
+
+### Restore drill
+
+A weekly drill verifies the latest backup is recoverable WITHOUT touching the production database. The drill decrypts the most recent `.dump.gpg`, runs `pg_restore --list` against it, and (optionally) restores into a throwaway `wms_drill_<timestamp>` database which is dropped on exit.
+
+```powershell
+# Cheap weekly check (TOC verification only):
+scripts\restore-drill.ps1
+
+# Quarterly: full restore into a drill DB:
+scripts\restore-drill.ps1 -DryRun:$false
+```
+
+See `docs/18-restore-drill.md` for the full runbook (scheduling, exit codes, troubleshooting).
 
 ## Running Odoo as a Windows service
 

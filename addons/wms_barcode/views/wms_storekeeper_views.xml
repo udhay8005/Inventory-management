@@ -105,7 +105,7 @@
                                 <field name="can_manage_catalog"
                                        widget="boolean_toggle"/>
                             </group>
-                            <div colspan="2" class="alert alert-info" role="alert">
+                            <div colspan="2" class="alert alert-info">
                                 Each tick maps to a specific Odoo group. To
                                 grant <b>finer</b> permissions (e.g. edit a
                                 custom report), add the user to that group

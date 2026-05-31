@@ -196,6 +196,18 @@ if ($LASTEXITCODE -ne 0) {
 try {
     Start-GpgPipe -Pass $Passphrase -InputFile $DumpPath -OutputFile $DumpEncPath
     Write-Host "    Database dumped + encrypted" -ForegroundColor Green
+    # Verify the dump is structurally restorable before we shred the
+    # plaintext. A truncated pg_dump may still produce a valid GPG
+    # envelope; this catches that class of silent corruption.
+    $tocOut = & pg_restore --list $DumpPath 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "pg_restore --list rejected the fresh dump ($LASTEXITCODE). Backup aborted."
+    }
+    $tocLines = ($tocOut | Measure-Object -Line).Lines
+    if ($tocLines -lt 100) {
+        throw "Fresh dump has only $tocLines TOC entries - expected 1000+. Backup aborted."
+    }
+    Write-Host "    pg_restore --list OK ($tocLines TOC entries)" -ForegroundColor Green
 } finally {
     # Always shred the plaintext dump - it's on disk for milliseconds.
     Remove-Item $DumpPath -Force -ErrorAction SilentlyContinue

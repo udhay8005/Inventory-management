@@ -321,6 +321,7 @@ class WmsAuditLine(models.Model):
         string="Slot",
         required=True,
         domain="[('usage', '=', 'internal')]",
+        ondelete="restrict",
     )
     product_id = fields.Many2one(
         "product.product",

@@ -182,7 +182,7 @@ Four built-in groups (Settings → Users & Companies → Groups, filtered by WMS
 
 | Group | Can | Cannot |
 |---|---|---|
-| **WMS / User** | Scan receipt, issue, internal transfer; view stock | Approve damage, edit racks |
+| **WMS / Store Keeper** | Scan receipt, issue, internal transfer; view stock | Approve damage, edit racks |
 | **WMS / Manager** | Everything WMS User can + cancel pickings, edit racks, run cycle count, see all reports | — |
 | **WMS / Repair Tech** | Start / finish repair, scrap from repair | Manage stock outside repair |
 | **WMS / Buyer** | View forecasts, create draft POs, see vendor data | Move stock |
@@ -192,8 +192,8 @@ Four built-in groups (Settings → Users & Companies → Groups, filtered by WMS
 | Role | Software group | Name in your org |
 |---|---|---|
 | Inventory In-charge | WMS / Manager | _______________ |
-| Receiver | WMS / User | _______________ |
-| Issuer / Despatcher | WMS / User | _______________ |
+| Receiver | WMS / Store Keeper | _______________ |
+| Issuer / Despatcher | WMS / Store Keeper | _______________ |
 | Repair Tech | WMS / Repair Tech | _______________ |
 | Buyer / Procurement | WMS / Buyer | _______________ |
 | Auditor | WMS / Manager (read-only sub-group if needed) | _______________ |
@@ -226,7 +226,7 @@ Before you onboard anyone:
 - [ ] Train the Issuer: complete one Scan Issue end-to-end with FIFO.
 - [ ] Run one mock damage + repair cycle so the team has muscle memory.
 - [ ] Set a daily 9am calendar reminder: "Yesterday's stock moves match physical?"
-- [ ] Schedule `./scripts/backup.sh` in Windows Task Scheduler — 02:00 daily.
+- [ ] Schedule `scripts\backup-native.ps1` in Windows Task Scheduler — 02:00 daily.
 - [ ] Print the responsibility table.
 
 That's the bar. Everything beyond is optimisation.

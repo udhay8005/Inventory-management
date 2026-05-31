@@ -1,5 +1,5 @@
-from odoo import api, fields, models
-from odoo.exceptions import ValidationError
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
 
 LOCATION_TYPES = [
     ("warehouse_view", "Warehouse view"),
@@ -357,6 +357,65 @@ class StockLocation(models.Model):
             plan.append((q, take))
             remaining -= take
         return plan, remaining
+
+    @api.ondelete(at_uninstall=False)
+    def _wms_block_delete_when_used(self):
+        """Refuse to delete a rack / compartment / slot / floor that still
+        holds stock or has move history. Tell the operator to archive
+        instead. Guards against an admin accidentally orphaning audit
+        history with one click on the standard form Delete button.
+        """
+        protected_types = {"rack", "compartment", "slot", "floor"}
+        Move = self.env["stock.move"].sudo()
+        for loc in self:
+            if loc.wms_location_type not in protected_types:
+                continue  # leave Odoo core paths untouched
+
+            # 1. Children still hanging off?
+            child_count = self.search_count([("location_id", "=", loc.id)])
+            if child_count:
+                raise UserError(
+                    _(
+                        "Cannot delete %(name)s - it still has %(n)d sub-location(s). "
+                        "Delete or archive them first (slot -> compartment -> rack)."
+                    )
+                    % {"name": loc.complete_name or loc.display_name, "n": child_count}
+                )
+
+            # 2. Live stock?
+            on_hand = sum(loc.quant_ids.mapped("quantity") or [0.0])
+            if on_hand > 0.001:
+                raise UserError(
+                    _(
+                        "Cannot delete %(name)s - it still holds %(qty).3f unit(s) "
+                        "across %(n)d quant(s). Issue, scrap, or transfer the stock "
+                        "first, then archive the location."
+                    )
+                    % {
+                        "name": loc.complete_name or loc.display_name,
+                        "qty": on_hand,
+                        "n": len(loc.quant_ids),
+                    }
+                )
+
+            # 3. Any move history? Then archive, do not delete.
+            history = Move.search_count(
+                [
+                    "|",
+                    ("location_id", "=", loc.id),
+                    ("location_dest_id", "=", loc.id),
+                ],
+                limit=1,
+            )
+            if history:
+                raise UserError(
+                    _(
+                        "Cannot delete %(name)s - it appears in past stock moves "
+                        "and the audit trail must be preserved. Tick 'Archived' "
+                        "on the location form instead (set active = False)."
+                    )
+                    % {"name": loc.complete_name or loc.display_name}
+                )
 
 
 def _shelf_label(top, bottom):
