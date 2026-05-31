@@ -6,6 +6,7 @@
 |---|---|
 | Daily | Verify `scripts\backup-native.ps1` ran (size sanity check on the latest .dump in `backups\`) |
 | Weekly | `cd .odoo && git pull origin 19.0 && cd .. && .venv\Scripts\pip install -r .odoo\requirements.txt --upgrade` then `scripts\start-native.ps1` to pick up Odoo CE security patches |
+| Weekly (Sunday 03:00) | Restore drill — verify latest backup is recoverable: `scripts\restore-drill.ps1` (see `docs/18-restore-drill.md`) |
 | Monthly | Restore-drill from a recent backup into a scratch DB (`pg_restore` into `wms_drill` and start Odoo against it briefly) |
 | Quarterly | Review `wms.forecast` accuracy report; retune safety stock |
 | Yearly | Major Odoo CE upgrade (see below) |
@@ -31,7 +32,9 @@ CREATE INDEX CONCURRENTLY idx_quant_fifo
   WHERE quantity > 0;
 ```
 
-We ship this index in `wms_fifo` migration `0001_initial.py`.
+We ship this index in `addons/wms_fifo/hooks.py:20-26` (created by the
+`post_init_hook` on first install). The same script is idempotent on
+re-runs, so re-installing `wms_fifo` will never duplicate the index.
 
 ## Forecast retraining
 

@@ -190,11 +190,13 @@ python .odoo\odoo-bin -c config\odoo.native.conf -d wms_test --test-enable --sto
 ## Backup / restore
 
 ```powershell
-scripts\backup-native.ps1            # Writes .\backups\wms-<timestamp>.dump + filestore zip
+scripts\backup-native.ps1            # Writes .\backups\wms-<timestamp>.dump.gpg + filestore zip
 
 # Restore — see docs/07-deployment.md
-pg_restore -U odoo -h localhost -d wms_new -c .\backups\wms-20260520-091500.dump
+scripts/restore-native.ps1 -BackupPath backups/wms-<timestamp>.dump.gpg
 ```
+
+A weekly restore drill (`scripts/restore-drill.ps1`) verifies the most recent encrypted backup is still recoverable - the drill never touches the production database. See `docs/18-restore-drill.md` for the runbook.
 
 ## CI / CD
 
