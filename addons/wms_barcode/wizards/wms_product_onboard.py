@@ -56,15 +56,23 @@ class WmsProductOnboard(models.TransientModel):
         database, so a 50th-row typo doesn't leave 49 half-saved
         products behind."""
         if not self.line_ids:
-            raise UserError(_("Add at least one product line before submitting."))
+            raise UserError(
+                _(
+                    "You haven't added any products yet. Add at least one "
+                    "product row (with name, kind, quantity, and slot) "
+                    "before you can submit."
+                )
+            )
         for line in self.line_ids:
             if not line.name:
                 raise UserError(_("Row %d: product name is required.") % (line._origin.id or 0))
             if not line.wms_product_kind:
                 raise UserError(
                     _(
-                        "Row %r: pick a WMS Kind so the system can choose the "
-                        "right SKU prefix (TOOL-, CONS-, ...)."
+                        "Row %r is missing a WMS Kind. Pick one (Tool, "
+                        "Consumable, Feed, Medicine, Pooja, Fluid) so the "
+                        "system can create the right SKU code starting with "
+                        "the right letters."
                     )
                     % line.name
                 )
@@ -74,8 +82,10 @@ class WmsProductOnboard(models.TransientModel):
             if line.initial_qty > 0 and not line.location_id:
                 raise UserError(
                     _(
-                        "Row %r: pick a slot (or scan its barcode) when "
-                        "initial quantity is > 0. Use 0 for catalog-only rows."
+                        "Row %r has a starting quantity, so it needs a slot "
+                        "to live in. Scan the slot barcode, or pick it from "
+                        "the list. If you only want this product in the "
+                        "catalog (no stock yet), set the quantity to 0."
                     )
                     % line.name
                 )
@@ -85,9 +95,10 @@ class WmsProductOnboard(models.TransientModel):
             if line.wms_product_kind in ("medicine", "feed") and not line.expiry_date:
                 raise UserError(
                     _(
-                        "Row %r is a %s product - the expiry date is "
-                        "required. Enter the date stamped on the supplier's "
-                        "label (or pack)."
+                        "Row %r is a %s product, and you must enter an "
+                        "expiry date from the supplier's label. This helps "
+                        "us use the oldest stock first (FEFO) and prevent "
+                        "spoilage."
                     )
                     % (
                         line.name,

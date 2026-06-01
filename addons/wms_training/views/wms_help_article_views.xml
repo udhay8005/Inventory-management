@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ============ Help Center: list / form / search ============ -->
+    <record id="view_wms_help_article_list" model="ir.ui.view">
+        <field name="name">wms.help.article.list</field>
+        <field name="model">wms.help.article</field>
+        <field name="arch" type="xml">
+            <list string="Help Center" create="0" edit="0" delete="0">
+                <field name="category"/>
+                <field name="name"/>
+                <field name="audience"/>
+                <field name="is_onboarding" string="Getting Started" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_wms_help_article_form" model="ir.ui.view">
+        <field name="name">wms.help.article.form</field>
+        <field name="model">wms.help.article</field>
+        <field name="arch" type="xml">
+            <form string="Help" create="0">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1><field name="name" placeholder="Article title"/></h1>
+                    </div>
+                    <group>
+                        <field name="category"/>
+                        <field name="audience"/>
+                        <field name="slug" groups="wms_location.group_wms_manager"/>
+                        <field name="is_onboarding"/>
+                        <field name="sequence" groups="wms_location.group_wms_manager"/>
+                        <field name="keywords" groups="wms_location.group_wms_manager"/>
+                    </group>
+                    <field name="body"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_wms_help_article_search" model="ir.ui.view">
+        <field name="name">wms.help.article.search</field>
+        <field name="model">wms.help.article</field>
+        <field name="arch" type="xml">
+            <search string="Search help">
+                <field name="name"
+                       filter_domain="['|','|',('name','ilike',self),('keywords','ilike',self),('body','ilike',self)]"
+                       string="Search the help center"/>
+                <filter name="onboarding" string="Getting Started" domain="[('is_onboarding','=',True)]"/>
+                <separator/>
+                <filter name="cat_term" string="What is this?" domain="[('category','=','terminology')]"/>
+                <filter name="cat_role" string="Role training" domain="[('category','=','role')]"/>
+                <filter name="cat_flow" string="Workflow tutorials" domain="[('category','=','workflow')]"/>
+                <filter name="cat_faq" string="FAQ" domain="[('category','=','faq')]"/>
+                <filter name="cat_trouble" string="Troubleshooting" domain="[('category','=','troubleshooting')]"/>
+                <filter name="cat_safety" string="Safety" domain="[('category','=','safety')]"/>
+                <separator/>
+                <filter name="for_keeper" string="For Store Keepers" domain="[('audience','in',['all','keeper'])]"/>
+                <filter name="for_admin" string="For Admins" domain="[('audience','in',['all','admin'])]"/>
+                <separator/>
+                <filter name="group_category" string="Category" context="{'group_by':'category'}"/>
+                <filter name="group_audience" string="Audience" context="{'group_by':'audience'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ============ Actions ============ -->
+    <record id="action_wms_help_center" model="ir.actions.act_window">
+        <field name="name">Help Center</field>
+        <field name="res_model">wms.help.article</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_wms_help_article_search"/>
+        <field name="context">{'search_default_group_category': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Welcome to the WMS Help Center</p>
+            <p>Search any term ("FIFO", "compartment", "why is this blocked?") or
+               browse by category. New here? Start with <b>Getting Started</b>.</p>
+        </field>
+    </record>
+
+    <record id="action_wms_getting_started" model="ir.actions.act_window">
+        <field name="name">Getting Started</field>
+        <field name="res_model">wms.help.article</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('is_onboarding','=',True)]</field>
+        <field name="search_view_id" ref="view_wms_help_article_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Welcome! Let's get you started.</p>
+            <p>These short guides walk you through the basics. Open each one in
+               order — they use plain language and real examples.</p>
+        </field>
+    </record>
+
+    <!-- ============ Menus (visible to every internal user) ============ -->
+    <menuitem id="menu_wms_training_root"
+              name="Help &amp; Training"
+              sequence="6"
+              groups="base.group_user"/>
+
+    <menuitem id="menu_wms_getting_started"
+              name="Getting Started"
+              parent="menu_wms_training_root"
+              action="action_wms_getting_started"
+              sequence="1"/>
+
+    <menuitem id="menu_wms_help_center"
+              name="Help Center"
+              parent="menu_wms_training_root"
+              action="action_wms_help_center"
+              sequence="2"/>
+</odoo>

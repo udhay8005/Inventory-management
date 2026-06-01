@@ -59,6 +59,23 @@ class TestAuditTrailInvariant(TransactionCase):
                         ("done", pk.id),
                     )
 
+    def test_db_check_fires_when_legacy_is_null(self):
+        """Regression (found in live UAT): a NULL wms_audit_legacy — which
+        a raw SQL INSERT leaves behind because Odoo applies default=False
+        only via the ORM — must STILL trip the CHECK. Without COALESCE in
+        the constraint the OR resolves to NULL and PostgreSQL passes it,
+        silently defeating the SQL-bypass protection."""
+        pk = self._make_picking("Barcode FIFO-NULL-001")
+        # Simulate the raw-INSERT path that omits the column.
+        self.env.cr.execute("UPDATE stock_picking SET wms_audit_legacy=NULL WHERE id=%s", (pk.id,))
+        with mute_logger("odoo.sql_db"):
+            with self.assertRaises(IntegrityError):
+                with self.env.cr.savepoint():
+                    self.env.cr.execute(
+                        "UPDATE stock_picking SET state=%s WHERE id=%s",
+                        ("done", pk.id),
+                    )
+
     def test_db_check_allows_non_barcode_origin(self):
         """Non-WMS pickings (PO-..., MO-..., manual entry) are not
         subject to the audit triplet — the CHECK condition short-circuits

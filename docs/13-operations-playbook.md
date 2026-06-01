@@ -32,12 +32,15 @@ Already complete:
 ```
 Warehouse (YourCompany)
   └─ Stock (WH/Stock)
-       └─ Rack R-01 .. R-32
-            └─ Level L-1 .. L-6
-                 └─ Divider D-1 .. D-4
-                      └─ Slot S-1 .. S-3   ← 2,304 unique stocking locations
+       └─ Rack R-01 ..            (a shelf × column grid, default 6 × 3)
+            └─ Compartment        (a 2D rectangle on that grid)
+                 └─ Slot          (holds stock; 1+ slots per compartment)
 ```
-- Each slot has its own auto-generated barcode like `R-12-L3-D2-S1`.
+- The hierarchy is 3 levels: Rack → Compartment → Slot. "Shelf" and
+  "Column" are grid coordinates, not separate location records. Floor /
+  open-area zones (`wms_location_type = floor`) hold stock directly.
+- Each slot has its own auto-generated barcode; total slot count depends
+  on each rack's grid + how compartments are laid out (not a fixed number).
 - Visual heat-map per rack at `/wms/rack/<id>/grid`.
 
 ### Physical alignment

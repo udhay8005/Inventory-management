@@ -182,6 +182,75 @@ function Start-GpgPipe {
     }
 }
 
+# --- Observability: heartbeat + backup-audit helpers --------------------
+# Both are FAILURE-SAFE by design: a heartbeat or audit-write problem must
+# NEVER abort or fail a backup. They degrade silently to a DarkGray note.
+$BackupStart = Get-Date
+$script:ObsBackupOk = $false
+
+# Optional healthchecks.io-style heartbeat URL, read from .env. Blank =
+# heartbeats disabled (no external dependency).
+$HeartbeatUrl = ''
+if (Test-Path $EnvPath) {
+    $hb = (Select-String -Path $EnvPath -Pattern '^HEALTHCHECK_BACKUP_URL=(.+)$' | Select-Object -First 1)
+    if ($hb) { $HeartbeatUrl = $hb.Matches.Groups[1].Value.Trim() }
+}
+
+function Send-Heartbeat {
+    # Non-blocking, 10s-timeout ping. Appends /fail for failure signals.
+    # Silent on any error - observability must never break the backup.
+    param([string]$Url, [switch]$Fail)
+    if (-not $Url) { return }
+    $target = if ($Fail) { "$Url/fail" } else { $Url }
+    try {
+        Invoke-WebRequest -Uri $target -Method Get -TimeoutSec 10 -UseBasicParsing | Out-Null
+    } catch {
+        Write-Host "    [warn] heartbeat ping failed (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
+}
+
+function Write-BackupAudit {
+    # Append one row to wms_backup_audit via psql. Failure-safe: if the
+    # table doesn't exist (wms_reports not installed) or the DB is
+    # unreachable, log a note and continue. No secrets are written.
+    param(
+        [string]$AuditType, [bool]$Success, [string]$FileName,
+        [double]$SizeMb = 0, [int]$TocEntries = 0, [bool]$Verified = $false,
+        [double]$DurationSeconds = 0, [string]$Checksum = '', [string]$Message = ''
+    )
+    try {
+        $sk = if ($Success)  { 'true' } else { 'false' }
+        $vf = if ($Verified) { 'true' } else { 'false' }
+        # Escape single quotes for SQL string literals (no user input here,
+        # but defensive). NOW() stamps event_time; create/write_uid = admin.
+        $fn  = ($FileName -replace "'", "''")
+        $msg = ($Message  -replace "'", "''")
+        $cs  = ($Checksum -replace "'", "''")
+        $hn  = ($env:COMPUTERNAME -replace "'", "''")
+        $sql = "INSERT INTO wms_backup_audit (name, audit_type, success, event_time, duration_seconds, size_mb, toc_entries, verified, checksum, host, message, create_uid, create_date, write_uid, write_date) VALUES ('$fn', '$AuditType', $sk, NOW(), $DurationSeconds, $SizeMb, $TocEntries, $vf, '$cs', '$hn', '$msg', 1, NOW(), 1, NOW());"
+        $sql | & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -v ON_ERROR_STOP=1 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "    [audit] recorded $AuditType in wms_backup_audit" -ForegroundColor DarkGray
+        } else {
+            Write-Host "    [warn] backup audit not recorded (is wms_reports installed?)" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "    [warn] backup audit write failed (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
+}
+
+# Failure-path observability: any terminating error pings /fail + logs a
+# failed audit row, then re-raises (break) so the exit code is unchanged.
+trap {
+    if (-not $script:ObsBackupOk) {
+        Send-Heartbeat -Url $HeartbeatUrl -Fail
+        Write-BackupAudit -AuditType 'backup_db' -Success $false -FileName "$DbName-$Stamp" `
+            -DurationSeconds ((Get-Date) - $BackupStart).TotalSeconds `
+            -Message "Backup failed: $($_.Exception.Message)"
+    }
+    break
+}
+
 # --- 1. Database dump (encrypted) ---------------------------------------
 $DumpPath    = Join-Path $BackupDir "$DbName-$Stamp.dump"
 $DumpEncPath = "$DumpPath.gpg"
@@ -208,6 +277,14 @@ try {
         throw "Fresh dump has only $tocLines TOC entries - expected 1000+. Backup aborted."
     }
     Write-Host "    pg_restore --list OK ($tocLines TOC entries)" -ForegroundColor Green
+    # Record the successful DB-backup event (failure-safe).
+    $dbSizeMb = [math]::Round((Get-Item $DumpEncPath).Length / 1MB, 2)
+    $dbHash = (Get-FileHash $DumpEncPath -Algorithm SHA256).Hash
+    Write-BackupAudit -AuditType 'backup_db' -Success $true `
+        -FileName (Split-Path -Leaf $DumpEncPath) -SizeMb $dbSizeMb `
+        -TocEntries $tocLines -Verified $true `
+        -DurationSeconds ((Get-Date) - $BackupStart).TotalSeconds `
+        -Checksum $dbHash -Message "OK"
 } finally {
     # Always shred the plaintext dump - it's on disk for milliseconds.
     Remove-Item $DumpPath -Force -ErrorAction SilentlyContinue
@@ -224,12 +301,23 @@ if (Test-Path $Filestore) {
     try {
         Start-GpgPipe -Pass $Passphrase -InputFile $ZipPath -OutputFile $ZipEncPath
         Write-Host "    Filestore archived + encrypted" -ForegroundColor Green
+        $fsSizeMb = [math]::Round((Get-Item $ZipEncPath).Length / 1MB, 2)
+        $fsHash = (Get-FileHash $ZipEncPath -Algorithm SHA256).Hash
+        Write-BackupAudit -AuditType 'backup_filestore' -Success $true `
+            -FileName (Split-Path -Leaf $ZipEncPath) -SizeMb $fsSizeMb -Verified $true `
+            -Checksum $fsHash -Message "OK"
     } finally {
         Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
     }
 } else {
     Write-Host "    [warn] Filestore not found at $Filestore (skipped)" -ForegroundColor Yellow
 }
+
+# Backup artifacts are written + verified. Mark success BEFORE retention so
+# a retention hiccup can't trigger a false failure alert, and send the
+# success heartbeat now.
+$script:ObsBackupOk = $true
+Send-Heartbeat -Url $HeartbeatUrl
 
 # --- 3. Retention -------------------------------------------------------
 Write-Host "Applying retention (keep last $Retain)" -ForegroundColor Cyan

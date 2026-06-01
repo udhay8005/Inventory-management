@@ -109,14 +109,22 @@ class WmsRackGenerator(models.TransientModel):
             try:
                 spec = json.loads(self.layout_json)
             except json.JSONDecodeError as exc:
-                raise UserError("Invalid layout JSON: %s" % exc) from exc
+                raise UserError(
+                    "The custom layout file isn't formatted correctly. "
+                    "Ask a Manager to re-generate the layout using the "
+                    "Visual builder, or fix the JSON file syntax if you're "
+                    "uploading a custom one. (Details: %s)" % exc
+                ) from exc
             spec.setdefault("rack_code", self.rack_code)
             spec.setdefault("rack_name", self.rack_name or self.rack_code)
             spec.setdefault("parent_location_id", self.parent_location_id.id)
             return self._validate_spec(spec)
 
         if self.shelf_count < 1 or self.column_count < 1:
-            raise UserError("Shelves and columns must both be at least 1.")
+            raise UserError(
+                "You must have at least 1 shelf and 1 column on the rack. "
+                "Enter numbers like 6 shelves x 3 columns (the usual setup)."
+            )
         if self.default_slot_count < 1:
             raise UserError("Slots per compartment must be at least 1.")
 
@@ -166,7 +174,10 @@ class WmsRackGenerator(models.TransientModel):
         shelves = int(spec["shelves"])
         columns = int(spec["columns"])
         if shelves < 1 or columns < 1:
-            raise UserError("Shelves and columns must both be at least 1.")
+            raise UserError(
+                "You must have at least 1 shelf and 1 column on the rack. "
+                "Enter numbers like 6 shelves x 3 columns (the usual setup)."
+            )
 
         # 2D coverage matrix indexed by (shelf, column). Every cell
         # can only be owned by one compartment.
