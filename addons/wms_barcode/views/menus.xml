@@ -36,20 +36,22 @@
                   sequence="30"/>
 
         <!--
-            Onboard Products wizard.
+            Onboard Products wizard — adds catalog rows + initial stock.
 
-            Lives under Operations (where the daily flow is) rather
-            than Configuration, because trustees onboard new items
-            multiple times a week as the trust grows. Sequence 5 so
-            it sits at the very top of Operations - the first thing
-            the Admin needs is to GET items into the system, then
-            Scan Receipt / Issue work on them.
+            Lives under Configuration (alongside Generate Zone / Create Rack)
+            because it is a SETUP wizard, not daily warehouse work, and it
+            opens as a modal (target=new). When it was the lowest-sequence
+            child of Operations, an Admin clicking the WMS app icon fell
+            straight through into a modal over an unrelated page — confusing
+            UX. With it here, clicking WMS lands cleanly on Operations -> Slots
+            (a real page), and Admins still find Onboard Products easily
+            under Configuration when adding new items.
         -->
         <menuitem id="menu_wms_product_onboard"
                   name="Onboard Products"
-                  parent="wms_location.menu_wms_operations"
+                  parent="wms_location.menu_wms_config"
                   action="action_wms_product_onboard"
                   groups="wms_location.group_wms_manager"
-                  sequence="5"/>
+                  sequence="35"/>
     </data>
 </odoo>
