@@ -1,0 +1,1819 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="help_welcome" model="wms.help.article">
+            <field name="slug">welcome</field>
+            <field name="name">Welcome to the Warehouse System</field>
+            <field name="category">role</field>
+            <field name="audience">all</field>
+            <field name="sequence">10</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">welcome start begin help getting started</field>
+            <field name="body" type="html"><div>
+                    <p>Welcome! This system keeps track of everything the trust buys and uses — feed, medicine, ghee for pooja, tools.</p>
+                    <p><b>New here?</b> Open the guides below in order. They use plain language and real examples.</p>
+                    <ul>
+                    <li>Stuck on a word? Search the <b>Help Center</b> (try "FIFO" or "compartment").</li>
+                    <li>See a hint under a field? That is here to help — read it before you type.</li>
+                    <li><b>Beginner Mode</b> is ON for you, so you will see extra guidance. You can turn it off in your Preferences once you are comfortable.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_fifo" model="wms.help.article">
+            <field name="slug">what-is-fifo</field>
+            <field name="name">FIFO — First In, First Out</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">101</field>
+            <field name="keywords">fifo, first in first out, oldest stock, in_date, issue, rotation</field>
+            <field name="body" type="html"><div>
+                    <p><b>FIFO means the oldest stock leaves the shelf first.</b></p>
+                    <p>When you issue an item, the system looks at <i>when each batch arrived</i> (its "in-date") and gives you the oldest one first.</p>
+                    <p><b>Why it matters</b> Stock that sits too long goes stale, rusts, or gets forgotten at the back of a rack. FIFO keeps things moving in the order they came in, so nothing rots while newer stock gets used.</p>
+                    <p><b>Real trust example</b> You have two sacks of cattle feed: one received in January, one in March. When a helper does a Scan Issue, the system points them to the <b>January</b> sack first. The older feed gets used while it's still good, and the March sack waits its turn.</p>
+                    <p><b>Good to know</b> FIFO is the normal rule for most items. For things that can expire (medicine, feed, fluids, pooja items), the system uses a smarter rule called <b>FEFO</b> instead — see that article.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_fefo" model="wms.help.article">
+            <field name="slug">what-is-fefo</field>
+            <field name="name">FEFO — First Expiry, First Out</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">102</field>
+            <field name="keywords">fefo, first expiry first out, expiry, medicine, feed, pooja, expiry date</field>
+            <field name="body" type="html"><div>
+                    <p><b>FEFO means the item that expires soonest leaves the shelf first</b> — even if a different batch arrived earlier.</p>
+                    <p>The system uses FEFO automatically for anything that can go bad: <b>medicine, feed, fluids, and pooja items</b>, or any product that has an expiry date set.</p>
+                    <p><b>Why it matters</b> With ordinary FIFO you ship the <i>oldest-arrived</i> item. But a batch that arrived first might expire <i>later</i> than a batch that arrived second. FEFO fixes that: the soonest-to-expire goes out first, so medicine and feed are never wasted sitting on the shelf past their date.</p>
+                    <p><b>Real trust example</b> FEFO means the bottle of calcium that expires first leaves the shelf first — so medicine never expires unused. If you have one calcium batch expiring December 2026 and a newer-looking batch expiring June 2027, FEFO still hands you the <b>December</b> batch first.</p>
+                    <p><b>Clever detail</b> FEFO even looks across <i>different batches of the same product name</i>. If two deliveries of "Calcium Bolus" sit in different slots, the wizard will pull from the earlier-expiring slot first and tell you which slot to pick from.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_rack" model="wms.help.article">
+            <field name="slug">what-is-a-rack</field>
+            <field name="name">Rack</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">103</field>
+            <field name="keywords">rack, shelving, grid, shelf, column, storage, R01</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Rack is one shelving unit</b> — like a single bookcase standing against the wall.</p>
+                    <p>Each rack is laid out as a grid of <b>shelves</b> (the horizontal rows) and <b>columns</b> (the vertical strips). A new rack defaults to <b>6 shelves tall and 3 columns wide</b>, but you can set any size.</p>
+                    <p><b>Why it matters</b> The rack is the top of the storage map. Every item ultimately lives somewhere on a rack's grid, so giving each rack a clear code (like <code>R01</code> or <code>PHARM01</code>) is how a helper knows <i>which</i> piece of furniture to walk to.</p>
+                    <p><b>Real trust example</b> In the medicine room you might have a rack coded <code>PHARM01</code>. On its label-printed barcode it shows as <code>R-PHARM01</code>. A helper scans or reads that to confirm they're at the right rack before looking for the exact shelf and column.</p>
+                    <p><b>Remember the family</b> A Rack holds <b>Compartments</b>, and a Compartment holds <b>Slots</b>. So the full address of any item is: Rack → Compartment → Slot.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_compartment" model="wms.help.article">
+            <field name="slug">what-is-a-compartment</field>
+            <field name="name">Compartment</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">104</field>
+            <field name="keywords">compartment, shelf column rectangle, grid, cubby, divider, SH01 C01</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Compartment is a rectangle on the rack's grid</b> — one cubby, drawer, or boxed-off area where you actually put stock.</p>
+                    <p>A compartment sits at a shelf-and-column position. It can be a single cell (<code>SH01 C01</code>), tall across several shelves (<code>SH01-03 C01</code>, good for tall bottles), wide across several columns (<code>SH01 C01-03</code>, good for a wide drawer), or a whole block (<code>SH01-03 C01-03</code>, a corner cabinet).</p>
+                    <p><b>Why it matters</b> The compartment is how you turn a big rack into clearly labelled spaces so two people store and find things the same way. "Shelf" and "column" are just grid coordinates — the compartment is the real spot.</p>
+                    <p><b>Real trust example</b> On rack <code>PHARM01</code>, the calcium bottles live in compartment <code>PHARM01 / SH01-03 / C01</code> — a tall compartment spanning the top three shelves of the first column. Its name always starts with the rack code so it's never confused with a <code>C01</code> on a different rack.</p>
+                    <p><b>Note</b> A compartment must sit inside a Rack, and it contains one or more <b>Slots</b> (usually just one).</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_slot" model="wms.help.article">
+            <field name="slug">what-is-a-slot</field>
+            <field name="name">Slot</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">105</field>
+            <field name="keywords">slot, bin, location, holds stock, SL01, smallest unit</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Slot is the smallest storage spot — the exact place the stock physically sits.</b> It's the bottom of the storage map.</p>
+                    <p>Most compartments have just <b>one slot</b> (the compartment <i>is</i> the slot). But a compartment can be split into several slots if you want to subdivide it — slot 1, slot 2, and so on.</p>
+                    <p><b>Why it matters</b> The slot is what the system actually counts stock against. When you receive, issue, or count an item, you're really pointing at a slot. Its full name reads like an address: <code>PHARM01 / SH01-03 / C01 / SL01</code>.</p>
+                    <p><b>Real trust example</b> When a helper does a Scan Issue for calcium, the wizard tells them the exact slot to pick from: "take 2 from <code>PHARM01 / SH01-03 / C01 / SL01</code>." No guessing which shelf — the slot name walks them straight to it.</p>
+                    <p><b>Also good to know</b> Stock can also sit in a <b>Floor / Open area</b> (see that article) instead of a rack slot — for sacks, pallets, or yard items that don't fit on shelving.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_zone" model="wms.help.article">
+            <field name="slug">what-is-a-zone</field>
+            <field name="name">Zone</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">106</field>
+            <field name="keywords">zone, building, area, floor, group of racks, room</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Zone is a big area that groups several racks together</b> — like a room, a building, or a section of the shed.</p>
+                    <p>A zone doesn't hold stock itself. It's a label for a region so the racks inside it are organised and easy to find.</p>
+                    <p><b>Why it matters</b> As the trust grows, you may have racks in the medicine room, the feed store, and the tool shed. Zones let you say "everything in the Pharmacy Zone" or "everything in the Feed Store Zone" instead of hunting rack by rack.</p>
+                    <p><b>Real trust example</b> You might create a <b>Pharmacy Zone</b> that contains racks <code>PHARM01</code> and <code>PHARM02</code>, and a separate <b>Feed Store Zone</b> for the feed racks. A new helper learning the layout first finds the right zone (room), then the rack, then the compartment and slot.</p>
+                    <p><b>Tip</b> Zones, racks, compartments, and slots are all set up by an Admin using the WMS Configuration menu (Create Rack / Generate Zones).</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_floor_location" model="wms.help.article">
+            <field name="slug">what-is-a-floor-location</field>
+            <field name="name">Floor / Open area location</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">107</field>
+            <field name="keywords">floor, open area, pallet, yard, sacks, bulk, open storage</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Floor location is open-area storage</b> — a pallet spot, a floor stack, or an outside yard bay where stock sits directly on the ground, <i>not</i> on rack shelving.</p>
+                    <p><b>Why it matters</b> Not everything fits in a neat rack compartment. Big sacks of feed, drums of fluid, or bulky tools often live on the floor or on a pallet. A floor location lets the system track that stock just like a slot does.</p>
+                    <p><b>Real trust example</b> Twenty sacks of cattle feed arrive and won't fit on a shelf, so they go on a pallet in the feed store. That pallet is a <b>Floor</b> location. When a helper receives or issues feed, the system can point to the floor area exactly the way it points to a rack slot — and FIFO/FEFO still work.</p>
+                    <p><b>Good to know</b> Floor locations behave the same as slots for receiving, issuing, counting (cycle count), damage, and repair. The difference is only that there's no compartment/shelf/column above them — stock lands there directly.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_quant" model="wms.help.article">
+            <field name="slug">what-is-a-quant</field>
+            <field name="name">Quant</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">108</field>
+            <field name="keywords">quant, quantity record, stock at a location, on hand, in_date, batch</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Quant is one line of "this much of this product is sitting in this spot."</b> It's how the system records stock.</p>
+                    <p>Each quant remembers four things: <b>which product</b>, <b>which slot (or floor)</b>, <b>how many</b>, and <b>when it arrived</b> (the in-date).</p>
+                    <p><b>Why it matters</b> Quants are the truth about your stock. Every count on a report, every FIFO pick, every "on-hand" number comes from adding up quants. You don't usually create quants by hand — they appear automatically when you receive, issue, or move stock.</p>
+                    <p><b>Real trust example</b> After receiving feed, the system creates a quant like: <i>product = Cattle Feed, slot = Feed Store pallet, quantity = 20 sacks, in-date = 1 June</i>. If a second delivery lands in March, that's a <b>second quant</b> for the same product — and FIFO uses each quant's in-date to decide which sack goes out first.</p>
+                    <p><b>Plain version</b> Think of a quant as one sticky note on one pile of stock, saying what it is, how much, and when it got here.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_reserved_quantity" model="wms.help.article">
+            <field name="slug">what-is-reserved-quantity</field>
+            <field name="name">Reserved quantity</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">109</field>
+            <field name="keywords">reserved, reserved quantity, allocated, set aside, free to use, in-flight issue</field>
+            <field name="body" type="html"><div>
+                    <p><b>Reserved quantity is stock that's already been promised to an in-progress job</b> — it's still physically on the shelf, but it's spoken for.</p>
+                    <p>The stock you can <i>actually</i> take = <b>on-hand minus reserved</b> (the "free" amount).</p>
+                    <p><b>Why it matters</b> Without reservations, two helpers could grab the same units at the same time and the counts would go wrong. Reserving stock for an in-flight Scan Issue keeps everyone honest about what's truly available.</p>
+                    <p><b>Real trust example</b> A slot shows 5 bottles of medicine on-hand. One helper has started a Scan Issue for 3 bottles, so <b>3 are reserved</b>. If you then try to file a Damage for 4 bottles from that slot, the system stops you: only <b>2 are free</b> right now. You either wait for the first issue to finish or reduce your quantity.</p>
+                    <p><b>Plain version</b> On-hand = everything on the shelf. Reserved = the part already claimed. Free = what's left for you.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_on_hand" model="wms.help.article">
+            <field name="slug">what-is-on-hand</field>
+            <field name="name">On-hand quantity</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">110</field>
+            <field name="keywords">on hand, on-hand, current stock, available, total quantity, count</field>
+            <field name="body" type="html"><div>
+                    <p><b>On-hand is how many units are physically present right now</b> — the total sitting in a slot, a rack, or the whole warehouse.</p>
+                    <p><b>Why it matters</b> On-hand is the number you check before issuing, ordering, or counting. But be careful: on-hand includes stock that may already be <b>reserved</b> for another job. The amount you can freely take is <b>on-hand minus reserved</b>.</p>
+                    <p><b>Real trust example</b> A helper opens the calcium product and sees <b>on-hand = 5</b>. That's five bottles in the building. If three are already reserved for someone else's issue, only two are free to grab today. The location screen also shows on-hand per slot, so you can see exactly where those five bottles are split across racks.</p>
+                    <p><b>Watch out for damaged/repair stock</b> Items moved to the Damage or Repair area are no longer counted as usable on-hand — so the number you see for "what's available to issue" stays honest.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_in_date" model="wms.help.article">
+            <field name="slug">what-is-in-date</field>
+            <field name="name">In-date (arrival date)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">111</field>
+            <field name="keywords">in date, in_date, arrival date, received date, age, fifo key</field>
+            <field name="body" type="html"><div>
+                    <p><b>The In-date is the date and time a batch of stock arrived in the warehouse.</b> The system stamps it automatically the moment you receive an item.</p>
+                    <p><b>Why it matters</b> The in-date is what makes <b>FIFO</b> work. To send the oldest stock out first, the system simply sorts by in-date and picks the earliest. It's also used to spot stock that has been sitting untouched for a long time.</p>
+                    <p><b>Real trust example</b> Two sacks of feed: one with in-date 1 January, one with in-date 1 March. When a helper issues feed, FIFO reads the in-dates and hands them the <b>January</b> sack first. Nobody has to remember which arrived first — the in-date does it.</p>
+                    <p><b>Good to know</b></p>
+                    <ul>
+                    <li>You don't type the in-date yourself; it's set when stock is received.</li>
+                    <li>For items that expire, the system prefers the <b>expiry date</b> over the in-date (that's FEFO). The in-date is the tie-breaker when two batches share an expiry.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_sku" model="wms.help.article">
+            <field name="slug">what-is-a-sku</field>
+            <field name="name">SKU — Stock Keeping Unit</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">112</field>
+            <field name="keywords">sku, stock keeping unit, internal reference, product code, naming, category-item-variant</field>
+            <field name="body" type="html"><div>
+                    <p><b>A SKU is the short code that names a product</b> — the trust's permanent nickname for one exact item.</p>
+                    <p>The trust's format is <code>CATEGORY-ITEM-VARIANT</code>, always UPPERCASE, letters/numbers/hyphen only, 20 characters or fewer. Examples: <code>RM-ASH-001</code>, <code>PK-JAR-500</code>, <code>TOOL-DRILL-18V</code>, <code>SPARE-BLT-M4</code>.</p>
+                    <p><b>Why it matters</b> Names change and get messy ("Soap (new)", "soap big"). A SKU never changes, so searching, counting, ordering, and 5-year-old records all still line up. The first part also tells you what kind of thing it is: <code>RM</code> raw material, <code>FL</code> fluid, <code>TOOL</code> tool, <code>SPARE</code> spare part, and so on.</p>
+                    <p><b>Real trust example</b> Gingelly oil is <code>FL-OIL-001</code>. Type <code>FL-</code> into search and every fluid appears instantly. When you later add coconut oil, it becomes <code>FL-OIL-COCO</code> — same family, clearly different.</p>
+                    <p><b>Golden rule</b> <b>Never rename an existing SKU</b> — it breaks the history trail. If something genuinely changes, create a new SKU and archive the old one. The SKU is usually also printed as the product's barcode.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_barcode" model="wms.help.article">
+            <field name="slug">what-is-a-barcode</field>
+            <field name="name">Barcode (Code128 and EAN-13)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">113</field>
+            <field name="keywords">barcode, code128, ean-13, scanner, label, scan, product code, slot label</field>
+            <field name="body" type="html"><div>
+                    <p><b>A barcode is a printed pattern of stripes that a scanner reads instantly</b>, so you don't type codes by hand.</p>
+                    <p>The system uses two common kinds:</p>
+                    <ul>
+                    <li><b>Code128</b> — the default. It can hold letters, numbers and hyphens, so it can print your full SKU like <code>TOOL-DRILL-18V</code>. Used for product labels and for slot/rack labels.</li>
+                    <li><b>EAN-13</b> — the familiar 13-digit shop barcode already printed on many manufactured products (e.g. <code>8901234567890</code>).</li>
+                    </ul>
+                    <p><b>Why it matters</b> Many helpers are temporary or low-tech, often working on a tablet. A scan beep is faster and far less error-prone than reading and typing a code, and it works the same on wired, wireless, or Bluetooth scanners (they all act like a keyboard).</p>
+                    <p><b>Real trust example</b> A medicine box already has an EAN-13 from the maker — scan it and the product pops up. Your own ash powder, which has no factory barcode, gets a printed <b>Code128</b> label of its SKU <code>RM-ASH-001</code>. Either way, one scan finds the product. Slots and racks also carry barcodes (like <code>R-PHARM01</code>) so you can scan the location too.</p>
+                    <p><b>Tip</b> Set your scanner to add an "Enter" after each scan — that's the factory default and lets scans process automatically.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_scan_receipt" model="wms.help.article">
+            <field name="slug">what-is-scan-receipt</field>
+            <field name="name">Scan Receipt (receiving stock)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">114</field>
+            <field name="keywords">scan receipt, receiving, incoming, receive stock, delivery, qc, putaway</field>
+            <field name="body" type="html"><div>
+                    <p><b>Scan Receipt is the screen you use to bring new stock into the warehouse.</b> You scan each item, the system adds it to a list, and when you're done you press Validate.</p>
+                    <p><b>How it works</b> 1. Scan a product (or a carton barcode that counts as many units). It's added with a quantity. 2. Optionally scan a slot to say where it goes — or leave it and let the system auto-pick a spot ("putaway"). 3. Tick <b>Quality check passed</b> to confirm you counted and inspected the delivery. 4. Choose the on-duty Store Keeper and Validate. The stock lands in its slot with today's date as the in-date.</p>
+                    <p><b>Why it matters</b> Receiving is where good (or bad) data begins. A quick scan-and-check keeps counts accurate and records <i>who</i> received <i>what</i>, <i>when</i>, and from <i>whom</i>.</p>
+                    <p><b>Real trust example</b> A vendor drops off 24-bottle cartons of calcium. The helper scans the carton barcode (which adds 24 at once), repeats for each carton, ticks Quality check, picks their name as Store Keeper, and validates. The bottles are now on the shelf and findable by scan.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_scan_issue" model="wms.help.article">
+            <field name="slug">what-is-scan-issue</field>
+            <field name="name">Scan Issue (taking stock out)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">115</field>
+            <field name="keywords">scan issue, issue, take out, fifo, fefo, withdraw, usage note, taken by</field>
+            <field name="body" type="html"><div>
+                    <p><b>Scan Issue is the screen you use to take stock out for use.</b> Since the trust uses inventory itself (it never sells), this is how feed, medicine, ghee, and tools leave the store for the cows, the pooja room, or a repair job.</p>
+                    <p><b>How it works</b> 1. Scan the product and enter how many you need. 2. The system <b>plans the pick using FIFO</b> (oldest first) — or <b>FEFO</b> (soonest-to-expire first) for medicine/feed/fluid/pooja — and shows you the exact slot(s) to take from <i>before</i> anything is finalised. 3. Fill in <b>who is taking it</b>, <b>who authorised it</b>, the <b>on-duty Store Keeper</b>, and a short <b>reason</b> (e.g. "morning feed for shed B"). A photo is required for liquids or weighed items. 4. Validate.</p>
+                    <p><b>Why it matters</b> This is the heart of the audit trail: every issue records who, why, and which keeper — so usage can be checked against the monthly cow-care plan.</p>
+                    <p><b>Real trust example</b> A helper needs 2 calcium bottles. The wizard says "take 2 from the December-expiry batch in slot PHARM01 / SH01 / C01" (FEFO). They enter taken-by, ordered-by, reason, validate — done, and it's all logged.</p>
+                    <p><b>If stock is short</b> The screen clearly warns "STOCK OUT" or "only N on hand" so you know to wait for a return or ask an Admin to receive more — it won't let you over-issue.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_scan_return" model="wms.help.article">
+            <field name="slug">what-is-scan-return</field>
+            <field name="name">Scan Return (bringing stock back)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">116</field>
+            <field name="keywords">scan return, return, bring back, tool returned, returnable, restock</field>
+            <field name="body" type="html"><div>
+                    <p><b>Scan Return is how you put stock back into the warehouse after it was taken out</b> — for example a borrowed tool or a spare part that came back unused.</p>
+                    <p><b>How it works</b> It's the Scan Receipt screen with <b>Return entry</b> ticked. You scan the items coming back, choose the on-duty Store Keeper, and validate. The stock goes back onto a shelf and becomes available again.</p>
+                    <p><b>Why it matters</b> Returns keep your counts truthful. If a tool leaves and comes back but nobody records the return, the system thinks it's still out and may tell people it's unavailable.</p>
+                    <p><b>Real trust example</b> A helper borrowed a cordless drill (<code>TOOL-DRILL-18V</code>) for a fence repair. Job done, they bring it back and do a Scan Return. The drill is back on the shelf and the next person can issue it.</p>
+                    <p><b>Important limit</b> Returns are only for <b>returnable</b> items (tools, spares). Things that get used up — fluids, consumables, single-use items — <b>cannot</b> be returned; the system blocks it. If such an item is damaged, use the Damage workflow instead.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_putaway" model="wms.help.article">
+            <field name="slug">what-is-putaway</field>
+            <field name="name">Putaway (where new stock goes)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">117</field>
+            <field name="keywords">putaway, put away, slot assignment, auto-assign, where to store, clustering</field>
+            <field name="body" type="html"><div>
+                    <p><b>Putaway is deciding which slot newly received stock goes into.</b> You can scan the slot yourself, or let the system auto-pick a sensible spot when you validate a Scan Receipt.</p>
+                    <p><b>How the system auto-picks</b> (in order): 1. A slot/floor that <b>already holds this same product</b> (keep like with like). 2. An empty rack slot. 3. An empty floor area. 4. As a last resort, any slot (with a warning that products will mix).</p>
+                    <p><b>Why it matters</b> Good putaway keeps each product together so it's quick to find and count, and stops the same item being scattered across ten random slots. Auto-putaway also means a brand-new helper doesn't need to memorise the whole layout — just scan and validate.</p>
+                    <p><b>Real trust example</b> More calcium arrives. Because there's already calcium in <code>PHARM01 / SH01 / C01</code>, putaway sends the new bottles to that <b>same</b> slot, clustering the stock instead of opening a fresh, half-empty slot elsewhere.</p>
+                    <p><b>Tip</b> If you want it somewhere specific, just scan that slot's barcode during the receipt and the system uses your choice.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_audit_trail" model="wms.help.article">
+            <field name="slug">what-is-audit-trail</field>
+            <field name="name">Audit trail</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">118</field>
+            <field name="keywords">audit trail, history, who took it, accountability, immutable, traceability, log</field>
+            <field name="body" type="html"><div>
+                    <p><b>The audit trail is the permanent record of who did what, when, and why</b> with the trust's stock. Nothing important happens without a name attached.</p>
+                    <p><b>What gets recorded</b></p>
+                    <ul>
+                    <li><b>Scan Issue</b>: who took it, who authorised it, the on-duty Store Keeper, the reason, and (for liquids/weighed items) a photo.</li>
+                    <li><b>Scan Receipt / Return</b>: who delivered it and which keeper received it.</li>
+                    <li><b>Damage &amp; Repair</b>: who reported it, who authorised it, and the keeper on duty.</li>
+                    </ul>
+                    <p><b>Why it matters</b> The trust runs on donations and trust. Being able to show exactly where every bottle of medicine and sack of feed went — and on whose say-so — protects the helpers and the organisation. It also helps spot patterns, like one team over-pulling soap.</p>
+                    <p><b>Real trust example</b> Three months later someone asks where 10 litres of ghee went. The Admin opens the issue history and sees: taken by Ramesh, authorised by the cow-care lead, keeper on duty Suresh, reason "Janmashtami pooja", with a photo. Question answered in seconds.</p>
+                    <p><b>Cannot be edited</b> Once a stock-moving action is done, its record stays. Submitted inventory audits in particular are <b>immutable</b> — see the Inventory Audit and Cycle Count articles.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_storekeeper" model="wms.help.article">
+            <field name="slug">what-is-a-storekeeper</field>
+            <field name="name">Store Keeper</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">119</field>
+            <field name="keywords">storekeeper, store keeper, roster, on duty, role, keeper, who is on the desk</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Store Keeper is a person who runs the store</b> — receiving deliveries, issuing items, filing damage, and counting stock.</p>
+                    <p>The trust keeps a <b>roster</b> of Store Keepers (their names live under Configuration → Store Keepers). On every Scan Issue, Receipt, Damage, or Repair, you pick the <b>on-duty Store Keeper</b> — the actual human at the desk right now.</p>
+                    <p><b>Why it matters</b> Many helpers are temporary or share one tablet, so the login alone doesn't tell you who physically handled the stock. Choosing the on-duty keeper makes the audit trail point to a real person.</p>
+                    <p><b>Real trust example</b> The shed tablet is signed in under a shared desk account. When Suresh issues feed in the morning, he picks "Suresh" from the roster. When Ramesh takes over after lunch, he picks "Ramesh". The history correctly shows who was on duty for each action.</p>
+                    <p><b>Roles and permissions</b> A Store Keeper can be given their own login with specific abilities (Scan Receive, Scan Issue, File Damage, Submit Audit). The other role is <b>WMS Manager</b> (Admin), who reviews audits, creates repair orders, sets up racks, and manages products. To retire a keeper, the Admin un-ticks "On the roster" — old records that mention them are kept.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_damage" model="wms.help.article">
+            <field name="slug">what-is-damage</field>
+            <field name="name">Damage (recording broken or spoiled stock)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">120</field>
+            <field name="keywords">damage, broken, expired, contaminated, scrap, damage location, write off</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Damage record is how you report stock that's broken, expired, contaminated, or otherwise no longer usable.</b> Filing it moves that stock out of normal storage into a separate <b>Damage</b> area so nobody issues it by mistake.</p>
+                    <p><b>How it works</b> 1. Pick the product, quantity, source slot, and a reason (Broken / Expired / Contaminated / Other — "Other" needs a note). 2. Fill in who reported it, who authorised it, and the on-duty keeper. 3. Confirm. The stock moves to the Damage location and the event is logged.</p>
+                    <p>The form also gives a <b>plain-English recommendation</b> — repair it, buy a replacement urgently, or just note it — based on whether the item is repairable and how much is left elsewhere.</p>
+                    <p><b>Why it matters</b> Broken or expired items sitting on the shelf cause wrong counts and dangerous mistakes (issuing expired medicine!). Recording damage keeps usable stock clean and creates an honest record.</p>
+                    <p><b>Real trust example</b> A helper finds a cracked bottle of calcium. They file a Damage (reason: Broken), and it's moved off the shelf. If that was the trust's last unit of a tool, the system flags an <b>urgent buy</b> and pings the Managers.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_repair" model="wms.help.article">
+            <field name="slug">what-is-repair</field>
+            <field name="name">Repair (fixing a damaged item)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">121</field>
+            <field name="keywords">repair, repair order, fix, in repair, technician, scrap, returnable tool</field>
+            <field name="body" type="html"><div>
+                    <p><b>A Repair Order tracks a damaged-but-fixable item through getting mended and coming back into service.</b> It's used for returnable things like tools and equipment.</p>
+                    <p><b>The stages</b></p>
+                    <ul>
+                    <li><b>Draft</b> → the order is created (often straight from a Damage record).</li>
+                    <li><b>In repair</b> → the item is sent to the <b>Repair</b> area and is in the technician's hands.</li>
+                    <li><b>Done</b> → it's fixed and returned to a slot, ready to issue again.</li>
+                    <li><b>Scrapped</b> → it couldn't be fixed and is written off.</li>
+                    </ul>
+                    <p>Each step records who reported it, who authorised it, and the keeper on duty.</p>
+                    <p><b>Why it matters</b> Good tools are expensive for a donation-funded trust. Repairing and returning them — instead of buying new — saves money, and tracking it means a broken tool never just "disappears".</p>
+                    <p><b>Real trust example</b> The cordless drill's battery fails. A helper files Damage, then clicks <b>Create Repair Order</b>. It goes "In repair", a technician replaces the battery, and it's marked <b>Done</b> — back in its slot and issuable again. If the drill were beyond saving, it would be <b>Scrapped</b> instead.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_cycle_count" model="wms.help.article">
+            <field name="slug">what-is-cycle-count</field>
+            <field name="name">Cycle count and Inventory audit</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">122</field>
+            <field name="keywords">cycle count, inventory audit, recount, stocktake, variance, count due, 30 days</field>
+            <field name="body" type="html"><div>
+                    <p><b>A cycle count is checking that what's physically on a shelf matches what the system says</b> — done slot by slot, a little at a time, instead of one giant yearly stocktake.</p>
+                    <p>The system flags any slot that hasn't been counted in <b>over 30 days</b> on the <i>Cycle Count Due</i> list and reminds Managers weekly.</p>
+                    <p><b>The Inventory Audit (the structured walk)</b> An Admin creates an audit and assigns a Store Keeper. The keeper walks the racks, scans, and enters the <b>counted</b> quantity next to the system's <b>expected</b> quantity. Differences ("variances") are highlighted. The keeper <b>submits</b>; the Admin then <b>accepts</b> (the system adjusts the books to match the count) or <b>rejects</b> (the keeper re-walks it).</p>
+                    <p><b>Why it matters</b> Counts drift over time — a missed return, a hand-grab nobody logged. Regular counting keeps the numbers trustworthy so issues and orders are based on reality.</p>
+                    <p><b>Real trust example</b> The feed-store slot hasn't been counted in 40 days, so it appears on Cycle Count Due. During the audit the keeper counts 18 sacks but the system expected 20. On accept, the books drop to 18 and the trail records who counted and who approved.</p>
+                    <p><b>Cannot be rewritten</b> Once an audit is submitted, its count lines are <b>locked</b> — they can't be quietly edited or deleted. To change anything, the Admin rejects it and the keeper does a fresh walk.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_backup" model="wms.help.article">
+            <field name="slug">what-is-a-backup</field>
+            <field name="name">Backup</field>
+            <field name="category">terminology</field>
+            <field name="audience">admin</field>
+            <field name="sequence">123</field>
+            <field name="keywords">backup, encrypted, dump, gpg, data safety, disaster recovery, restore</field>
+            <field name="body" type="html"><div>
+                    <p><b>A backup is a complete, encrypted copy of the warehouse system's data</b>, saved so everything can be recovered if the main computer fails, is lost, or gets corrupted.</p>
+                    <p>Backups are written as encrypted files (<code>.dump.gpg</code>) on a schedule, and each one's size, checksum, and result are recorded in the <b>Backup &amp; DR Audit</b> dashboard. No passwords or secrets are ever stored in that record — only filenames, sizes, and status.</p>
+                    <p><b>Why it matters</b> All the trust's stock history — every receipt, issue, audit, and the location map — lives in one database. If that's lost without a backup, years of records vanish. Backups are the safety net.</p>
+                    <p><b>Real trust example</b> The store-room PC's drive dies one morning. Because an encrypted backup ran the night before, an Admin restores it onto a new machine and the trust is back to within a day of where it was — all the medicine and feed history intact.</p>
+                    <p><b>Important</b> A backup is only trustworthy if it has been <b>proven to restore</b> — which is exactly why we run a weekly <b>Restore drill</b> (see that article). The system also raises a warning if no successful backup has been recorded in the last 24 hours.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_restore_drill" model="wms.help.article">
+            <field name="slug">what-is-a-restore-drill</field>
+            <field name="name">Restore drill</field>
+            <field name="category">terminology</field>
+            <field name="audience">admin</field>
+            <field name="sequence">124</field>
+            <field name="keywords">restore drill, disaster recovery, dr, test restore, weekly, pg_restore, verify backup</field>
+            <field name="body" type="html"><div>
+                    <p><b>A restore drill is a weekly practice run that proves the latest backup can actually be recovered</b> — without ever touching the live system.</p>
+                    <p>The drill decrypts the newest backup, checks it's complete and structurally sound, and (in a full run) restores it into a temporary throwaway database that's deleted afterwards. The result is logged to the Backup &amp; DR Audit dashboard.</p>
+                    <p><b>Why it matters</b> "A backup that has never been restored is not a backup." A backup file can look fine but be silently broken — cut off mid-write, hit by a software change, or locked by a changed password. A weekly drill catches all three within 7 days, <i>before</i> a real emergency.</p>
+                    <p><b>Real trust example</b> The backup password was rotated but nobody tested it. The next weekly drill fails to decrypt and immediately flags the problem — so it's fixed while the data is still safe, instead of being discovered during an actual disaster when it's too late.</p>
+                    <p><b>Health link</b> If no successful drill has run in over 7 days, the system marks backup health as <b>DEGRADED</b> and notifies the Managers.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_health_check" model="wms.help.article">
+            <field name="slug">what-is-a-health-check</field>
+            <field name="name">Health check (/wms/health)</field>
+            <field name="category">terminology</field>
+            <field name="audience">admin</field>
+            <field name="sequence">125</field>
+            <field name="keywords">health check, /wms/health, monitoring, status, healthy degraded critical, uptime, endpoint</field>
+            <field name="body" type="html"><div>
+                    <p><b>A health check is a quick automatic status report on whether the warehouse system is safe and running.</b> The system answers at the web address <b><code>/wms/health</code></b> and returns one of three statuses:</p>
+                    <ul>
+                    <li><b>HEALTHY</b> — recent backup <i>and</i> a recent restore drill. All good.</li>
+                    <li><b>DEGRADED</b> — something's slipping: the backup is over 24 hours old, or the restore drill is over 7 days old. Still running, but needs attention.</li>
+                    <li><b>CRITICAL</b> — no successful backup has ever been recorded, or the system can't be reached. Act now.</li>
+                    </ul>
+                    <p><b>Why it matters</b> Problems with backups are invisible until you need them. The health check turns "are we protected?" into a single glance, and a monitoring tool can poll it automatically and alert someone the moment status drops.</p>
+                    <p><b>Real trust example</b> A monitoring service checks <code>/wms/health</code> every few minutes. Last night's backup didn't run, so the status turns <b>DEGRADED</b> and an alert goes out. The Admin fixes the backup the same morning — long before anyone needs to restore.</p>
+                    <p><b>Safe to expose</b> The health report deliberately contains no sensitive data — only statuses and how old the last backup/drill are — so it's safe for a monitor to read without a password.</p>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_system_overview" model="wms.help.article">
+            <field name="slug">admin-path-system-overview</field>
+            <field name="name">Admin Path 1: What this system is and what it does</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">36</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">admin overview manager system wms purpose non-profit trust cow care</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> what the warehouse system is for, and the big picture before the detailed lessons.</p>
+                    <p>This is the <b>Warehouse Management System (WMS)</b> for the trust. The trust <b>buys and uses</b> things (cattle feed, medicine, ghee for pooja, tools, cleaning items). It <b>never sells</b> them. So there are no customer orders or prices to worry about — only <i>receiving</i>, <i>storing</i>, <i>issuing</i>, and <i>keeping the count honest</i>.</p>
+                    <p><b>Steps to get oriented:</b> 1. Log in. As an Admin you are in the group <b>WMS / Manager</b>, which can see and do everything. 2. Open the <b>WMS</b> menu. You will see <b>Operations</b> (the daily scanning work), <b>Configuration</b> (racks, slots, store-keeper roster, carton barcodes), and <b>Reporting</b> (live dashboards). 3. Open the <b>Help Center</b> and read the role lessons in order — this one is the start of your path. 4. Note the two everyday jobs the system protects: every stock move is <b>scanned</b> (not typed from memory) and every move records <b>who did it</b> (the audit trail).</p>
+                    <p><b>Why it matters:</b> A small, shared, volunteer-run store fails when people "update stock later" or nobody is accountable. This system makes the honest way the <i>only</i> easy way.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Treating it like a shop with sales — there are no sales here.</li>
+                    <li>Skipping the lessons and clicking around blind; the paths are short and ordered for a reason.</li>
+                    <li>Doing daily scanning yourself as the only Admin — train Store Keepers so the work spreads.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_warehouse_structure" model="wms.help.article">
+            <field name="slug">admin-path-warehouse-structure</field>
+            <field name="name">Admin Path 2: How the warehouse is laid out (Rack, Compartment, Slot, Zone, Floor)</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">37</field>
+            <field name="keywords">admin rack compartment slot zone floor shelf column grid location structure layout</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> the five location types and how stock physically maps to them.</p>
+                    <p>The layout has <b>three levels</b> plus two extra area types: 1. <b>Rack</b> — a real shelving unit, drawn as a grid of <b>shelves (rows) x columns</b>. The default is <b>6 shelves x 3 columns</b>. 2. <b>Compartment</b> — a rectangle on that grid (for example shelves 1-3, column 1). It can be one square, tall, wide, or a block. 3. <b>Slot</b> — the actual spot that holds stock. A compartment has one or more slots. <i>Stock always lives in a slot.</i> 4. <b>Zone</b> — a building, floor, or area that groups several racks together. 5. <b>Floor</b> — open / pallet / yard storage where stock sits directly, with no compartment or slot underneath.</p>
+                    <p><b>Important:</b> "Shelf" and "Column" are just grid <i>coordinates</i>, not separate records. Only Rack, Compartment, Slot, Zone, and Floor are real locations in the system.</p>
+                    <p><b>Steps to view it:</b> 1. Go to <b>WMS &gt; Configuration</b> to see racks, compartments, and slots. 2. Open a rack's grid heat-map to see, square by square, what is stored where. 3. Compare it to the real shed — the screen should match the shelves.</p>
+                    <p><b>Why it matters:</b> Because stock lives in a slot, the system can tell a keeper the <i>exact</i> square to walk to, and reports can show occupancy per rack.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Thinking shelf/column are separate places to create — they are not.</li>
+                    <li>Leaving stock "on the floor" with no Floor location defined for it.</li>
+                    <li>Letting the screen and the real shed drift apart — fix mismatches the same day.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_rack_compartment_slot_logic" model="wms.help.article">
+            <field name="slug">admin-path-rack-compartment-slot-logic</field>
+            <field name="name">Admin Path 3: Creating and laying out racks, compartments and slots</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">38</field>
+            <field name="keywords">admin rack generator create slot compartment grid labels constraints capacity barcode print</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to build the storage map and print labels so the shed matches the screen.</p>
+                    <p><b>Steps:</b> 1. Go to <b>WMS &gt; Configuration &gt; Racks</b> (or use the <b>Rack Generator</b> wizard) to create a rack. Set its <b>shelf count</b> and <b>column count</b> (default 6 x 3). 2. Add <b>compartments</b> as rectangles on that grid (top/bottom shelf, left/right column). A compartment must sit <i>inside</i> its rack's grid — the system blocks one that spills over the edge. 3. Give each compartment one or more <b>slots</b>. One slot per compartment is fine to start. 4. Optionally set a <b>capacity hint</b> on a slot. This is a <i>soft</i> hint shown in the screen, not a hard limit. 5. Print labels: open <b>Slots</b>, select up to 100, then the menu <b>Print &gt; WMS Location Label</b>. Stick each label where a hand can see it while reaching in. 6. Walk the floor with the rack grid open and confirm <b>physical = software</b>.</p>
+                    <p><b>Why it matters:</b> Every slot has its own barcode. Good labels are what make scanning fast and putaway error-free.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Building a compartment bigger than its rack grid — the system will refuse it.</li>
+                    <li>Forgetting that a compartment's parent must be a <b>rack</b>, and a slot's parent must be a <b>compartment</b>.</li>
+                    <li>Printing labels but not sticking them, or sticking them where they cannot be seen.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_users_and_permissions" model="wms.help.article">
+            <field name="slug">admin-path-users-and-permissions</field>
+            <field name="name">Admin Path 4: Users, the two roles, and capability switches</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">39</field>
+            <field name="keywords">admin users roles permissions store keeper manager capability groups repair tech buyer access</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> the role model and how to give each helper exactly the access they need.</p>
+                    <p>There are <b>two main roles</b>:</p>
+                    <ul>
+                    <li><b>WMS / Store Keeper</b> — the everyday operator (scanning, damage, audits). Can read every report but cannot edit racks or products.</li>
+                    <li><b>WMS / Manager</b> — the Admin. Can do everything.</li>
+                    </ul>
+                    <p>On top of Store Keeper there are <b>capability switches</b> you tick per person: 1. <b>Scan Receipt + Scan Return</b> 2. <b>Scan Issue (outbound)</b> 3. <b>File damage events</b> 4. <b>Submit inventory audits</b> 5. <b>Manage carton aliases + labels</b></p>
+                    <p>A Store Keeper with <i>no</i> switches can log in and look around, but the Scan and Damage menus stay hidden until you grant a switch. There are also optional sub-roles: <b>Repair Tech</b> (can start/finish/scrap repairs) and <b>Buyer</b> (sees forecasts, drafts purchase orders).</p>
+                    <p><b>Steps:</b> 1. Go to <b>Settings &gt; Users</b>. Create one login per person, or one shared login per shift (the on-duty human is still recorded separately — see the audit lesson). 2. Add the user to <b>WMS / Store Keeper</b>. 3. Tick only the capability switches that person needs. 4. Grant <b>Repair Tech</b> or <b>Buyer</b> only when that job is actually theirs.</p>
+                    <p><b>Why it matters:</b> Least access prevents accidents. A keeper cannot reach Odoo's raw Inventory app — the WMS scan flows are deliberately the <i>only</i> way they move stock.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Making everyone a Manager "to save time" — that removes every guardrail.</li>
+                    <li>Forgetting to tick a capability and then wondering why a menu is missing.</li>
+                    <li>Granting Repair Tech or Buyer to people who do not do those jobs.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_stock_flow_fifo_fefo" model="wms.help.article">
+            <field name="slug">admin-path-stock-flow-fifo-fefo</field>
+            <field name="name">Admin Path 5: How stock flows in and out (FIFO and FEFO)</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">40</field>
+            <field name="keywords">admin stock flow fifo fefo expiry in_date receipt issue return removal oldest earliest</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> the in-and-out flow and the two rules the system uses to pick which stock leaves first.</p>
+                    <p><b>The flow:</b> stock comes in via <b>Scan Receipt</b>, sits in a slot or floor zone, and leaves via <b>Scan Issue</b>. Returns of reusable items come back via <b>Scan Return</b>.</p>
+                    <p><b>FIFO — First In, First Out:</b> the stock that arrived earliest leaves first. The system stamps an arrival time (<code>in_date</code>) on every receipt and, when you issue, automatically picks the oldest first across all slots. The keeper never has to remember which sack is oldest.</p>
+                    <p><b>FEFO — First Expiry, First Out:</b> for things that spoil, arrival order is not enough. For the kinds <b>medicine, feed, fluid, and pooja</b> (and anything with an expiry date set), the system switches to picking the <b>soonest-to-expire</b> batch first. So a new medicine batch expiring in 2027 is never handed out while an older one expiring next month still sits on the shelf.</p>
+                    <p><b>Steps to confirm it works:</b> 1. Open <b>Reporting &gt; Oldest Stock First (FIFO)</b> and check the aging buckets. 2. Open the <b>Expiry Alert</b> report to see what is close to expiry. 3. Set an <b>Expiry date</b> on perishable products so FEFO and the alert can do their job.</p>
+                    <p><b>Why it matters:</b> FIFO stops old stock rotting forgotten at the back; FEFO stops the trust handing out a medicine or feed that expires first while keeping a fresher one.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Leaving expiry dates blank on medicine/feed/fluid/pooja — FEFO then has nothing to sort by.</li>
+                    <li>Telling a keeper to "grab any one" — let the scan plan choose for them.</li>
+                    <li>Assuming FIFO covers perishables; for those kinds, FEFO is the rule.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_audit_trail_and_roster" model="wms.help.article">
+            <field name="slug">admin-path-audit-trail-and-roster</field>
+            <field name="name">Admin Path 6: The audit trail, the roster, and immutable audits</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">41</field>
+            <field name="keywords">admin audit trail roster storekeeper immutable chatter taken by ordered by accountability who did it</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how the system records who did every stock move, and why submitted audits cannot be changed.</p>
+                    <p>Every action that moves stock records an <b>audit set</b>:</p>
+                    <ul>
+                    <li><b>Who physically handled it</b> (taken by / reported by / delivered by)</li>
+                    <li><b>Who approved it</b> (ordered by / authorised by)</li>
+                    <li><b>Who was on the desk</b> — picked from the <b>Store Keeper roster</b></li>
+                    </ul>
+                    <p>These are saved on the resulting record <i>and</i> written into the chatter (the message log at the bottom of every record). If a login is shared across a shift, the system also records the <b>logged-in account</b> automatically — so you know both <i>which human</i> and <i>which session</i>.</p>
+                    <p><b>Steps:</b> 1. Go to <b>WMS &gt; Configuration &gt; Store Keepers</b> and add one row per real person (Lakshmi, Ramesh, Suresh...). Wizards make keepers pick a name from this roster. 2. To review history, open any picking, damage, or repair record and read the chatter. 3. For a structured count, use <b>Inventory Audits</b>: you create an audit and assign a keeper, the keeper walks and counts, then <b>Submits</b>. You <b>Accept</b> (the system applies the corrections) or <b>Reject</b> (the keeper re-walks).</p>
+                    <p><b>Why it matters:</b> A <b>submitted</b> audit is the count of record. Its lines are <b>locked</b> — they cannot be deleted or quietly rewritten, even by an Admin or a script. To change a wrong count you reject the audit and a fresh one is walked. This is what makes the trail trustworthy.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Leaving the roster empty so keepers cannot name themselves.</li>
+                    <li>Trying to "fix" a submitted audit by editing lines — reject and re-walk instead.</li>
+                    <li>Ignoring the chatter; it is your free, automatic history of who did what.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_backups_and_restore_drill" model="wms.help.article">
+            <field name="slug">admin-path-backups-and-restore-drill</field>
+            <field name="name">Admin Path 7: Backups and the weekly restore drill</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">42</field>
+            <field name="keywords">admin backup restore drill encrypted dump gpg passphrase disaster recovery DR off-site weekly</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how the trust's data is protected and why a backup is only real once it has been restored.</p>
+                    <p>The system makes <b>encrypted backups</b> (an encrypted <code>.dump.gpg</code> file) on a schedule. But a backup that has never been restored is not a backup — so a <b>restore drill</b> runs <b>weekly</b> to prove the latest backup can actually be recovered, <i>without ever touching the live database</i>.</p>
+                    <p><b>Steps to keep this healthy:</b> 1. Make sure a <b>daily backup</b> task is scheduled (Windows Task Scheduler, around 2am). 2. Set a <b>real backup passphrase</b> in the <code>.env</code> file — the drill refuses to run while it is still the placeholder. 3. Let the <b>weekly drill</b> run (Sunday early morning). It checks the backup is complete and decryptable. <b>Once a quarter</b>, run a <b>full restore</b> drill so the database actually rebuilds into a throwaway copy. 4. Keep an <b>off-site copy</b> of the encrypted backups (a NAS or cloud) and drill against it at least monthly.</p>
+                    <p><b>Why it matters:</b> Three silent failures — a half-written backup, a schema change that breaks restore, and a rotated-but-untested passphrase — are caught only by an end-to-end restore. The weekly drill catches all three within seven days.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Leaving the passphrase as the default placeholder.</li>
+                    <li>Keeping the only backup on the same machine as the live system.</li>
+                    <li>Assuming backups work — never restoring is the classic way to lose everything.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_observability_health" model="wms.help.article">
+            <field name="slug">admin-path-observability-health</field>
+            <field name="name">Admin Path 8: Watching system health (/wms/health and the DR dashboard)</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">43</field>
+            <field name="keywords">admin health observability monitoring heartbeat backup audit dashboard healthy degraded critical endpoint</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> the two ways to see at a glance whether the system is well.</p>
+                    <p><b>1. The health endpoint.</b> Visiting <b>/wms/health</b> returns a small status report: whether the database is reachable, how many hours since the last backup, how many days since the last restore drill, and any warnings. The overall status is one of:</p>
+                    <ul>
+                    <li><b>HEALTHY</b> — all good.</li>
+                    <li><b>DEGRADED</b> — working, but something needs attention (for example a backup is overdue).</li>
+                    <li><b>CRITICAL</b> — a serious problem; needs action now.</li>
+                    </ul>
+                    <p>The page is safe to open or to point a monitoring tool at — it deliberately shows only ages and a status, never filenames, paths, or secrets.</p>
+                    <p><b>2. The Backup &amp; DR Audit dashboard</b> inside the WMS shows the same backup and drill heartbeats in a friendly screen.</p>
+                    <p><b>Steps:</b> 1. Bookmark <b>/wms/health</b> and glance at it daily, or have a monitor poll it. 2. If it shows <b>DEGRADED</b> or <b>CRITICAL</b>, open the <b>Backup &amp; DR Audit</b> dashboard to see which heartbeat is stale. 3. Act on the warning (usually: a backup or drill did not run — check Task Scheduler).</p>
+                    <p><b>Why it matters:</b> Problems with backups and recovery are invisible until you need them. A status you check every day turns an invisible risk into an obvious to-do.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Never looking at the health status until something has already broken.</li>
+                    <li>Ignoring DEGRADED because "it still works" — that is the warning before CRITICAL.</li>
+                    <li>Exposing the system to the internet without reading the security lesson first.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_reports_overview" model="wms.help.article">
+            <field name="slug">admin-path-reports-overview</field>
+            <field name="name">Admin Path 9: Reading the reports and dashboards</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">44</field>
+            <field name="keywords">admin reports dashboards stock oldest occupancy reorder dead slow expiry forecast monthly consumption</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> which dashboard answers which question. All reports are <b>live</b> views on the real stock — they never hold a stale copy.</p>
+                    <p><b>Steps — open WMS &gt; Reporting and learn these:</b> 1. <b>Current Stock by Product / by Slot</b> — what we have and where. 2. <b>Oldest Stock First (FIFO)</b> — what has been sitting longest (aging buckets) so old stock is used before it rots. 3. <b>Expiry Alert</b> — perishables close to their expiry date. 4. <b>Stock Movement History</b> — every in/out move over a date range. 5. <b>Low Stock / Reorder Suggestions</b> — what is running low and roughly how much to buy (the buying figure is computed, not guessed). 6. <b>Location Occupancy</b> — how full each rack is. 7. <b>Dead / Slow Stock</b> — items barely moving, so the trust stops over-buying them. 8. <b>Damaged Items</b> and <b>Repair Pipeline</b> — open damage and repairs in progress. 9. <b>Monthly Consumption</b> — how much of each item the trust uses per month.</p>
+                    <p><b>Why it matters:</b> These dashboards turn raw stock numbers into decisions: what to buy, what to use first, what to stop buying, and where the gaps are.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Exporting numbers into a separate spreadsheet and editing them — the dashboards are already live and correct.</li>
+                    <li>Buying more of a Dead/Slow item out of habit.</li>
+                    <li>Ignoring the Expiry Alert until items have already expired.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_damage_repair_oversight" model="wms.help.article">
+            <field name="slug">admin-path-damage-repair-oversight</field>
+            <field name="name">Admin Path 10: Overseeing damage and repair</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">45</field>
+            <field name="keywords">admin damage repair recommendation urgent buy returnable scrap state machine notification manager</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how damage and repair work, and what the Admin must approve.</p>
+                    <p>When a keeper files a <b>Damage</b> event and picks the product, the system shows a coloured recommendation banner:</p>
+                    <ul>
+                    <li><b>URGENT BUY (red)</b> — a non-returnable item with <b>no spare anywhere</b>. Buy a replacement now.</li>
+                    <li><b>Repair needed (yellow/blue)</b> — a reusable item; consider opening a <b>Repair Order</b>.</li>
+                    <li><b>Just a note (grey)</b> — a non-returnable item but you still have spares; no action beyond recording it.</li>
+                    </ul>
+                    <p>If the recommendation is <b>URGENT BUY</b>, every WMS Manager gets a <b>notification</b> in their Discuss inbox automatically.</p>
+                    <p><b>Repair Orders</b> follow a simple state machine: <b>draft → in repair → done</b> (or <b>scrapped</b>). Each step moves the item between the Damage and Repair locations and records the audit set.</p>
+                    <p><b>Steps:</b> 1. Watch your inbox for <b>URGENT BUY</b> notifications and act on them. 2. Open <b>Operations &gt; Repair Orders</b> to start, finish, or scrap repairs (only Managers and Repair Techs can do this). 3. Use the <b>Repair Pipeline</b> report to see what is stuck in repair.</p>
+                    <p><b>Why it matters:</b> Damaged stock that is not recorded becomes a silent shortage. The recommendation engine tells you instantly whether a breakage is an emergency or just a note.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Ignoring URGENT BUY notifications until the cows or pooja run out.</li>
+                    <li>Cancelling a repair that is <i>in repair</i> — you must Finish or Scrap it first so stock is not orphaned at the Repair location.</li>
+                    <li>Letting items sit forever in the repair pipeline.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_admin_path_troubleshooting" model="wms.help.article">
+            <field name="slug">admin-path-troubleshooting</field>
+            <field name="name">Admin Path 11: Troubleshooting common problems</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">46</field>
+            <field name="keywords">admin troubleshooting scanner camera menu missing health critical backup drill mobile https fixes</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> quick fixes for the problems you will most often be asked about.</p>
+                    <p><b>Steps — match the symptom to the fix:</b> 1. <b>A keeper says a menu (Scan / Damage / Audit) is missing.</b> They are missing the matching <b>capability switch</b>. Open their user and tick it (see the users lesson). 2. <b>Scans land in the box but never process.</b> The scanner is not sending an Enter key. Set the scanner to add a <b>CR/LF (Enter) suffix</b> (print the config barcode from its manual). 3. <b>The camera will not open on a phone.</b> Cameras only work over <b>HTTPS</b> (or on localhost). Use a Cloudflare tunnel to get HTTPS, or have the operator upload an existing photo instead. 4. <b>Phone cannot reach the system over WiFi.</b> Open port <b>8069</b> in Windows Firewall, and use the host PC's correct LAN IP. 5. <b>/wms/health shows CRITICAL or DEGRADED.</b> Open the <b>Backup &amp; DR Audit</b> dashboard; usually a backup or drill did not run — check Windows Task Scheduler. 6. <b>Restore drill failed.</b> The most common cause is the <b>passphrase</b> still being the placeholder, or the backup file being truncated — re-run the backup and set a real passphrase.</p>
+                    <p><b>Why it matters:</b> Most "the system is broken" reports are small configuration issues. Knowing these six covers the large majority.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Reinstalling or restoring when a one-tick capability or a scanner setting was the real fix.</li>
+                    <li>Exposing the system on the internet without the security guardrails.</li>
+                    <li>Letting a failed drill sit unfixed — that is the one failure that can lose all data.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_getting_started" model="wms.help.article">
+            <field name="slug">keeper-path-getting-started</field>
+            <field name="name">Keeper Path 1: Getting started as a Store Keeper</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">47</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">keeper store keeper start login tablet beginner mode menu operations daily</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> what your job is and how to find your way around on your first day.</p>
+                    <p>As a <b>Store Keeper</b> you do the daily hands-on work: take in deliveries, put them away, hand things out, take reusable things back, and report damage. You do <b>not</b> edit racks or products — that is the Admin's job. You can look at every report.</p>
+                    <p><b>Steps:</b> 1. Log in (your supervisor gives you the login). On a tablet, the screen is touch-friendly. 2. Keep <b>Beginner Mode ON</b> at first — it shows extra hints and stronger "are you sure?" warnings. You can switch it off in your own preferences once you are confident. 3. Open the <b>WMS &gt; Operations</b> menu. Your daily tools live here: <b>Scan Receipt</b>, <b>Scan Issue (FIFO)</b>, <b>Scan Return</b>, and <b>Damages</b>. 4. If a menu you expect is missing, tell your Admin — they grant each tool with a tick. 5. Search the <b>Help Center</b> for any word you do not know (try "FIFO" or "compartment").</p>
+                    <p><b>Why it matters:</b> The trust's whole stock count depends on you scanning every move at the time it happens. Doing it right is more important than doing it fast.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Turning Beginner Mode off on day one and missing the safety prompts.</li>
+                    <li>Guessing instead of searching the Help Center.</li>
+                    <li>Doing stock moves "in your head" and planning to record them later.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_barcodes_and_scanners" model="wms.help.article">
+            <field name="slug">keeper-path-barcodes-and-scanners</field>
+            <field name="name">Keeper Path 2: Barcodes and your scanner</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">48</field>
+            <field name="keywords">keeper barcode scanner product slot rack carton code128 ean usb bluetooth enter suffix</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> the kinds of barcodes you will scan and how to make your scanner behave.</p>
+                    <p><b>Barcodes you will meet:</b> 1. <b>Product barcode</b> — on the item itself; tells the system <i>what</i> it is. 2. <b>Carton / bulk barcode</b> — one scan stands for many units (for example one scan = 24 units). Set up by the Admin. 3. <b>Slot barcode</b> — stuck on the shelf spot; tells the system <i>where</i>. 4. <b>Rack barcode</b> — identifies the whole rack.</p>
+                    <p><b>Steps:</b> 1. Pick up the scanner. Any USB, wireless, or Bluetooth scanner works like a keyboard — no setup needed. 2. Click into the <b>scan box</b> of a wizard so the cursor blinks there. 3. Pull the trigger on the barcode. The line appears by itself — you usually do <b>not</b> press a button. 4. The cursor stays in the box, so you can scan the next item straight away. 5. No scanner? You can <b>type</b> the barcode by hand into the same box.</p>
+                    <p><b>Why it matters:</b> Scanning the printed barcode means the human and the computer always agree on what the item is — far safer than picking from a list by memory.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Scanning before clicking into the box (the scan goes nowhere).</li>
+                    <li>If scans appear but never process, the scanner is not sending <b>Enter</b> — ask the Admin to set a <b>CR/LF (Enter) suffix</b>.</li>
+                    <li>Scanning a slot barcode when you meant the product, or the reverse — check the line that appears.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_receiving" model="wms.help.article">
+            <field name="slug">keeper-path-receiving</field>
+            <field name="name">Keeper Path 3: Receiving a delivery (Scan Receipt)</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">49</field>
+            <field name="keywords">keeper receiving scan receipt delivery quality check qc grn audit validate print slot in_date</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to take in a delivery correctly, every single time.</p>
+                    <p><b>Steps:</b> 1. When a delivery arrives, <b>count it</b> at the door and do a quick <b>quality check</b> (visible damage, count matches, expiry on perishables). 2. Open <b>WMS &gt; Operations &gt; Scan Receipt</b>. 3. <b>Scan each product or carton barcode.</b> A line is added with a quantity (a carton fills in its unit count automatically). 4. Optionally <b>scan the slot barcode</b> to say where it will go; if you do not, the system suggests a slot for you. 5. Tick <b>Quality check passed</b> and fill the <b>audit panel</b>: the Store Keeper on duty (pick your name from the list) and who delivered it. These are required. 6. Press <b>Validate &amp; Print</b>. The system records the stock into the slot, stamps the arrival time, and can print labels. 7. Walk to the slot, place the stock, and confirm the label matches.</p>
+                    <p><b>Why it matters:</b> The system refuses to finish until the <b>quality check is ticked</b> and your name is filled. This keeps a clean record of who received what, and stamps the arrival time that FIFO later uses.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li><b>Placing stock on the shelf before scanning it in</b> — never do this; scan first.</li>
+                    <li>Forgetting to tick "Quality check passed" — Validate will stop you.</li>
+                    <li>Silently throwing away damaged or short-shipped items — send them through the <b>Damage</b> flow instead.</li>
+                    <li>Doing one big receipt for several separate deliveries — one entry per delivery.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_putaway_finding_slots" model="wms.help.article">
+            <field name="slug">keeper-path-putaway-finding-slots</field>
+            <field name="name">Keeper Path 4: Putaway and finding the right slot</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">50</field>
+            <field name="keywords">keeper putaway slot find auto assign cluster empty rack floor zone label match place stock</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> where to place stock after receiving, and how the system helps you choose.</p>
+                    <p>When you receive without scanning a slot, the system <b>suggests</b> one in this order: 1. A slot that <b>already holds this same product</b> (keep like with like). 2. Any <b>empty rack slot</b>. 3. Any <b>empty floor zone</b>. 4. A rack slot that already has something else (with a warning that you would be <b>mixing products</b>). 5. Any floor zone.</p>
+                    <p><b>Steps:</b> 1. Read the slot the wizard assigned (or scan the slot you want to use). 2. Walk to that exact slot — the label on the shelf matches the name on screen. 3. Place the stock and check the label one more time. 4. If the suggested slot is physically full or wrong, scan a different empty slot instead.</p>
+                    <p><b>Why it matters:</b> Keeping one product together in one place makes both picking and counting far easier, and avoids the confusion of two different items sharing a square.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Ignoring the suggestion and dumping stock in the nearest gap.</li>
+                    <li>Mixing two different products in one slot when an empty slot was available.</li>
+                    <li>Placing stock in a slot whose label does not match what the screen says.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_issuing_fifo" model="wms.help.article">
+            <field name="slug">keeper-path-issuing-fifo</field>
+            <field name="name">Keeper Path 5: Issuing stock the FIFO way (Scan Issue)</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">51</field>
+            <field name="keywords">keeper issue scan issue fifo fefo oldest expiry plan validate photo short shortage audit taken by</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to hand out stock so the oldest (or soonest-to-expire) goes first, automatically.</p>
+                    <p><b>Steps:</b> 1. Open <b>WMS &gt; Operations &gt; Scan Issue (FIFO)</b>. 2. <b>Scan the product</b> and enter how many are needed. 3. The system builds a <b>plan</b> showing exactly which slots to take from — <b>oldest first</b> (FIFO). For medicine, feed, fluid, and pooja items it picks the <b>soonest-to-expire</b> first (FEFO). You do not have to decide which batch. 4. Fill the <b>audit panel</b>: who is taking it, who ordered/approved it, and the on-duty Store Keeper. 5. If the product is measured (litres, kg), you must <b>attach a photo</b> of the dispensed amount before you can finish. 6. Press <b>Validate</b>. The stock leaves and the move is recorded with your audit details.</p>
+                    <p><b>Why it matters:</b> You do not have to remember which sack is oldest — the plan tells you. This stops old stock rotting at the back and stops a soon-to-expire medicine sitting while a fresher one is handed out.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Picking from a different slot than the plan shows "because it is closer" — that breaks FIFO/FEFO.</li>
+                    <li>Skipping the required photo for measured items (Validate will stop you).</li>
+                    <li>If the system says <b>short</b> (not enough stock), do <b>not</b> part-issue and hope — tell the Admin so it can be bought.</li>
+                    <li>Taking material first and planning to log it later — always scan at the moment you hand it out.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_returns" model="wms.help.article">
+            <field name="slug">keeper-path-returns</field>
+            <field name="name">Keeper Path 6: Taking reusable items back (Scan Return)</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">52</field>
+            <field name="keywords">keeper return scan return returnable tool spare reusable consumable fluid refuse slot</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to put a reusable item back into stock, and which items can never come back.</p>
+                    <p>Some things survive use and can return to the shelf: <b>tools, spares, raw materials, cloth, safety gear</b>. Other things cannot — once they leave they are spent, contaminated, or impossible to reseal: <b>feed, medicine, fluids, ghee/pooja items, cement, soap</b>.</p>
+                    <p><b>Steps:</b> 1. Open <b>WMS &gt; Operations &gt; Scan Return</b>. 2. <b>Scan the item</b> coming back. 3. Fill the <b>audit panel</b> (who is returning it, who is on duty). 4. Choose or scan the slot it goes back to. 5. Press <b>Validate</b>. The item is added back into stock.</p>
+                    <p><b>Why it matters:</b> Returning a tool puts it back on the books so the next person can find it. But returning a consumable would create stock that does not really exist.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Trying to return a <b>non-returnable</b> item (feed, medicine, fluid, pooja, cement...) — the wizard will <b>refuse</b> it and list which products are not returnable.</li>
+                    <li>Returning a tool to the wrong slot, so the next person cannot find it.</li>
+                    <li>Putting a returned item straight on the shelf without scanning it back in.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_damaged_goods" model="wms.help.article">
+            <field name="slug">keeper-path-damaged-goods</field>
+            <field name="name">Keeper Path 7: Reporting damaged goods</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">53</field>
+            <field name="keywords">keeper damage damaged broken report recommendation urgent buy photo audit confirm slot quantity</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to report something broken, expired, or unusable — and what the colours mean.</p>
+                    <p><b>Steps:</b> 1. Open <b>WMS &gt; Operations &gt; Damages &gt; New</b>. 2. Pick the <b>product</b>, the <b>slot</b> it is in, and <b>how many</b> are damaged. 3. Say <b>who reported it</b> and fill the rest of the audit details. 4. Read the coloured banner the system shows:</p>
+                    <ul>
+                    <li><b>Red (URGENT BUY)</b> — there is no spare anywhere; a Manager is alerted to buy a replacement.</li>
+                    <li><b>Yellow/Blue (repair)</b> — the item can be repaired; a Repair Order may be opened.</li>
+                    <li><b>Grey (just a note)</b> — you still have spares; you are only recording it.</li>
+                    </ul>
+                    <p>5. Add a <b>photo</b> if you can — it helps the Admin decide. 6. Press <b>Confirm</b>. The damaged stock is moved out of its slot into the Damage area, with your name on the record.</p>
+                    <p><b>Why it matters:</b> Damage that is reported keeps the count honest and warns the Admin before the trust runs out of something important (like feed or medicine).</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li><b>Quietly throwing damaged stock away</b> — the count then shows items that are gone.</li>
+                    <li>Entering more than is actually in the slot — the system will block a quantity bigger than what is there.</li>
+                    <li>Leaving an audit field blank — Confirm will stop you until who-reported-it is filled.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_repair" model="wms.help.article">
+            <field name="slug">keeper-path-repair</field>
+            <field name="name">Keeper Path 8: What happens with repairs</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">54</field>
+            <field name="keywords">keeper repair create repair order view read only repair tech linked back link state</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> your part in the repair process, and where it stops.</p>
+                    <p>When you file a damage on a <b>reusable</b> item, you may see a <b>Create Repair Order</b> button on the damage form. Clicking it opens a repair request, already filled in from your damage report.</p>
+                    <p><b>Steps:</b> 1. On a confirmed damage of a repairable item, click <b>Create Repair Order</b> if your supervisor wants it repaired. 2. That creates the repair request and links it back to your damage event (the <b>Linked repair order</b> field). 3. You can <b>open and read</b> that repair order, but you cannot change it. The buttons to <b>Start</b>, <b>Finish</b>, or <b>Scrap</b> the repair are hidden from you. 4. A <b>Repair Tech</b> or the <b>Admin</b> does the actual repair steps from the <b>Repair Orders</b> menu.</p>
+                    <p><b>Why it matters:</b> You raise the request; the repair itself is handled by someone with the Repair Tech role. This keeps a clear hand-off and avoids stock getting stuck halfway through a repair.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Expecting to finish a repair yourself — that is the Repair Tech's job.</li>
+                    <li>Clicking Create Repair Order for an item that just needs a note (the grey banner) — only open a repair when the item is worth repairing.</li>
+                    <li>Losing track of the linked repair — follow the back-link on your damage event.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_stock_adjustments_audits" model="wms.help.article">
+            <field name="slug">keeper-path-stock-adjustments-audits</field>
+            <field name="name">Keeper Path 9: Stock counts and inventory audits</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">55</field>
+            <field name="keywords">keeper stock adjustment cycle count audit walk count variance submit immutable roster reject</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to count stock honestly and hand a count to the Admin.</p>
+                    <p>There are two counting jobs:</p>
+                    <ul>
+                    <li><b>Cycle count</b> — a quick recount of a few slots, comparing the shelf to the screen.</li>
+                    <li><b>Inventory audit</b> — a structured walk the Admin assigns to you.</li>
+                    </ul>
+                    <p><b>Steps for an audit:</b> 1. The Admin creates an audit and assigns it to you; it lists the slots and the <b>expected</b> quantity for each. 2. Walk to each slot, count what is really there, and type it in the <b>Counted</b> column. 3. The system shows the <b>variance</b> (what you counted minus what was expected) and highlights mismatches. 4. Pick your name as the <b>on-duty Store Keeper</b>. 5. Press <b>Submit</b>. The Admin is notified and reviews it.</p>
+                    <p><b>Why it matters:</b> Once you <b>Submit</b>, the audit is <b>locked</b> — the counts cannot be changed or deleted, by you or anyone. That is what makes the count trustworthy. If something was wrong, the Admin <b>rejects</b> it and you walk a fresh one.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>"Fixing" the count to match the screen instead of writing what you actually see — write the truth, even if it is a mismatch.</li>
+                    <li>Submitting before you have counted every line.</li>
+                    <li>Forgetting to pick your on-duty name (Submit will stop you).</li>
+                    <li>Thinking you can edit it after submitting — you cannot; ask the Admin to reject it.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_keeper_path_daily_routine" model="wms.help.article">
+            <field name="slug">keeper-path-daily-routine</field>
+            <field name="name">Keeper Path 10: Your daily routine and common mistakes</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">56</field>
+            <field name="keywords">keeper daily routine checklist habit same day scan first golden rules end of day spot check</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> a simple daily rhythm that keeps the whole system accurate.</p>
+                    <p><b>Steps — a typical day:</b> 1. <b>Log in</b> and glance at <b>Operations</b> for anything pending. 2. <b>Receive</b> every delivery the moment it arrives — count, quality check, <b>Scan Receipt</b>, then shelve it. 3. <b>Issue</b> items only through <b>Scan Issue (FIFO)</b> — follow the plan, oldest/soonest-expiry first. 4. <b>Take back</b> reusable items through <b>Scan Return</b>. 5. <b>Report</b> anything broken or expired through <b>Damages</b> straight away. 6. Do a small <b>spot count</b> of a few high-value slots (a quick cycle count). 7. At the end of the day, ask: <b>does the screen match the shelves?</b> If not, flag it.</p>
+                    <p><b>The golden rules:</b></p>
+                    <ul>
+                    <li><b>Scan first, shelve second.</b> Stock never touches a shelf before it is scanned in.</li>
+                    <li><b>Same day, every move.</b> "I will log it later" is the number one way the count goes wrong.</li>
+                    <li><b>Write the truth.</b> If a count is off, record what you see and tell the Admin.</li>
+                    </ul>
+                    <p><b>Why it matters:</b> The system is only as accurate as the moves you scan. Small, consistent habits keep the count trustworthy for everyone — including the cows, the pooja, and the next keeper on shift.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Batching up moves to "do at the end" — do each one as it happens.</li>
+                    <li>Skipping the quality check or the photo because you are in a hurry.</li>
+                    <li>Hiding a mismatch instead of reporting it.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_readonly_path_what_you_can_do" model="wms.help.article">
+            <field name="slug">readonly-path-what-you-can-do</field>
+            <field name="name">Viewer Path 1: What a read-only viewer can and cannot do</field>
+            <field name="category">role</field>
+            <field name="audience">readonly</field>
+            <field name="sequence">57</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">readonly viewer view only safe look reports search audit no edit permissions auditor</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> exactly what your view-only access lets you do, and why it is set up this way.</p>
+                    <p>As a <b>read-only viewer</b> you can <b>look at everything but change nothing</b>. You can open reports, search stock, and read the history of who did what — but you cannot move stock, edit products, or change racks. The Scan and Damage menus do not appear for you.</p>
+                    <p><b>Steps:</b> 1. Log in. Your menus are limited on purpose — that is normal. 2. Open <b>WMS &gt; Reporting</b> to see live stock and history. 3. Use the <b>global search</b> to find a product or slot. 4. Open any record and read its <b>chatter</b> (the history log at the bottom) to see who did what and when. 5. If you genuinely need to change something, ask an <b>Admin</b> — do not ask for edit rights you do not need.</p>
+                    <p><b>Why it matters:</b> View-only access lets auditors, supervisors, and helpers check the numbers without any risk of accidentally changing them. You can look freely, knowing you cannot break anything.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Thinking something is broken because a menu is missing — view-only is meant to be limited.</li>
+                    <li>Asking for full edit rights when you only need to look.</li>
+                    <li>Trying to "correct" a number yourself — report it to an Admin instead.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_readonly_path_using_reports" model="wms.help.article">
+            <field name="slug">readonly-path-using-reports</field>
+            <field name="name">Viewer Path 2: Using the reports</field>
+            <field name="category">role</field>
+            <field name="audience">readonly</field>
+            <field name="sequence">58</field>
+            <field name="keywords">readonly viewer reports dashboards stock oldest occupancy expiry movement filter group live</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> which report answers which question, so you can find facts quickly.</p>
+                    <p>All reports are <b>live</b> — they always show the real, current stock. Nothing here is an old copy.</p>
+                    <p><b>Steps — open WMS &gt; Reporting:</b> 1. <b>Current Stock by Product / by Slot</b> — "What do we have, and where?" 2. <b>Oldest Stock First (FIFO)</b> — "What has been sitting longest?" 3. <b>Expiry Alert</b> — "What is about to expire?" 4. <b>Stock Movement History</b> — "What came in and went out, and when?" 5. <b>Location Occupancy</b> — "How full is each rack?" 6. <b>Damaged Items / Repair Pipeline</b> — "What is broken or being fixed?" 7. Use the <b>filters</b> (date range, product, rack) and grouping at the top of each report to narrow down.</p>
+                    <p><b>Why it matters:</b> You do not need anyone to prepare a report for you — the answer is already on screen and up to date. This makes spot-checks and audits fast.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Copying numbers into your own spreadsheet and trusting that instead of the live report.</li>
+                    <li>Forgetting to clear a filter, then thinking stock is missing when it is just hidden.</li>
+                    <li>Reading an old printout when the live report has since changed.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_readonly_path_searching_stock" model="wms.help.article">
+            <field name="slug">readonly-path-searching-stock</field>
+            <field name="name">Viewer Path 3: Searching for stock and finding where it is</field>
+            <field name="category">role</field>
+            <field name="audience">readonly</field>
+            <field name="sequence">59</field>
+            <field name="keywords">readonly viewer search find product sku slot where is it location quantity on hand filter</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to find any item and see exactly where and how much there is.</p>
+                    <p><b>Steps:</b> 1. Use the <b>global search</b> at the top. Type the product name or its <b>SKU</b> (the code like <code>FEED-00042</code> or <code>MED-00007</code>). 2. Open the product. The form shows <b>Total on hand</b> and <b>in how many slots</b> the item is stored right now. 3. Click the <b>Where is it?</b> button to see the per-slot breakdown — which slot, and how much in each. 4. To browse by place instead, open the <b>Current Stock by Slot</b> report and filter by rack. 5. You can sort and filter, but you cannot change any numbers — that is expected.</p>
+                    <p><b>Why it matters:</b> Anyone can answer "do we have it, and where?" in seconds, without disturbing a keeper or touching the stock.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Searching a half-remembered name when the <b>SKU</b> would find it instantly.</li>
+                    <li>Reading a quantity from an old screen — reopen the record for the live figure.</li>
+                    <li>Assuming an item is out of stock because you searched the wrong spelling.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_readonly_path_audit_visibility" model="wms.help.article">
+            <field name="slug">readonly-path-audit-visibility</field>
+            <field name="name">Viewer Path 4: Seeing the audit trail (who did what)</field>
+            <field name="category">role</field>
+            <field name="audience">readonly</field>
+            <field name="sequence">60</field>
+            <field name="keywords">readonly viewer audit trail chatter history who did what taken by ordered by storekeeper immutable transparency</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> how to read the full history of any stock move — a powerful tool for auditors and supervisors.</p>
+                    <p>Every stock move records an <b>audit set</b>: who physically handled it, who approved it, and which <b>Store Keeper</b> was on duty. All of this is written into the <b>chatter</b> — the message log at the bottom of every record.</p>
+                    <p><b>Steps:</b> 1. Open any <b>receipt, issue, damage, or repair</b> record. 2. Scroll to the <b>chatter</b> at the bottom. 3. Read the audit message — it names the people involved and the time, and if a shared login was used, it also names the <b>account</b> that was logged in. 4. For structured counts, open a submitted <b>Inventory Audit</b> to see expected vs counted quantities and any variances.</p>
+                    <p><b>Why it matters:</b> This gives you complete transparency for free. You can trace any change back to a person and a moment — exactly what an audit needs.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Overlooking the chatter — it is the richest part of the record.</li>
+                    <li>Expecting to edit or delete history — for non-admins it is <b>immutable</b>, and submitted audits are locked for everyone. That is by design.</li>
+                    <li>Asking a keeper "who did this?" when the chatter already tells you.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_readonly_path_safe_viewing" model="wms.help.article">
+            <field name="slug">readonly-path-safe-viewing</field>
+            <field name="name">Viewer Path 5: Safe viewing habits</field>
+            <field name="category">role</field>
+            <field name="audience">readonly</field>
+            <field name="sequence">61</field>
+            <field name="keywords">readonly viewer safe habits do not edit report problems escalate log out shared tablet privacy</field>
+            <field name="body" type="html"><div>
+                    <p><b>You will learn:</b> simple habits so you get the most from view-only access without causing confusion.</p>
+                    <p><b>Steps:</b> 1. <b>Look, do not change.</b> Open, read, filter, and sort freely — none of that affects the data. 2. If you spot a wrong number or something odd, <b>note the record and tell an Admin</b>. Do not try to fix it yourself. 3. On a <b>shared tablet</b>, log out when you finish so the next person starts clean. 4. Trust the <b>live reports</b> over any printout or your own notes — the screen is always current. 5. If a menu or button is missing, that is your role working as intended — not a fault.</p>
+                    <p><b>Why it matters:</b> View-only access exists so people can check the trust's stock safely. Good habits keep your checks reliable and keep the shared screens tidy for everyone.</p>
+                    <p><b>Common mistakes to avoid:</b></p>
+                    <ul>
+                    <li>Asking for more access than you need "just in case".</li>
+                    <li>Sharing a problem as a rumour instead of pointing the Admin to the exact record.</li>
+                    <li>Leaving a shared tablet logged in under your view, confusing the next user.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_receiving_stock" model="wms.help.article">
+            <field name="slug">workflow-receiving-stock</field>
+            <field name="name">How to receive stock (Scan Receipt)</field>
+            <field name="category">workflow</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">252</field>
+            <field name="keywords">receive receiving scan receipt inbound delivery goods in qc quality check arrival new stock</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Use Scan Receipt every time new stock arrives at the store room or cow shed: sacks of feed, boxes of medicine, tins of ghee, new tools. It tells the system what came in, puts it on a shelf, and records who took the delivery.</p>
+                    <p><b>Step by step</b> 1. On the top menu open <b>WMS -&gt; Operations -&gt; Scan Receipt</b>. 2. Your cursor sits in the <b>Scan here</b> box. Point the scanner at each item's barcode and pull the trigger. Each scan adds a line to the table. If a box has a carton barcode, the system fills in the unit count for you. 3. Type a count by hand if an item has no barcode label yet (ask the Admin to onboard it later). 4. Optionally scan a slot barcode to choose where it goes. If you skip this, the system picks a slot for you when you finish. 5. Pick your name in <b>Store Keeper on duty</b> (this is required). Type who handed the goods over in <b>Delivered by</b>. 6. Physically count and check the goods. Then tick <b>Quality check passed</b>. 7. Click <b>Validate &amp; Print</b>.</p>
+                    <p><b>Why this workflow exists</b> The trust buys, it never sells, so a clean record of what came in is the only proof of where the money went. It also starts the FIFO clock so the oldest stock leaves first.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not tick Quality check passed without actually counting. The system will block you if the box is unticked, but only your honesty checks the count.</li>
+                    <li>Do not guess quantities. Wrong numbers here break every later report.</li>
+                    </ul>
+                    <p><b>Best practice</b> Receive the delivery the moment it lands, while the driver is still there. Keep the cursor in the Scan box and let the scanner do the typing.</p>
+                    <p><b>Trust example</b> A vendor drops 20 sacks of cattle feed. The keeper scans the carton label, sees 20 appear, ticks Quality check passed, picks his name, types the driver's name in Delivered by, and clicks Validate &amp; Print.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_creating_racks" model="wms.help.article">
+            <field name="slug">workflow-creating-racks</field>
+            <field name="name">How to create a rack (Create Rack)</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">253</field>
+            <field name="keywords">rack create racks shelves columns compartments slots build generate storage layout grid</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> A rack is the physical shelving unit in the store room. Creating one in the system builds the whole grid at once: the rack, its shelves x columns of compartments, and the slots inside that actually hold stock. Only an Admin/Manager does this.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Configuration -&gt; Create Rack</b>. 2. Pick the <b>Parent location</b> (usually a Zone like 'Pharmacy', or the main warehouse stock location). 3. Type a <b>Rack code</b> such as R01 (keep two digits: R01, R02...). Add a <b>Display name</b> like 'Pharmacy bottles' if you like. 4. Set <b>Shelves</b> (default 6) and <b>Columns</b> (default 3). This makes a 6x3 grid of compartments. 5. Set <b>Slots per compartment</b> (default 1 means the compartment itself is the storage spot). 6. Click <b>Generate</b>. The system creates the rack, every compartment, every slot, and a printable barcode for each.</p>
+                    <p><b>Why this workflow exists</b> Doing this once builds dozens of correctly named, correctly barcoded slots in seconds instead of by hand. Names like R01 / SH01 / C01 / SL01 mean anyone can find a spot.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not reuse a rack code that already exists under the same parent; the system will refuse.</li>
+                    <li>Do not delete a rack later if it holds stock or has history. The system blocks deletion on purpose. Tick Archived instead.</li>
+                    <li>Leave the <b>Custom layout</b> box alone unless you truly need an odd shape; the visual builder fills it for you.</li>
+                    </ul>
+                    <p><b>Best practice</b> Match the numbers to the real shelving: count the actual shelves and columns before you type. Keep one rack code per physical rack.</p>
+                    <p><b>Trust example</b> The trust buys a new 6-shelf medicine rack. The Admin opens Create Rack, picks the Pharmacy zone, types R05, leaves 6 shelves x 3 columns, and clicks Generate. Eighteen labelled slots are ready to print and stick on.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_creating_zones_and_floor_areas" model="wms.help.article">
+            <field name="slug">workflow-creating-zones-and-floor-areas</field>
+            <field name="name">How to create zones and floor areas</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">254</field>
+            <field name="keywords">zone zones floor area open storage pallet yard generate building floor groups organise move to zone</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> A Zone is a building, floor, or area (like '1st Floor' or 'Outside Yard') that holds racks and floor areas. A Floor area is open storage with no shelves: a pallet stack, a yard bay, a single slab. Both are Admin tasks.</p>
+                    <p><b>Step by step (one zone with everything inside)</b> 1. Open <b>WMS -&gt; Configuration -&gt; Generate Zone</b>. 2. Type a <b>Zone name</b> like '1st Floor'. 3. To add racks, set <b>How many racks</b>, the <b>Rack prefix</b> (R), and shelves/columns per rack. 4. To add open areas, set <b>How many open floor zones</b> and the <b>Floor prefix</b> (F). 5. Click <b>Generate</b>. The zone, racks, slots, and floor areas are all created together.</p>
+                    <p><b>Step by step (just floor areas)</b> 1. Open <b>WMS -&gt; Configuration -&gt; Generate Floor Zones</b>. 2. Pick the <b>Parent area</b>, set a <b>prefix</b> (F gives F-01, F-02...), a <b>count</b>, and a <b>start number</b>. 3. Click <b>Generate</b>.</p>
+                    <p><b>Why this workflow exists</b> Not everything fits on a rack. Feed sacks, drums, and pallets sit on the floor. Floor areas let you scan, issue with FIFO, and report on that stock exactly like a rack slot.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Re-running with the same names is safe (it skips ones that already exist), so do not worry about duplicates.</li>
+                    <li>Do not store loose stock 'somewhere' off-system; every spot needs a barcode.</li>
+                    </ul>
+                    <p><b>Best practice</b> Group racks into zones that match the real building, then use <b>Configuration -&gt; (Move racks/floors into a zone)</b> if existing racks need tidying under a new zone.</p>
+                    <p><b>Trust example</b> The trust opens a second store room upstairs. The Admin runs Generate Zone, names it '1st Floor', asks for 10 racks and 4 floor areas, and clicks Generate. The whole upstairs is mapped in one click.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_assigning_slots" model="wms.help.article">
+            <field name="slug">workflow-assigning-slots</field>
+            <field name="name">How to assign a product to a slot</field>
+            <field name="category">workflow</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">255</field>
+            <field name="keywords">assign slot location put stock place shelf where to store auto assign destination</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Assigning a slot tells the system the exact shelf spot (or floor area) where an item physically sits. It happens during Scan Receipt, and you can also let the system choose for you.</p>
+                    <p><b>Step by step (choosing the slot yourself)</b> 1. Start a receipt: <b>WMS -&gt; Operations -&gt; Scan Receipt</b>. 2. Scan the product so it appears as a line. 3. Scan the <b>slot barcode</b> on the shelf. The system attaches that slot to the most recent line that still has no slot. 4. The feedback line confirms 'Slot ... assigned'.</p>
+                    <p><b>Step by step (letting the system choose)</b> 1. Scan products only and leave the slot empty. 2. When you click <b>Validate &amp; Print</b>, the system auto-picks a slot in this order: a slot already holding the same product, then any empty rack slot, then any empty floor area, then any rack slot, then any floor area.</p>
+                    <p><b>Why this workflow exists</b> If nobody records the spot, the next person hunts the whole store room. A slot per item means the <b>Where is product X?</b> report can point straight to it.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not put two very different products in one slot if you can avoid it; the auto-picker only mixes products as a last resort and warns you.</li>
+                    <li>Do not invent a slot in your head. Scan the printed label so the names match.</li>
+                    </ul>
+                    <p><b>Best practice</b> Keep the same product in the same slot every time (clustering). It speeds up counting and FIFO picking.</p>
+                    <p><b>Trust example</b> The keeper receives calcium boluses, scans the box, then scans the shelf label R05/SH02/C01/SL01. Next month, anyone searching 'calcium' is sent to that exact spot.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_putaway_moving_stock_to_its_spot" model="wms.help.article">
+            <field name="slug">workflow-putaway-moving-stock-to-its-spot</field>
+            <field name="name">How to do putaway (get stock onto the shelf)</field>
+            <field name="category">workflow</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">256</field>
+            <field name="keywords">putaway put away store shelving move stock to shelf after receipt slot placement</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Putaway means physically placing what you just received onto the correct shelf or floor area, and making sure the system agrees with reality. In this system, putaway happens as part of Scan Receipt rather than as a separate screen.</p>
+                    <p><b>Step by step</b> 1. Finish a receipt (see the Scan Receipt guide). When you scan a slot barcode, or let the system auto-assign, the stock is recorded at that spot. 2. Carry each item to the slot named on the label, for example R02/SH03/C01/SL01. 3. Place it physically where the system says it is. 4. If you decide a different shelf is better, scan that slot barcode during the receipt so the record matches where you actually put it. 5. To confirm afterwards, open <b>WMS -&gt; Reports -&gt; Where is product X?</b> and check the slot shown matches the real shelf.</p>
+                    <p><b>Why this workflow exists</b> Receiving is only half the job. If the box says R02 but you drop it on R09, every future search and FIFO pick points to the wrong place. Putaway keeps the digital map and the real room identical.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not pile new stock 'temporarily' in a corner and forget to record where it ended up.</li>
+                    <li>Do not move stock between slots without telling the system; use Scan Receipt's slot scan or ask the Admin.</li>
+                    </ul>
+                    <p><b>Best practice</b> Put away immediately after receiving, one item at a time, scanning the slot as you place it. Heavy or liquid items go on lower shelves.</p>
+                    <p><b>Trust example</b> After receiving 12 tins of ghee, the keeper walks them to the pooja-supplies rack, scans the slot label as he sets them down, and the Where is product X? report instantly shows the right spot.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_fifo_issuing" model="wms.help.article">
+            <field name="slug">workflow-fifo-issuing</field>
+            <field name="name">How to issue stock (Scan Issue, FIFO)</field>
+            <field name="category">workflow</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">257</field>
+            <field name="keywords">issue scan issue fifo fefo take out give out outbound use stock oldest first expiry photo reason taken by</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Use Scan Issue whenever stock leaves the store for use: feed for the shed, medicine for a calf, ghee for pooja, a tool for a job. The system automatically takes the oldest stock first (FIFO), or the soonest-to-expire first (FEFO) for medicine, feed, fluids, and pooja items.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Operations -&gt; Scan Issue (FIFO)</b>. 2. Set <b>Requested Qty</b>, then scan the product barcode. The system shows a plan of which slot(s) it will take from, before anything moves. 3. Check the plan rows. If a slot is actually empty, reduce that row. 4. Fill the audit panel (all required): <b>Taken by</b> (who is carrying it away), <b>Ordered by</b> (who authorised it), <b>Store Keeper on duty</b> (you), and a <b>Reason / usage note</b> (for example 'morning feed for shed B'). 5. If the item is measured by weight or volume (kg, litres), snap the required <b>Item photo</b>. 6. Click <b>Validate</b>.</p>
+                    <p><b>Why this workflow exists</b> It forces older stock out first so nothing rots at the back, and it records who took what and why, which is how a non-profit proves its inventory was used honestly.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not partial-issue during a stock-out. If the store is short, the system refuses on purpose so you flag the Admin instead of half-filling.</li>
+                    <li>Do not leave the Reason blank or pick a name that is not really on duty.</li>
+                    <li>A measured item will not validate without a photo.</li>
+                    </ul>
+                    <p><b>Best practice</b> Issue at the moment of handover, not later from memory. Trust the plan; the system already knows the oldest batch.</p>
+                    <p><b>Trust example</b> The keeper needs 5 calcium boluses. He scans them; FEFO plans them from the batch expiring this December, not next June. He types Taken by 'Dr Rao', Ordered by 'Farm lead', reason 'vaccination round for calves', and clicks Validate.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_returns" model="wms.help.article">
+            <field name="slug">workflow-returns</field>
+            <field name="name">How to handle returns (Scan Return)</field>
+            <field name="category">workflow</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">258</field>
+            <field name="keywords">return returns scan return bring back tool spare borrowed returnable not returnable</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Use Scan Return when something that left the store comes back unused and reusable: a tool borrowed for a job, a spare part not needed, raw material brought back. It puts the stock back on the shelf.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Operations -&gt; Scan Return</b>. (This is the same screen as Scan Receipt, already set to Return entry.) 2. Scan each returning item so it appears as a line. 3. Optionally scan the slot it should go back to, or let the system auto-assign. 4. Pick your name in <b>Store Keeper on duty</b> and note who brought it back in <b>Delivered by</b>. 5. Tick <b>Quality check passed</b> after you confirm the item is in good condition. 6. Click <b>Validate &amp; Print</b>.</p>
+                    <p><b>Why this workflow exists</b> Returned tools and spares are still trust property and should go back into stock, not vanish. Recording the return keeps counts honest and makes the item available to the next person.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Some items cannot be returned. Fluids and consumables are flagged not-returnable, and the system will refuse them at Validate, listing which ones. Those go through the Damage workflow if spoiled, not Return.</li>
+                    <li>Do not return a broken item as if it were fine; if it is damaged, file a Damage instead.</li>
+                    </ul>
+                    <p><b>Best practice</b> Inspect before ticking Quality check passed. If an item comes back damaged, stop and use the Damages workflow.</p>
+                    <p><b>Trust example</b> A plumber borrowed a pipe wrench from the tools rack and brings it back clean. The keeper opens Scan Return, scans the wrench, scans its slot, ticks Quality check passed, and validates. The wrench is back in stock for the next job.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_damage_handling" model="wms.help.article">
+            <field name="slug">workflow-damage-handling</field>
+            <field name="name">How to record damaged stock (Damages)</field>
+            <field name="category">workflow</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">259</field>
+            <field name="keywords">damage damaged broken expired contaminated spoiled scrap damage event report recommendation urgent buy</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> File a Damage when stock is broken, expired, contaminated, or otherwise no longer usable. It moves the bad stock out of normal storage into a Damage holding location and tells the Admin what to do next.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Operations -&gt; Damages</b>, then click <b>New</b>. 2. Pick the <b>Product</b>, the <b>Quantity</b>, and the <b>Slot</b> (the shelf or floor area it sits in). 3. Choose a <b>Reason</b>: Broken, Expired, Contaminated, or Other. If you pick Other, you must type a note explaining it. 4. As soon as you pick the product, a coloured banner suggests what to do (for example a red URGENT BUY, or a blue 'Open a Repair Order'). 5. Fill the audit fields: <b>Reported by</b>, <b>Authorised by</b>, and <b>Store Keeper on duty</b> (all required). 6. Click <b>Confirm</b>.</p>
+                    <p><b>Why this workflow exists</b> Damaged stock must leave the usable count immediately, or the system thinks the trust has feed or medicine it cannot actually use. It also creates an honest paper trail for spoilage.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>You cannot file more units than are actually free in the slot; the system blocks over-counting and stock already reserved for an in-progress issue.</li>
+                    <li>Do not skip the audit fields; Confirm is blocked until who-reported / who-authorised / which-keeper are filled.</li>
+                    <li>Do not throw the item away physically before confirming the record.</li>
+                    </ul>
+                    <p><b>Best practice</b> File the damage the moment you spot it, and read the banner. If it says repair, follow the Repairs workflow; if it says URGENT BUY, the managers are notified automatically.</p>
+                    <p><b>Trust example</b> A keeper finds a leaking medicine bottle. He opens Damages -&gt; New, picks the product and its slot, reason Contaminated, fills the three audit names, and clicks Confirm. The bottle moves to the Damage location and the report updates.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_repairs" model="wms.help.article">
+            <field name="slug">workflow-repairs</field>
+            <field name="name">How to repair a damaged item (Repair Orders)</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">260</field>
+            <field name="keywords">repair repairs repair order fix tool start repair mark done scrap in repair return slot technician</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> A Repair Order tracks a fixable item (usually a returnable tool or spare) from the Damage area, through repair, and back onto its shelf, or to scrap if it cannot be saved. Managers run repairs; the Admin authorises each step.</p>
+                    <p><b>Step by step</b> 1. The easiest start: open the confirmed Damage event and click <b>Create Repair Order</b>. It pre-fills the product, quantity, original slot, return slot, and the audit names. (Or open <b>WMS -&gt; Operations -&gt; Repair Orders -&gt; New</b> for a standalone one.) 2. Make sure <b>Reported by</b>, <b>Authorised by</b>, and <b>Store Keeper on duty</b> are filled. 3. Click <b>Start Repair</b>. The item moves from the Damage location to the Repair-Out bench (state becomes In repair). 4. When the fix is finished, set the <b>Return slot</b> if it differs from the original, then click <b>Mark Done</b>. The item goes back to its slot and is available to issue again. 5. If it cannot be fixed, click <b>Scrap</b> instead. It is written off from the Repair-Out location.</p>
+                    <p><b>Why this workflow exists</b> The trust keeps tools, not throwaways. Repairing and returning them saves money, and the order keeps the item's location honest at every step instead of leaving it 'somewhere being fixed'.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>An In repair order cannot be cancelled; you must either Mark Done or Scrap it, otherwise the unit is stuck at Repair-Out with no owner.</li>
+                    <li>A Done or Scrapped order is final; open a new Damage if the item fails again.</li>
+                    <li>Every step needs the audit names filled.</li>
+                    </ul>
+                    <p><b>Best practice</b> Always start repairs from the Damage event so the history links up. Set the return slot before Mark Done so the tool lands back where keepers expect it.</p>
+                    <p><b>Trust example</b> A water pump is filed as damaged. The Admin clicks Create Repair Order, then Start Repair. After the technician fixes it, the Admin clicks Mark Done and the pump returns to its tools slot, ready for the next job.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_backup_verification" model="wms.help.article">
+            <field name="slug">workflow-backup-verification</field>
+            <field name="name">How to verify backups are healthy</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">261</field>
+            <field name="keywords">backup verify download encrypted health check dashboard dr audit last backup age stale</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Verifying backups means checking that the trust's data is being saved safely and could be brought back if the computer died. An Admin should glance at this weekly.</p>
+                    <p><b>Step by step</b> 1. Open the <b>Backup &amp; DR Audit</b> dashboard from the WMS menu. Each row is a backup or restore-drill event with its time, size, and a success tick. 2. Check the newest <b>Database backup</b> row is from the last 24 hours and shows success. 3. Check there is a recent <b>Restore drill</b> row (within the last 7 days) marked verified. 4. Open a web browser to the address <b>/wms/health</b> on the server. It returns HEALTHY, DEGRADED, or CRITICAL, plus the age of the last backup and last drill. 5. To grab a copy by hand, use <b>WMS -&gt; Configuration -&gt; Download encrypted backup</b>. It downloads one encrypted file.</p>
+                    <p><b>Why this workflow exists</b> A backup nobody checks is not a backup. If a backup silently stopped working, this is how you catch it within a day instead of discovering it after a disaster.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not assume green forever; check weekly. A DEGRADED or CRITICAL status means a backup is stale or a drill failed.</li>
+                    <li>Do not share or email the downloaded encrypted file casually; it is the whole database.</li>
+                    <li>The health page shows ages and status only, never secrets, so it is safe for a monitor to poll.</li>
+                    </ul>
+                    <p><b>Best practice</b> Make the weekly backup check part of the same routine as the weekly inventory audit. If status is not HEALTHY, read the Restore drill guide and the deployment doc.</p>
+                    <p><b>Trust example</b> Every Monday the Admin opens the Backup &amp; DR Audit dashboard, sees last night's database backup ticked green and Sunday's restore drill verified, opens /wms/health to confirm HEALTHY, and moves on.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_restore_drill" model="wms.help.article">
+            <field name="slug">workflow-restore-drill</field>
+            <field name="name">How to run the weekly restore drill</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">262</field>
+            <field name="keywords">restore drill recovery test backup recoverable pg_restore powershell dry run quarterly full restore</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> A restore drill proves that the latest backup can actually be brought back, without ever touching the live database. It runs a saved backup into a throwaway copy and checks it is complete. An Admin oversees it; it normally runs automatically every week.</p>
+                    <p><b>Step by step (cheap weekly check)</b> 1. Open PowerShell on the server. 2. Run the drill script in the project's scripts folder: <code>scripts\restore-drill.ps1</code>. By default this is a dry run, it checks the backup's contents in seconds without rebuilding anything. 3. Read the result. Exit code 0 means the backup is recoverable. Other codes point to the exact problem (missing file, decrypt failed, truncated dump, and so on).</p>
+                    <p><b>Step by step (full restore, once a quarter)</b> 1. Run <code>scripts\restore-drill.ps1 -DryRun:$false</code>. 2. The script builds a temporary database named wms_drill_&lt;date&gt;, restores into it, checks the users table exists, then drops it again automatically.</p>
+                    <p><b>Why this workflow exists</b> Three silent failures, a cut-off backup file, a database change that breaks restore, or a changed password that was never tested, are caught only by an end-to-end restore. The weekly drill catches them within 7 days.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>This is the DRILL, not a real recovery. For a real recovery use <code>scripts\restore-native.ps1</code>, which writes into the live database, only after reading the deployment doc.</li>
+                    <li>If the script says the passphrase is still the placeholder, set the real one in the .env file first.</li>
+                    <li>Do not delete the backups folder.</li>
+                    </ul>
+                    <p><b>Best practice</b> Leave the automatic weekly task running, and once a quarter run a full restore by hand to be extra sure. Each drill writes a line to the Backup &amp; DR Audit dashboard so you have a record.</p>
+                    <p><b>Trust example</b> On the first Sunday of the quarter the Admin runs the full drill. The script restores last night's backup into a temporary wms_drill database, confirms it is complete, drops it, and logs a green verified row. The trust now knows its data is genuinely safe.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_using_reports" model="wms.help.article">
+            <field name="slug">workflow-using-reports</field>
+            <field name="name">How to use the reports</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">263</field>
+            <field name="keywords">reports warehouse map where is product oldest stock occupancy movement history dead stock find search</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> The Reports menu answers everyday questions without digging through stock by hand: where something is, what is oldest, what is running low, what is expiring, and who issued what. Everyone can read reports; only Admins change the underlying data.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Reports</b>. 2. Pick the report that matches your question:</p>
+                    <ul>
+                    <li><b>Where is product X?</b> to find the slot holding an item.</li>
+                    <li><b>Warehouse Map</b> for a visual picture of the racks.</li>
+                    <li><b>Oldest stock (FIFO)</b> to see what should leave first.</li>
+                    <li><b>Slot occupancy</b> to see how full each slot is.</li>
+                    <li><b>Movement history</b> to see every receipt, issue, damage, and repair.</li>
+                    <li><b>Expiry alerts</b> for batches nearing their expiry date.</li>
+                    <li><b>Dead stock</b> for items that have not moved in a long time.</li>
+                    </ul>
+                    <p>3. Use the filters and group-by at the top to narrow the list (for example group Movement history by Store Keeper).</p>
+                    <p><b>Why this workflow exists</b> Reports turn the raw stock records into plain answers a busy helper can act on, so people stop walking the whole store room to find one bottle.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Reports are read-only views; you cannot fix a wrong number here. If something looks wrong, the cause is usually a missed receipt or issue, fix that workflow.</li>
+                    <li>Do not panic at a stock-out figure before checking the Damage and Repair areas, the units may be held there.</li>
+                    </ul>
+                    <p><b>Best practice</b> Start your shift with Where is product X? for anything you will issue, and let the Admin watch Expiry alerts and Dead stock weekly.</p>
+                    <p><b>Trust example</b> A helper is asked for deworming medicine. Instead of hunting, he opens Where is product X?, types the name, and is sent straight to slot R05/SH02/C01/SL01.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_cycle_count_checking" model="wms.help.article">
+            <field name="slug">workflow-cycle-count-checking</field>
+            <field name="name">How to do an inventory / cycle-count check</field>
+            <field name="category">workflow</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">264</field>
+            <field name="keywords">cycle count inventory check stock count audit reconcile adjustment count due recount slot</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> A cycle count is physically counting the stock in a slot and comparing it to what the system says, then fixing any difference. It keeps the records trustworthy. The system flags slots that have not been counted in over 30 days.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Reports -&gt; Cycle Count Due</b> to see which slots are overdue (counted more than 30 days ago). 2. Go to the slot and physically count the stock. 3. Open <b>WMS -&gt; Operations -&gt; Cycle Count</b> (Odoo's Inventory Adjustments) and find that slot. 4. If the count matches, mark it counted. If it differs, enter the real counted quantity so the system updates. 5. If you also keep a formal monthly record, file it under <b>WMS -&gt; Operations -&gt; Inventory audits</b> (this needs the audit capability). Note: once an audit is submitted it is locked and cannot be edited.</p>
+                    <p><b>Why this workflow exists</b> Receipts and issues are entered by people, and people miscount. Regular cycle counts catch small errors before they grow, so reports stay honest.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not adjust a quantity to 'make the system happy' without actually counting; that hides the real problem.</li>
+                    <li>Do not edit a submitted audit; submitted audits are immutable on purpose. Start a new count instead.</li>
+                    <li>Avoid counting a slot mid-issue, finish or wait for any in-progress Scan Issue first.</li>
+                    </ul>
+                    <p><b>Best practice</b> Count a few overdue slots each week rather than the whole store at once. Each cycle count resets that slot's 30-day clock, so the overdue list stays short.</p>
+                    <p><b>Trust example</b> The Cycle Count Due list flags the feed floor area. The keeper counts 42 sacks but the system shows 45. He opens Cycle Count, enters 42, and the record now matches the shed. Three sacks of error are caught early.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_low_stock_handling" model="wms.help.article">
+            <field name="slug">workflow-low-stock-handling</field>
+            <field name="name">How to handle low stock and reordering</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">265</field>
+            <field name="keywords">low stock reorder buying recommendation shopping list reorder summary vendor out of stock replenish forecast</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> This workflow spots items running low so the trust buys more before it runs out, and groups what to buy into a simple shopping list by vendor. It is mainly an Admin task.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Reports -&gt; Low stock alerts</b> to see items below their safe level. 2. Open <b>WMS -&gt; Reports -&gt; Reorder summary</b> to see a buying list grouped by vendor, with how many of each to order. 3. For tools and spares, check <b>Tool / Spare fleet</b>; for items about to expire, check <b>Expiry alerts</b>. 4. Decide what to buy and place the order with the vendor outside the system (the trust buys, it does not sell). 5. When the goods arrive, record them with <b>Scan Receipt</b> so the counts go back up.</p>
+                    <p><b>Why this workflow exists</b> Running out of feed or medicine for the cows is the worst outcome. These reports give early warning and turn scattered shortages into one clear order, instead of buying in a panic.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not ignore an URGENT BUY alert. When a damaged item leaves zero usable stock, the managers get a Discuss message and the buying report flags it Critical.</li>
+                    <li>Do not order without checking the Damage and Repair areas first, some 'missing' units may just be out for repair.</li>
+                    <li>Do not forget to Scan Receipt the new stock; until you do, the report still shows it as low.</li>
+                    </ul>
+                    <p><b>Best practice</b> Review Low stock alerts and Reorder summary on the same weekly cycle as cycle counts. Set sensible safe levels on the products so the alerts fire early enough to order calmly.</p>
+                    <p><b>Trust example</b> The Low stock alerts report shows cattle feed and mineral mix both low. The Admin opens Reorder summary, sees both come from the same vendor with a suggested quantity each, places one combined order, and Scan Receipts the delivery when it arrives.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_cant_i_delete_this_slot" model="wms.help.article">
+            <field name="slug">why-cant-i-delete-this-slot</field>
+            <field name="name">Why can't I delete this slot (or rack)?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">466</field>
+            <field name="keywords">delete slot rack compartment blocked archive cannot remove location history</field>
+            <field name="body" type="html"><div>
+                    <p>If you press Delete on a rack, compartment, slot, or floor area and the system stops you, that is on purpose. It is protecting your records.</p>
+                    <p>The system blocks the delete for one of three reasons:</p>
+                    <ul>
+                    <li><b>It still has sub-locations.</b> A rack holds compartments, which hold slots. Empty those first (slot, then compartment, then rack).</li>
+                    <li><b>It still holds stock.</b> Issue, scrap, or move the stock out first, then the slot becomes empty.</li>
+                    <li><b>It has past movement history.</b> Anything that has ever received or issued stock is part of the audit trail, and that trail must be kept forever.</li>
+                    </ul>
+                    <p><b>What to do instead: archive it.</b> On the location form, tick <b>Archived</b> (this sets it to inactive). The slot disappears from your day-to-day lists but every past record that mentions it stays safe.</p>
+                    <p><b>Example:</b> Slot R12 / SH01 / C01 / SL01 once held calcium bolus that was issued last month. Even though it looks empty now, deleting it would break the record of that issue. So you archive it instead.</p>
+                    <p><b>Why it matters:</b> the trust must be able to prove, months later, exactly where every item lived and who handled it. A deleted slot would leave a hole in that story.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_is_this_stock_reserved" model="wms.help.article">
+            <field name="slug">why-is-this-stock-reserved</field>
+            <field name="name">Why is this stock reserved?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">367</field>
+            <field name="keywords">reserved stock locked held cannot take in-flight issue available free quantity</field>
+            <field name="body" type="html"><div>
+                    <p><b>Reserved</b> means another job has already claimed those units, even though they are still sitting on the shelf.</p>
+                    <p>Most often this happens because someone has a <b>Scan Issue</b> open and the system has planned to take those exact units. Until they press Validate (or cancel), those units are set aside so two people don't grab the same stock.</p>
+                    <p>The number you can actually use is <b>Free = On hand minus Reserved</b>.</p>
+                    <p><b>Example:</b> Slot SH02 / C03 has 10 sacks of feed. Ramesh is half-way through issuing 4 of them. While his wizard is open, 4 are reserved, so only 6 are free for you right now.</p>
+                    <p><b>What to do:</b></p>
+                    <ul>
+                    <li>Wait a minute. Once the other person validates or cancels, the reservation clears.</li>
+                    <li>If you only need what is free, reduce your quantity and carry on.</li>
+                    <li>If a reservation seems stuck (the person walked away), ask the Admin to check the open issue.</li>
+                    </ul>
+                    <p><b>Why it matters:</b> reservations stop the warehouse from promising the same item to two people at once, which would push a slot count below zero.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_is_this_action_blocked" model="wms.help.article">
+            <field name="slug">why-is-this-action-blocked</field>
+            <field name="name">Why is this action blocked?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">468</field>
+            <field name="keywords">blocked error red message cannot save validate confirm why stopped permission</field>
+            <field name="body" type="html"><div>
+                    <p>When the system stops an action, it is almost always guarding your stock counts or your records. Read the red message first, it usually tells you exactly what to fix.</p>
+                    <p>The most common reasons an action is blocked:</p>
+                    <ul>
+                    <li><b>A required field is empty.</b> Issues, damage reports, and repairs need the audit details (who took it, who allowed it, which keeper is on duty) and a reason. Fill them in.</li>
+                    <li><b>Not enough free stock.</b> You asked for more than the slot has free (see <i>Why is this stock reserved?</i>).</li>
+                    <li><b>A photo is required.</b> Items measured by weight or volume (kg, litres) need a photo before you can validate.</li>
+                    <li><b>A daily or per-issue limit was hit.</b> Some items have a cap (see <i>Why did my issue get blocked by a daily limit?</i>).</li>
+                    <li><b>You don't have permission.</b> Some actions, like moving racks into a zone, are Admin-only.</li>
+                    <li><b>The record is in the wrong state.</b> For example, you can only scrap an item that is <i>in repair</i>.</li>
+                    </ul>
+                    <p><b>What to do:</b> read the message, fix the one thing it names, and try again. If it still won't go through and you don't understand why, <b>stop and ask the Admin</b> rather than working around it.</p>
+                    <p><b>Why it matters:</b> these blocks exist so a small mistake never turns into a wrong count that takes days to untangle.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_record_who_took_stock" model="wms.help.article">
+            <field name="slug">why-record-who-took-stock</field>
+            <field name="name">Why must I record who took the stock?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">369</field>
+            <field name="keywords">taken by ordered by storekeeper reason usage note audit accountability who required</field>
+            <field name="body" type="html"><div>
+                    <p>Every time stock leaves the store, the system asks for four things before it will let you finish:</p>
+                    <ul>
+                    <li><b>Taken by</b> — the person physically carrying the items away.</li>
+                    <li><b>Ordered by</b> — the person who said it was OK to take them (Manager or cow-care lead).</li>
+                    <li><b>Store Keeper on duty</b> — you, the keeper running the desk right now, picked from the roster.</li>
+                    <li><b>Reason / usage note</b> — a short line saying why, e.g. "morning feed for shed B".</li>
+                    </ul>
+                    <p>All four are required. The issue cannot go through without them.</p>
+                    <p><b>Why it matters:</b> the trust buys and uses everything itself, it never sells. The only way to know that feed, medicine, and ghee are being used properly, and not wasted or walking out the door, is to record who, who allowed it, and why, every single time.</p>
+                    <p><b>Example:</b> three months from now the Admin notices the soap stock dropped fast. Because every issue recorded a name and a reason, they can see it was used for a one-time deep clean of shed C, not lost. No name, no explanation, weeks of guessing.</p>
+                    <p>This is also kind to you: an honest record protects you if anyone ever asks what happened to an item.</p>
+            </div></field>
+        </record>
+
+        <record id="help_scanned_wrong_barcode" model="wms.help.article">
+            <field name="slug">scanned-wrong-barcode</field>
+            <field name="name">What do I do if I scan the wrong barcode?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">470</field>
+            <field name="keywords">wrong barcode mistake scan remove line delete undo correct mis-scan fix</field>
+            <field name="body" type="html"><div>
+                    <p>Scanning the wrong item happens, and it is easy to fix as long as you catch it <b>before</b> you press Validate.</p>
+                    <p><b>Before you validate (the easy case):</b></p>
+                    <ul>
+                    <li>In the Scan Receipt or Scan Issue wizard, find the wrong line in the list.</li>
+                    <li>Remove it (click the small delete / X on that line).</li>
+                    <li>Scan the correct barcode and carry on.</li>
+                    </ul>
+                    <p>Nothing has moved yet at this stage, so removing a line costs you nothing.</p>
+                    <p><b>After you validate (ask for help):</b></p>
+                    <p>Once you press Validate, real stock has moved and the record is part of the audit trail, so you cannot simply edit it. <b>Tell the Admin.</b> They will make an inventory adjustment (or a return) to put things right, and the correction is logged too.</p>
+                    <p><b>If a scan does nothing at all:</b> make sure the cursor is sitting in the scan box, tap it once if not, then scan again.</p>
+                    <p><b>If a scan says "does not resolve to a product":</b> the barcode isn't linked to anything yet. A vendor carton sticker may need a carton alias set up by the Admin, or the product label may need printing.</p>
+                    <p><b>Why it matters:</b> catching a mistake in the wizard is free; fixing it after validation needs an adjustment so the records stay honest.</p>
+            </div></field>
+        </record>
+
+        <record id="help_two_people_scan_same_time" model="wms.help.article">
+            <field name="slug">two-people-scan-same-time</field>
+            <field name="name">What if two of us scan at the same time?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">371</field>
+            <field name="keywords">two people same time concurrent scan issue clash reserved conflict simultaneous keepers</field>
+            <field name="body" type="html"><div>
+                    <p>It is safe for two keepers to work at the same time. The system is built to handle it.</p>
+                    <p>When you plan a Scan Issue, the units you are about to take are <b>reserved</b> straight away. That means a second keeper planning an issue for the same product cannot grab the same units, they will only see what is still free.</p>
+                    <p><b>Example:</b> a slot has 10 bottles of dewormer. You plan to issue 7, so 7 become reserved. At the same moment Suresh scans the same dewormer, his wizard shows only 3 free. Nobody ends up with a slot count below zero.</p>
+                    <p><b>What you might see:</b></p>
+                    <ul>
+                    <li>A smaller "free" number than you expected, because a colleague reserved some.</li>
+                    <li>A short stock message telling you to reduce your quantity or wait.</li>
+                    </ul>
+                    <p><b>What to do:</b> if you are short because of someone else's open issue, either take the free amount now, or wait a moment for them to finish so the rest is released.</p>
+                    <p><b>One more thing:</b> if you open a record (like a damage report) right after another keeper saved it, you may see an orange banner saying "so-and-so saved this a few minutes ago". Read their changes before you save over them.</p>
+                    <p><b>Why it matters:</b> reservations and warnings let the whole team work at once without stepping on each other's counts.</p>
+            </div></field>
+        </record>
+
+        <record id="help_issue_blocked_daily_limit" model="wms.help.article">
+            <field name="slug">issue-blocked-daily-limit</field>
+            <field name="name">Why did my issue get blocked by a daily limit?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">472</field>
+            <field name="keywords">daily limit cap blocked too much max per issue 24 hours rolling overuse exceeded</field>
+            <field name="body" type="html"><div>
+                    <p>Some items have a built-in limit so they can't be over-pulled by mistake or habit. If you hit one, the system blocks the issue and tells you the numbers.</p>
+                    <p>There are two kinds of limit, and an item may have either, both, or none:</p>
+                    <ul>
+                    <li><b>Max per issue</b> — the most you can take in a single ticket. If you ask for more, split it or reduce the quantity.</li>
+                    <li><b>Daily cap (24-hour rolling)</b> — the most that can leave in any 24-hour window. The message shows how much already went out, what you're asking for, and the cap.</li>
+                    </ul>
+                    <p>The 24-hour window is <b>rolling</b>, not a calendar day. It looks back exactly 24 hours from right now, so waiting a while may free up room as older issues age out.</p>
+                    <p><b>Example:</b> a strong medicine has a daily cap of 5. If 4 already went out in the last 24 hours and you try to issue 2, the total (6) is over 5, so it's blocked. Wait for the window to clear, or take 1 now.</p>
+                    <p><b>What to do:</b></p>
+                    <ul>
+                    <li>Reduce the quantity, or wait for the rolling window to clear.</li>
+                    <li>If the cap is genuinely too low for real work, ask the <b>Admin</b> to raise it on the product (these limits live on the product's WMS Classification settings).</li>
+                    </ul>
+                    <p><b>Why it matters:</b> caps quietly protect costly or sensitive items, like medicine, from being drained faster than they should be.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_beginner_mode" model="wms.help.article">
+            <field name="slug">what-is-beginner-mode</field>
+            <field name="name">What is Beginner Mode?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">373</field>
+            <field name="keywords">beginner mode hints guidance new helper preferences turn off confirmations training easy</field>
+            <field name="body" type="html"><div>
+                    <p><b>Beginner Mode</b> is a helper setting that gives you extra on-screen guidance and stronger "are you sure?" confirmations while you learn the system.</p>
+                    <p>It is <b>on by default</b> for everyone, so a brand-new helper is guided from their very first login. You can turn it off yourself once you feel confident, and turn it back on any time.</p>
+                    <p><b>How to change it:</b></p>
+                    <p>1. Click your name in the top-right corner. 2. Open <b>Preferences</b>. 3. Find the <b>Warehouse (WMS)</b> section and tick or untick <b>WMS Beginner Mode</b>.</p>
+                    <p>You don't need Admin rights, this is your own personal setting and only affects what you see.</p>
+                    <p><b>What it does for you:</b> shows friendly hints next to fields, and asks for an extra confirmation before risky actions (like scrapping an item) so you don't do something final by accident.</p>
+                    <p><b>Example:</b> with Beginner Mode on, the first time you scrap something the system pauses to make sure you really mean it, because scrapping can't be undone.</p>
+                    <p><b>Why it matters:</b> new helpers, including temporary ones, can start work safely on day one without memorising everything first. Experienced keepers can switch it off for a faster screen.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_audit_locked_after_submit" model="wms.help.article">
+            <field name="slug">why-audit-locked-after-submit</field>
+            <field name="name">Why can't I change an audit after I submit it?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">374</field>
+            <field name="keywords">audit submit locked immutable edit change line cannot delete count reject re-walk</field>
+            <field name="body" type="html"><div>
+                    <p>Once you press <b>Submit</b> on an inventory audit, the count lines lock and you can no longer edit or delete them. This is on purpose.</p>
+                    <p>A submitted audit is the official record of what you counted on the shelves that day. If anyone could quietly change it afterwards, the count would no longer be trustworthy.</p>
+                    <p><b>If you spot a mistake after submitting:</b> don't try to force a change. Instead, tell the Admin. They can <b>reject</b> the audit, which sends it back so a fresh audit can be walked. The keeper then re-counts the flagged slots and submits again.</p>
+                    <p><b>The audit flow in plain steps:</b></p>
+                    <p>1. Admin creates an audit and assigns a keeper. 2. Keeper presses Start, walks the racks, and types in the counted quantity for each line. 3. Keeper presses Submit (the Admin is notified automatically). 4. Admin either <b>Accepts</b> (the system adjusts the books to match your count) or <b>Rejects</b> (re-walk needed).</p>
+                    <p><b>Example:</b> you submit, then realise you counted slot C02 in a hurry. You can't edit it now, so the Admin rejects the audit and you re-walk just to be sure. The honest record stays intact.</p>
+                    <p><b>Why it matters:</b> trust in the stock figures is built by counting carefully and never editing the count after the fact.</p>
+            </div></field>
+        </record>
+
+        <record id="help_stock_out_message" model="wms.help.article">
+            <field name="slug">stock-out-message</field>
+            <field name="name">Why does it say STOCK OUT or that I'm short?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">475</field>
+            <field name="keywords">stock out short shortfall not enough cannot issue empty warehouse return receipt</field>
+            <field name="body" type="html"><div>
+                    <p>When you plan a Scan Issue, the system checks every slot in the warehouse for that product. If it can't find enough, it tells you straight away rather than letting a bad issue go through.</p>
+                    <p><b>Two messages you might see:</b></p>
+                    <ul>
+                    <li><b>STOCK OUT</b> — there is none of this product anywhere in the warehouse. The issue can't proceed.</li>
+                    <li><b>Short by X</b> — there is some, but less than you asked for. It shows how much is on hand and how much you're missing.</li>
+                    </ul>
+                    <p><b>What to do:</b></p>
+                    <ul>
+                    <li><b>Reduce the quantity</b> to what is actually available and issue that.</li>
+                    <li><b>Wait for stock to come back</b> through Scan Return (for items that can be returned).</li>
+                    <li><b>Ask the Admin to receive more</b> via Scan Receipt if a delivery has arrived but isn't entered yet.</li>
+                    </ul>
+                    <p>You cannot validate while you are still short, this stops the slot count going negative.</p>
+                    <p><b>Example:</b> you ask for 20 bags of lime but only 12 are on hand. The wizard shows "12 on hand, 8 short". Issue 12 now and ask the Admin when the next delivery lands.</p>
+                    <p><b>Why it matters:</b> the system would rather tell you the truth now than create a record claiming you issued stock that was never there.</p>
+            </div></field>
+        </record>
+
+        <record id="help_safety_never_delete_archive" model="wms.help.article">
+            <field name="slug">safety-never-delete-archive</field>
+            <field name="name">SAFETY: Never delete a location with history, archive it</field>
+            <field name="category">safety</field>
+            <field name="audience">all</field>
+            <field name="sequence">126</field>
+            <field name="keywords">safety delete location archive history audit warning never remove rack slot inactive</field>
+            <field name="body" type="html"><div>
+                    <p><b>Warning: deleting the wrong thing can erase records you can never get back.</b> When in doubt, archive, don't delete.</p>
+                    <p>Racks, compartments, slots, and floor areas often carry a long history of receipts and issues. That history is the trust's proof of where everything has been. The system will block a delete that would break it, but please don't go looking for ways around the block.</p>
+                    <p><b>The safe habit:</b></p>
+                    <ul>
+                    <li>A slot or rack you no longer use? Open its form and tick <b>Archived</b> (set it inactive).</li>
+                    <li>It vanishes from your everyday lists, but every past record stays whole.</li>
+                    <li>Only ever fully remove a location that has never held stock and never appeared in a movement, for example one you created by mistake a moment ago.</li>
+                    </ul>
+                    <p><b>Example:</b> an old rack in the corner is being retired. Don't delete it, archive it. Next year, if anyone asks what used to be stored there, the answer is still in the system.</p>
+                    <p><b>If you're unsure, stop and ask the Admin.</b> A deleted record can't be brought back; an archived one can be switched back on in seconds.</p>
+                    <p><b>Why it matters:</b> the trust must be able to account for every item, every donation, and every use, for a long time. Records are not clutter, they are the whole point.</p>
+            </div></field>
+        </record>
+
+        <record id="help_safety_double_check_fefo_medicine" model="wms.help.article">
+            <field name="slug">safety-double-check-fefo-medicine</field>
+            <field name="name">SAFETY: Double-check expiry on medicine and feed (FEFO)</field>
+            <field name="category">safety</field>
+            <field name="audience">all</field>
+            <field name="sequence">127</field>
+            <field name="keywords">safety FEFO expiry medicine feed fluid pooja earliest first check date expired batch</field>
+            <field name="body" type="html"><div>
+                    <p><b>Warning: giving out expired medicine or feed can harm the cows.</b> Always take a moment to check the expiry date with your own eyes.</p>
+                    <p>For medicine, feed, fluids, and pooja items, the system uses <b>FEFO</b> — First Expiry, First Out. When you issue, it automatically picks the batch that expires <b>soonest</b>, not just the oldest by arrival date. It will even pull from a different batch of the same item if that batch expires earlier.</p>
+                    <p><b>What you must still do:</b></p>
+                    <ul>
+                    <li><b>Read the slot the wizard tells you to pick from</b>, and take from exactly that slot. The plan lists the right batch for a reason.</li>
+                    <li><b>Check the expiry date printed on the item</b> before it leaves your hands. If it has already passed, do <b>not</b> issue it.</li>
+                    <li>An expired item should go through the <b>Damage</b> flow (reason: Expired), not out to the cows.</li>
+                    </ul>
+                    <p><b>Example:</b> you scan a calcium bolus. The wizard says take from the slot holding the batch expiring this December, not the fresh one expiring next year. That is FEFO doing its job, follow it.</p>
+                    <p><b>If the system points you at one slot but you grabbed from another,</b> the counts will drift, tell the Admin so it can be corrected.</p>
+                    <p><b>Why it matters:</b> the software gets the order right, but only you can see the actual date on the actual item in your hand. The two together keep the animals safe.</p>
+            </div></field>
+        </record>
+
+        <record id="help_safety_confirm_before_scrapping" model="wms.help.article">
+            <field name="slug">safety-confirm-before-scrapping</field>
+            <field name="name">SAFETY: Confirm carefully before scrapping</field>
+            <field name="category">safety</field>
+            <field name="audience">all</field>
+            <field name="sequence">128</field>
+            <field name="keywords">safety scrap write-off permanent confirm damage repair cannot undo destroy throw away</field>
+            <field name="body" type="html"><div>
+                    <p><b>Warning: scrapping is permanent.</b> A scrapped item is written off for good, it cannot be brought back into stock. Pause and be sure before you confirm.</p>
+                    <p>Scrapping happens through the <b>Repair</b> flow: an item can only be scrapped while it is <i>in repair</i>. Choosing Scrap means "this can't be fixed and is gone for ever".</p>
+                    <p><b>Before you scrap, ask yourself:</b></p>
+                    <ul>
+                    <li>Can this item be <b>repaired and returned</b> instead? If it's a tool or spare, repair is usually better.</li>
+                    <li>Is the <b>quantity</b> correct? Scrapping 10 when only 1 is broken is hard to reverse.</li>
+                    <li>Has the <b>reason</b> been recorded honestly (broken, expired, contaminated)?</li>
+                    </ul>
+                    <p>If Beginner Mode is on, the system will ask you to confirm again, please don't click through it on autopilot.</p>
+                    <p><b>Throwing something out physically? Record it first.</b> Never quietly bin a broken or expired item. File it through <b>Damage</b> (and Repair/Scrap if needed) so the records match what actually left the building.</p>
+                    <p><b>Example:</b> a feed sack is contaminated. File a Damage event with reason Contaminated. If it truly can't be saved, scrap it, and now there is a clear, dated record of why it's gone.</p>
+                    <p><b>Why it matters:</b> every item the trust owns is accounted for. A quiet, unrecorded disposal looks exactly like theft or loss in the books, recording it protects both the trust and you.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_cant_i_move_racks_into_zone" model="wms.help.article">
+            <field name="slug">why-cant-i-move-racks-into-zone</field>
+            <field name="name">Why can't I move racks into a zone?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">479</field>
+            <field name="keywords">move to zone racks floor admin only permission blocked manager organise group reparent</field>
+            <field name="body" type="html"><div>
+                    <p>If the <b>Move to Zone</b> action shows you a message saying it's for Admins only, that's expected. Reorganising the warehouse layout, moving whole racks or floor areas under a zone, is a Manager (Admin) job.</p>
+                    <p><b>Why it's Admin-only:</b> moving racks around changes the shape of the whole warehouse. It's a planning decision, so it's kept in the hands of the people who set up the layout, to avoid the structure being shuffled by accident during a busy day.</p>
+                    <p><b>What you can still do as a keeper:</b> all your normal work, receiving, issuing, damage reports, audits, and counts. None of that needs the layout to change.</p>
+                    <p><b>What to do if racks really do need reorganising:</b> ask the Admin. For them it's a quick job: they pick the racks or floor areas and choose the target zone, and the system reparents them safely (existing stock doesn't move, only the labelling of where things sit).</p>
+                    <p><b>Example:</b> you notice the pharmacy racks are listed loose instead of under a "Pharmacy" zone. Mention it to the Admin, they can tidy it in under a minute.</p>
+                    <p><b>Why it matters:</b> keeping layout changes with Admins means the map of the warehouse stays stable and trustworthy for everyone scanning against it.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_photo_required_on_issue" model="wms.help.article">
+            <field name="slug">why-photo-required-on-issue</field>
+            <field name="name">Why is a photo required for some issues?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">380</field>
+            <field name="keywords">photo required issue measured weight volume kg litre liquid bulk camera proof mandatory</field>
+            <field name="body" type="html"><div>
+                    <p>When you issue an item that is measured by <b>weight or volume</b>, kilograms, litres, cubic metres, the system asks you to attach a photo before you can validate. For items simply counted in pieces, no photo is needed.</p>
+                    <p><b>Why measured items are different:</b> if you count out 5 bottles, the number is exact. But "3 kg of feed" or "2 litres of medicine" is a judgement, it's easy to pour a little more or less. A quick photo is honest proof of what actually went out.</p>
+                    <p><b>How to add it:</b></p>
+                    <ul>
+                    <li><b>On a phone or tablet:</b> tapping the photo field opens the camera directly, snap the item.</li>
+                    <li><b>On a desktop:</b> a file picker opens, choose the photo.</li>
+                    </ul>
+                    <p>The photo is saved permanently with the issue record, so it's always there in the history.</p>
+                    <p><b>Example:</b> you issue 4 litres of a fluid supplement. The wizard won't validate until you photograph the container being measured out. Months later, anyone reviewing that issue can see exactly what left.</p>
+                    <p><b>Tip:</b> you can attach a photo to any issue if you want proof, even counted ones. It's only <i>required</i> for measured items.</p>
+                    <p><b>Why it matters:</b> for bulk and liquid items, a photo turns a rough figure into a clear, trustworthy record.</p>
+            </div></field>
+        </record>
+
+        <record id="help_why_cant_receive_as_return" model="wms.help.article">
+            <field name="slug">why-cant-receive-as-return</field>
+            <field name="name">Why won't it let me receive this as a return?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">481</field>
+            <field name="keywords">return not returnable scan return refused fluid consumable single use receive blocked kind</field>
+            <field name="body" type="html"><div>
+                    <p>When you use <b>Scan Receipt</b> with the <b>Return entry</b> box ticked, the system only accepts items that are allowed to come back. If an item is refused, it's because it's flagged as <b>not returnable</b>.</p>
+                    <p><b>What's usually not returnable:</b> fluids, consumables, and single-use items. Once a liquid or a one-time-use item has left the store, it can't sensibly be put back on the shelf as good stock.</p>
+                    <p><b>The message will name the items and their kind</b>, so you know exactly which lines are the problem.</p>
+                    <p><b>What to do:</b></p>
+                    <ul>
+                    <li>If the item genuinely can't be returned (it's a fluid or consumable), it shouldn't go back into stock. If it's damaged or unusable, file it through the <b>Damage</b> flow instead.</li>
+                    <li>If you believe the item really should be returnable (maybe it's mislabelled), ask the <b>Admin</b> to check the product's WMS Kind and its Returnable flag.</li>
+                    </ul>
+                    <p><b>Example:</b> a worker brings back an unused spanner, fine, it's a returnable tool. But a half-used bottle of teat dip can't go back as stock; that goes through Damage if it's spoiled.</p>
+                    <p><b>Why it matters:</b> blocking returns of single-use and liquid items keeps spoiled or unusable goods from being logged as fresh, usable stock.</p>
+            </div></field>
+        </record>
+
+        <record id="help_faq_where_is_product" model="wms.help.article">
+            <field name="slug">faq-where-is-product</field>
+            <field name="name">How do I find where a product is stored?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">382</field>
+            <field name="keywords">find product location where is slot search report next to pick walk floor lookup</field>
+            <field name="body" type="html"><div>
+                    <p>You don't need to walk the floor hunting for an item, let the system tell you where it is.</p>
+                    <p><b>Steps:</b></p>
+                    <p>1. Go to <b>WMS → Reports → Where is product X?</b> 2. Search by the product name or its SKU code. 3. The list shows <b>every slot</b> that holds it, with the quantity in each. 4. The slot the system would pick next (oldest stock, or earliest expiry for medicine/feed) is marked <b>"Next to pick"</b>.</p>
+                    <p>Click any row to open that slot. From the rack you can open the <b>visual grid</b> to see the slot highlighted on a picture of the rack, handy for guiding a new helper to the right shelf.</p>
+                    <p><b>Example:</b> a vet asks for dewormer. You search it, see it's in two slots, and the report marks the older batch as "Next to pick". You go straight there instead of opening every drawer.</p>
+                    <p><b>Tip:</b> the "Next to pick" slot matches what Scan Issue will choose, so following it keeps your physical picking and the system in step.</p>
+                    <p><b>Why it matters:</b> finding stock from the report saves time, avoids opening the wrong slots, and helps everyone, even a first-day helper, fetch the right item quickly.</p>
+            </div></field>
+        </record>
+
+        <record id="help_faq_fifo_vs_fefo" model="wms.help.article">
+            <field name="slug">faq-fifo-vs-fefo</field>
+            <field name="name">FIFO vs FEFO: which order does the system pick?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">383</field>
+            <field name="keywords">fifo fefo difference oldest earliest expiry first in out medicine feed order picking rotation</field>
+            <field name="body" type="html"><div>
+                    <p>When you issue stock, the system decides which units to take first, you don't have to choose. It uses one of two rules:</p>
+                    <ul>
+                    <li><b>FIFO (First In, First Out)</b> — takes the <b>oldest arrival</b> first. Used for most items. It stops stock sitting forgotten at the back until it goes bad.</li>
+                    <li><b>FEFO (First Expiry, First Out)</b> — takes the batch that <b>expires soonest</b> first. Used for medicine, feed, fluids, and pooja items, anything where the expiry date matters more than the arrival date.</li>
+                    </ul>
+                    <p>For FEFO items, the system can even reach across different batches of the same product to grab the one expiring earliest, so a fresh batch never gets used up before an older one that's about to expire.</p>
+                    <p><b>Example:</b></p>
+                    <ul>
+                    <li><i>FIFO:</i> you issue cleaning cloths, the system takes the pack that arrived first.</li>
+                    <li><i>FEFO:</i> you issue calcium bolus, the system takes the batch expiring this December even if a newer batch arrived more recently.</li>
+                    </ul>
+                    <p><b>What you do:</b> follow the slot the wizard tells you to pick from, and still eyeball the expiry date on medicine/feed (see the FEFO safety note).</p>
+                    <p><b>Why it matters:</b> the right order means less waste for ordinary stock, and no expired medicine reaching the cows.</p>
+            </div></field>
+        </record>
+
+        <record id="help_troubleshooting_scan_not_working" model="wms.help.article">
+            <field name="slug">troubleshooting-scan-not-working</field>
+            <field name="name">My scan isn't registering, what now?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">484</field>
+            <field name="keywords">scan not working scanner cursor barcode nothing happens unknown does not resolve tablet</field>
+            <field name="body" type="html"><div>
+                    <p>If you scan and nothing happens, work through these quick checks, they fix almost every case.</p>
+                    <p><b>1. Is the cursor in the scan box?</b> The wizard only catches a scan when the <b>Scan here</b> field is active. Tap it once, then scan again. Keep the cursor there and you can scan one item after another.</p>
+                    <p><b>2. Did the scanner beep?</b> If there's no beep, the scanner didn't read the barcode. Hold it steady, the right distance away, and try a cleaner part of the label.</p>
+                    <p><b>3. Did you get "Unknown barcode" or "does not resolve to a product"?</b> The barcode isn't linked to anything yet:</p>
+                    <ul>
+                    <li>A <b>vendor carton</b> sticker may need a carton alias set up (this links one carton scan to, say, 24 units). Ask the Admin.</li>
+                    <li>A <b>trust product</b> may need its label printed first.</li>
+                    </ul>
+                    <p><b>4. Is the slot label faded or missing?</b> Re-print it: WMS → Operations → Slots → tick the slot → menu → Print → WMS Location Labels.</p>
+                    <p><b>5. On a tablet and the camera/keyboard pops up oddly?</b> Tap the scan field again to refocus, then scan.</p>
+                    <p><b>Example:</b> a new helper scans and nothing shows. The scan box had lost focus after they tapped elsewhere, one tap back on it and the next scan works.</p>
+                    <p><b>Why it matters:</b> a scan that doesn't register means stock could end up on a shelf without being recorded, fix the scan before moving the item.</p>
+            </div></field>
+        </record>
+
+        <record id="help_faq_who_are_storekeepers_on_duty" model="wms.help.article">
+            <field name="slug">faq-who-are-storekeepers-on-duty</field>
+            <field name="name">Why must I pick a Store Keeper on duty, and what if my name isn't there?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">385</field>
+            <field name="keywords">store keeper on duty roster name missing add shared login who desk pick required</field>
+            <field name="body" type="html"><div>
+                    <p>On every Scan Issue, Scan Receipt, Damage, and Repair, you must pick the <b>Store Keeper on duty</b>, the actual person running the desk at that moment, from a roster.</p>
+                    <p><b>Why a roster, not just the login?</b> Several helpers often share one desk login. The roster name records the real human handling the stock, so the audit trail names a person, not just an account.</p>
+                    <p><b>What if the name I need isn't in the list?</b> It must be added before you can finish. Ask the <b>Admin</b> to add it under <b>Configuration → Store Keepers</b>. It only takes a moment. (If a keeper has left, the Admin retires them by un-ticking "On the roster", which keeps their past records intact without showing them in new dropdowns.)</p>
+                    <p><b>Example:</b> a temporary helper covers the store for a week. The Admin adds them to the roster on day one; from then on they appear in the dropdown and every action they handle is properly attributed.</p>
+                    <p><b>Tip:</b> pick the person who is <i>physically</i> handling the stock right now, even if someone else is logged in.</p>
+                    <p><b>Why it matters:</b> naming the real keeper on duty means responsibility is always clear, which protects honest helpers and makes any problem easy to trace.</p>
+            </div></field>
+        </record>
+
+        <record id="help_faq_cannot_cancel_repair" model="wms.help.article">
+            <field name="slug">faq-cannot-cancel-repair</field>
+            <field name="name">Why can't I cancel this repair order?</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">all</field>
+            <field name="sequence">486</field>
+            <field name="keywords">repair order cancel blocked in repair done scrapped state stuck cannot draft finish</field>
+            <field name="body" type="html"><div>
+                    <p>Whether you can cancel a repair order depends on what stage it's at, because stock may already have moved.</p>
+                    <ul>
+                    <li><b>Draft</b> (nothing has moved yet): you can cancel freely.</li>
+                    <li><b>In repair</b> (the item is at the Repair-Out station): you <b>can't</b> just cancel. Either <b>Mark Done</b> to bring it back to its slot, or <b>Scrap</b> it if it can't be fixed. Cancelling here would leave the item stuck at Repair-Out with no owner.</li>
+                    <li><b>Done</b> or <b>Scrapped</b> (finished): you can't cancel, because real stock moves were already recorded. If the item needs to leave service again, open a new Damage event.</li>
+                    </ul>
+                    <p><b>What to do when you're blocked:</b> read which state it's in and finish it properly, Mark Done or Scrap for an in-repair item.</p>
+                    <p><b>Example:</b> you started a repair on a pump, then realised it wasn't needed. Because it's already at Repair-Out, you can't cancel, so you Mark Done to return it to its shelf, leaving a clean record.</p>
+                    <p><b>Why it matters:</b> a repair order is tied to real stock movements. Forcing a cancel at the wrong time would orphan those moves and leave the books not matching the shelf.</p>
+            </div></field>
+        </record>
+
+        <record id="help_faq_what_is_archived_location" model="wms.help.article">
+            <field name="slug">faq-what-is-archived-location</field>
+            <field name="name">What does it mean when a location is archived?</field>
+            <field name="category">faq</field>
+            <field name="audience">all</field>
+            <field name="sequence">387</field>
+            <field name="keywords">archived location inactive hidden retired slot rack restore unarchive missing dropdown</field>
+            <field name="body" type="html"><div>
+                    <p><b>Archived</b> means a location (a rack, compartment, slot, or floor area) has been set aside, it's hidden from everyday lists and dropdowns, but all its past records are kept.</p>
+                    <p>It's the safe way to retire something you no longer use, instead of deleting it (which would destroy history).</p>
+                    <p><b>What you'll notice:</b></p>
+                    <ul>
+                    <li>An archived slot won't appear when you're choosing where to put stock.</li>
+                    <li>Its old receipts, issues, and audits are still fully there in the records.</li>
+                    <li>It can be brought back any time by un-ticking Archived, nothing is lost.</li>
+                    </ul>
+                    <p><b>"A slot I expected is missing from the list."</b> It may have been archived. Ask the Admin, they can show archived locations and restore it in seconds if it's needed again.</p>
+                    <p><b>Example:</b> during a tidy-up, three empty corner slots were archived. A month later one is needed again, the Admin simply un-archives it and it reappears, with its full history intact.</p>
+                    <p><b>Why it matters:</b> archiving keeps your working lists short and clean while never losing the trust's records, the best of both worlds, and far safer than deleting.</p>
+            </div></field>
+        </record>
+    </data>
+</odoo>

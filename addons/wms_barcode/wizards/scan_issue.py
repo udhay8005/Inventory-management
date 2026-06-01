@@ -179,13 +179,12 @@ class WmsScanIssue(models.TransientModel):
             # 1. Per-issue cap
             if cap_issue > 0 and requested_qty > cap_issue:
                 raise UserError(
-                    "Per-issue cap exceeded for %s.\n\n"
-                    "Requested: %g\n"
-                    "Maximum per issue: %g\n\n"
-                    "Reduce the quantity or split into multiple tickets. "
-                    "If the cap is wrong, ask the Admin to adjust the "
-                    "'Max per issue' field on the product (WMS "
-                    "Classification tab)." % (product.display_name, requested_qty, cap_issue)
+                    "You asked for more %s than is allowed in a single "
+                    "issue. You requested %g, but the most you can give "
+                    "out in one go is %g. Either ask for less, split this "
+                    "into two separate issues, or check with a Manager to "
+                    "see if the limit can be changed on the product."
+                    % (product.display_name, requested_qty, cap_issue)
                 )
 
             # 2. Daily cap (24h rolling)
@@ -222,14 +221,12 @@ class WmsScanIssue(models.TransientModel):
                 projected = used_24h + requested_qty
                 if projected > cap_daily:
                     raise UserError(
-                        "Daily cap exceeded for %s.\n\n"
-                        "Already issued in last 24h: %g\n"
-                        "Trying to issue now: %g\n"
-                        "Total would be: %g\n"
-                        "Daily cap: %g\n\n"
-                        "Wait for the rolling window to clear or ask "
-                        "the Admin to raise the 'Daily cap (24h "
-                        "rolling)' on this product."
+                        "You've reached the daily limit for %s. You've "
+                        "already given out %g in the last 24 hours. If "
+                        "you issue %g more now, the total will be %g — "
+                        "over the daily limit of %g. Wait a few hours and "
+                        "try again, or ask a Manager to increase the "
+                        "daily limit for this product."
                         % (
                             product.display_name,
                             used_24h,
@@ -242,10 +239,18 @@ class WmsScanIssue(models.TransientModel):
     def action_plan(self):
         self.ensure_one()
         if not self.last_scan:
-            raise UserError("Scan a product first.")
+            raise UserError(
+                "Scan a product barcode before planning the issue. "
+                "The system needs to know what you want to give out."
+            )
         info = self.env["wms.barcode.alias"].resolve(self.last_scan)
         if info.get("kind") not in ("product", "alias", "lot"):
-            raise UserError("Barcode does not resolve to a product.")
+            raise UserError(
+                "That barcode isn't linked to any product in the "
+                "warehouse. Make sure you scanned the right label, or "
+                "ask a Manager to check if the barcode is set up "
+                "correctly."
+            )
 
         product = info["product"]
         qty = self.requested_qty * info.get("units", 1.0)
@@ -332,20 +337,21 @@ class WmsScanIssue(models.TransientModel):
         self.ensure_one()
         if not self.plan_line_ids:
             raise UserError(
-                "Nothing planned yet — scan a product first so the wizard "
-                "knows what you want to issue."
+                "You haven't chosen what to issue yet. Scan a product "
+                "and confirm the slots before validating the issue."
             )
         if self.short_qty:
             raise UserError(
-                "Stock out. The warehouse is %s short of what you asked for, "
-                "so this issue can't go ahead. Wait for the missing units to "
-                "come back through Scan Return, or reduce the requested "
-                "quantity and try again." % self.short_qty
+                "The warehouse doesn't have enough stock. You're short "
+                "by %s. Either wait for stock to come back through Scan "
+                "Return, or ask for less now and complete the rest "
+                "later." % self.short_qty
             )
         if self.photo_required and not self.photo:
             raise UserError(
-                "This item is measured (liters / kg / etc.). "
-                "Please attach a photo of what's being issued before validating."
+                "This product is measured by weight or volume. Take a "
+                "photo of what you're issuing and attach it before you "
+                "finish — the trust needs proof of measured items."
             )
         # ---- Overuse / abuse-prevention checks ------------------------------
         # Hard-block any single-issue qty over wms_max_per_issue and any
@@ -361,9 +367,9 @@ class WmsScanIssue(models.TransientModel):
             picking_type = self.warehouse_id.int_type_id
         if not picking_type:
             raise UserError(
-                "Warehouse %s isn't configured for this kind of stock issue. "
-                "Ask an Administrator to enable the relevant operation type "
-                "in the Inventory settings." % self.warehouse_id.display_name
+                "Warehouse %s isn't set up to issue stock this way. Ask "
+                "a Manager to check the warehouse settings in Odoo and "
+                "enable the right operation type." % self.warehouse_id.display_name
             )
         if not picking_type.active:
             picking_type.sudo().active = True
