@@ -1,0 +1,177 @@
+# -*- coding: utf-8 -*-
+"""Concurrency-hardening tests for the scan wizards (STEP 6).
+
+Odoo's TransactionCase runs each test inside ONE transaction that never
+commits, so a second DB connection cannot see the test's fixtures — real
+OS-thread concurrency is therefore not cleanly testable here. Instead we
+prove every SAFETY OUTCOME deterministically by simulating the concurrent
+change (e.g. another keeper depleting a slot between planning and
+validating) and asserting the guard fires:
+
+  * a double-submit never issues/receives twice (idempotency picking_id),
+  * an issue aborts cleanly (no negative/phantom stock) when its planned
+    stock was taken underneath it (the assigned-state check),
+  * the daily cap still blocks (it now runs inside the per-product lock).
+
+The per-product `FOR UPDATE` lock itself is a PostgreSQL serialization
+guarantee exercised on every happy-path issue below; its blocking
+behaviour is the database's contract, not something a single-process
+test can stage.
+"""
+from odoo.exceptions import UserError
+from odoo.tests import TransactionCase, tagged
+
+
+@tagged("post_install", "-at_install", "wms", "wms_concurrency")
+class TestScanConcurrency(TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.wh = cls.env["stock.warehouse"].search([], limit=1)
+        cls.stock = cls.wh.lot_stock_id
+        cls.keeper = cls.env["wms.storekeeper"].search([], limit=1) or cls.env[
+            "wms.storekeeper"
+        ].create({"name": "UAT Keeper"})
+        cls.product = cls.env["product.product"].create(
+            {
+                "name": "CONC-TEST Widget",
+                "type": "consu",
+                "is_storable": True,
+                "barcode": "CONCTEST001",
+                "wms_product_kind": "consumable",
+            }
+        )
+        # 10 units on hand, in the warehouse stock location.
+        cls.env["stock.quant"]._update_available_quantity(cls.product, cls.stock, 10.0)
+
+    def _on_hand(self):
+        return self.env["stock.quant"]._get_available_quantity(self.product, self.stock)
+
+    def _new_issue(self, qty=3.0):
+        wiz = self.env["wms.scan.issue"].create(
+            {
+                "warehouse_id": self.wh.id,
+                "requested_qty": qty,
+                "last_scan": "CONCTEST001",
+                "taken_by": "Test Taker",
+                "ordered_by": "Test Orderer",
+                "usage_note": "concurrency test",
+                "storekeeper_id": self.keeper.id,
+            }
+        )
+        wiz.action_plan()
+        return wiz
+
+    # ---- Idempotency ----------------------------------------------------
+    def test_issue_double_click_is_idempotent(self):
+        """Validating twice must create exactly ONE delivery and deduct
+        the stock once."""
+        start = self._on_hand()
+        wiz = self._new_issue(3.0)
+        wiz.action_validate()
+        first_picking = wiz.picking_id
+        self.assertTrue(first_picking, "first validate should create a picking")
+        after_first = self._on_hand()
+        self.assertAlmostEqual(after_first, start - 3.0, places=3)
+
+        # Second click (or refresh re-submit) on the SAME wizard.
+        wiz.action_validate()
+        self.assertEqual(wiz.picking_id, first_picking, "must reuse the same picking")
+        self.assertAlmostEqual(self._on_hand(), after_first, places=3, msg="no second deduction")
+        count = self.env["stock.picking"].search_count(
+            [("origin", "=", "Barcode FIFO issue"), ("wms_storekeeper_id", "=", self.keeper.id)]
+        )
+        self.assertGreaterEqual(count, 1)
+
+    # ---- Stock taken concurrently --------------------------------------
+    def test_issue_aborts_when_stock_taken_concurrently(self):
+        """If a planned slot is emptied between planning and validating
+        (another keeper got there first), the issue aborts cleanly: a
+        friendly error, no delivery, and stock never goes negative."""
+        wiz = self._new_issue(8.0)
+        # Simulate another keeper taking ALL the stock after we planned.
+        self.env["stock.quant"]._update_available_quantity(self.product, self.stock, -10.0)
+        self.assertAlmostEqual(self._on_hand(), 0.0, places=3)
+
+        with self.assertRaises(UserError):
+            wiz.action_validate()
+        # Nothing issued, no picking recorded, stock not negative.
+        self.assertFalse(wiz.picking_id)
+        self.assertGreaterEqual(self._on_hand(), 0.0)
+
+    # ---- Daily cap (race-safe behind the per-product lock) -------------
+    def test_daily_cap_blocks_second_issue(self):
+        self.product.product_tmpl_id.wms_daily_cap = 5.0
+        self._new_issue(3.0).action_validate()  # 3 issued, under cap
+        # A second issue of 3 -> projected 6 > cap 5 -> must block.
+        wiz2 = self._new_issue(3.0)
+        with self.assertRaises(UserError):
+            wiz2.action_validate()
+        self.assertFalse(wiz2.picking_id)
+
+    # ---- Happy path exercises the product-row FOR UPDATE lock ----------
+    def test_issue_happy_path_with_product_lock(self):
+        start = self._on_hand()
+        wiz = self._new_issue(2.0)
+        wiz.action_validate()  # runs the FOR UPDATE lock SQL + assigns + validates
+        self.assertTrue(wiz.picking_id)
+        self.assertAlmostEqual(self._on_hand(), start - 2.0, places=3)
+
+
+@tagged("post_install", "-at_install", "wms", "wms_concurrency")
+class TestReceiptConcurrency(TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.wh = cls.env["stock.warehouse"].search([], limit=1)
+        cls.stock = cls.wh.lot_stock_id
+        cls.keeper = cls.env["wms.storekeeper"].search([], limit=1) or cls.env[
+            "wms.storekeeper"
+        ].create({"name": "UAT Keeper R"})
+        cls.product = cls.env["product.product"].create(
+            {
+                "name": "CONC-RCPT Widget",
+                "type": "consu",
+                "is_storable": True,
+                "barcode": "CONCRCPT001",
+                "wms_product_kind": "consumable",
+            }
+        )
+        # A floor zone for the receipt to land in (auto-assign needs a
+        # slot or floor; a fresh test DB has none).
+        cls.floor = cls.env["stock.location"].create(
+            {
+                "name": "CONC-RCPT Floor",
+                "usage": "internal",
+                "location_id": cls.stock.id,
+                "wms_location_type": "floor",
+            }
+        )
+
+    def _on_hand(self):
+        return self.env["stock.quant"]._get_available_quantity(
+            self.product, self.stock, allow_negative=True
+        )
+
+    def test_receipt_double_click_is_idempotent(self):
+        """Validating a receipt twice must add the stock only once."""
+        start = self._on_hand()
+        wiz = self.env["wms.scan.receipt"].create(
+            {
+                "warehouse_id": self.wh.id,
+                "qc_passed": True,
+                "storekeeper_id": self.keeper.id,
+            }
+        )
+        self.env["wms.scan.receipt.line"].create(
+            {"wizard_id": wiz.id, "product_id": self.product.id, "quantity": 5.0}
+        )
+        wiz.action_validate()
+        first = wiz.picking_id
+        self.assertTrue(first)
+        after_first = self._on_hand()
+        self.assertAlmostEqual(after_first, start + 5.0, places=3)
+
+        wiz.action_validate()  # double-click
+        self.assertEqual(wiz.picking_id, first)
+        self.assertAlmostEqual(self._on_hand(), after_first, places=3, msg="no second receipt")

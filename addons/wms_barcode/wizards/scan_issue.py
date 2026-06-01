@@ -55,6 +55,15 @@ class WmsScanIssue(models.TransientModel):
 
     plan_line_ids = fields.One2many("wms.scan.issue.plan", "wizard_id")
     short_qty = fields.Float(readonly=True, help="Shortfall — what we couldn't allocate.")
+    picking_id = fields.Many2one(
+        "stock.picking",
+        readonly=True,
+        copy=False,
+        help="The delivery this issue created. Set once validated so a "
+        "double-click or a page refresh re-submitting the form cannot "
+        "issue the same stock twice — the second attempt just re-opens "
+        "the delivery that was already made.",
+    )
 
     # ---- Audit trail -----------------------------------------------------
     # Captured at validate-time and copied onto the resulting picking, so
@@ -335,6 +344,13 @@ class WmsScanIssue(models.TransientModel):
 
     def action_validate(self):
         self.ensure_one()
+        # ---- Idempotency: never issue twice ---------------------------------
+        # A double-click on Validate, or a page refresh that re-POSTs the
+        # form, would otherwise create a second picking and deduct the
+        # stock again. Once we've created a picking, this wizard is spent —
+        # just re-open the delivery that was already made.
+        if self.picking_id:
+            return self._open_picking()
         if not self.plan_line_ids:
             raise UserError(
                 "You haven't chosen what to issue yet. Scan a product "
@@ -353,10 +369,25 @@ class WmsScanIssue(models.TransientModel):
                 "photo of what you're issuing and attach it before you "
                 "finish — the trust needs proof of measured items."
             )
+        # ---- Concurrency: serialize issues of the same product --------------
+        # Take a short row lock on each product before the daily-cap read and
+        # the reservation. Two keepers issuing the same product now run one
+        # after the other instead of overlapping, so neither the rolling-24h
+        # cap check nor the oldest-stock pick can be raced. The lock is held
+        # only until this transaction commits (a second or two) and products
+        # are locked in id order so concurrent multi-product issues can't
+        # deadlock. Different products never contend.
+        product_ids = sorted(set(self.plan_line_ids.mapped("product_id").ids))
+        if product_ids:
+            self.env.cr.execute(
+                "SELECT id FROM product_product WHERE id IN %s ORDER BY id FOR UPDATE",
+                (tuple(product_ids),),
+            )
         # ---- Overuse / abuse-prevention checks ------------------------------
         # Hard-block any single-issue qty over wms_max_per_issue and any
         # request that would push the rolling-24h total over wms_daily_cap.
         # 0 on either field = no cap. See product.template for the rationale.
+        # Now race-safe: it runs inside the per-product lock above.
         self._enforce_overuse_caps()
 
         # Pick a picking type via warehouse-level m2o so we don't get bitten
@@ -402,11 +433,28 @@ class WmsScanIssue(models.TransientModel):
             )
             move._action_confirm()
         picking.action_assign()
+        # ---- Concurrency safety: only issue what we could actually reserve --
+        # action_assign reserves against LIVE quants (Odoo row-locks them).
+        # If another keeper emptied a planned slot between planning and now,
+        # the move won't be fully assigned. Abort cleanly — raising here rolls
+        # back the whole transaction (no half-made picking, no negative stock)
+        # — instead of blindly forcing the line quantity and deducting stock
+        # that isn't on the shelf.
+        unassigned = picking.move_ids.filtered(lambda m: m.state != "assigned")
+        if unassigned:
+            raise UserError(
+                "Another keeper took some of this stock while you were "
+                "finishing up, so it can no longer be issued in full. "
+                "Nothing was issued. Please scan again to plan against "
+                "what's left on the shelf."
+            )
         for move in picking.move_ids:
             for ml in move.move_line_ids:
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
+        # Record the picking so a re-submit is a no-op (idempotency guard).
+        self.picking_id = picking.id
 
         # Audit-trail message. Goes into the picking's history so the
         # Admin can scroll back through it later. Includes the Odoo
@@ -463,10 +511,16 @@ class WmsScanIssue(models.TransientModel):
                 .ids,
             )
 
+        return self._open_picking()
+
+    def _open_picking(self):
+        """Open the delivery this issue created (also the no-op target a
+        double-submit lands on)."""
+        self.ensure_one()
         return {
             "type": "ir.actions.act_window",
             "res_model": "stock.picking",
-            "res_id": picking.id,
+            "res_id": self.picking_id.id,
             "view_mode": "form",
         }
 
