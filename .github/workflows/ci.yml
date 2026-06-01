@@ -210,10 +210,10 @@ jobs:
               --db_host=localhost --db_port=5432 \
               --db_user=odoo --db_password=odoo_ci_password \
               --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
-              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
+              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training \
               --without-demo=all \
               --test-enable \
-              --test-tags wms,wms_audit,wms_delete \
+              --test-tags wms,wms_audit,wms_delete,wms_health \
               --log-level=info \
               --logfile=/dev/stdout \
               2>&1 | tee odoo_test.log
