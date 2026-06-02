@@ -30,10 +30,10 @@
 
         <menuitem id="menu_wms_barcode_alias"
                   name="Carton Barcodes"
-                  parent="wms_location.menu_wms_config"
+                  parent="wms_location.menu_wms_operations"
                   action="action_wms_barcode_alias"
                   groups="wms_location.group_wms_can_manage_catalog"
-                  sequence="30"/>
+                  sequence="60"/>
 
         <!--
             Onboard Products wizard — adds catalog rows + initial stock.
