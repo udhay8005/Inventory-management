@@ -1815,5 +1815,27 @@
                     <p><b>Why it matters:</b> archiving keeps your working lists short and clean while never losing the trust's records, the best of both worlds, and far safer than deleting.</p>
             </div></field>
         </record>
+
+        <record id="help_how_to_add_training_video" model="wms.help.article">
+            <field name="slug">how-to-add-a-training-video</field>
+            <field name="name">How to add a training video</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">45</field>
+            <field name="keywords">video record upload youtube vimeo training clip how to class</field>
+            <field name="body" type="html"><div>
+                    <p><b>You can attach a short video to any help article</b> so a new helper can watch a task instead of only reading about it.</p>
+                    <p><b>Best way — upload a clip (works offline):</b></p>
+                    <ul>
+                    <li>Record a short clip on a phone (landscape, good light). Keep it under <b>5 minutes</b> and under <b>50 MB</b> — one task per clip (e.g. "Scanning a receipt").</li>
+                    <li>Save it as <b>MP4</b> (H.264) if you can — it plays on every device.</li>
+                    <li>Open the article, find <b>Training video (managers only)</b>, click <b>Upload a clip</b>, choose the file, and Save.</li>
+                    <li>Add a one-line <b>caption</b> like "Scanning a receipt — 2 min".</li>
+                    </ul>
+                    <p>The clip is stored inside the system and is included in every backup. It plays right inside the article — <b>no internet needed</b>, which is ideal for a tablet in the shed.</p>
+                    <p><b>Other way — paste a YouTube or Vimeo link:</b> if the video is already online, paste its link into <b>Video link</b> instead of uploading. It shows inside the article, but this one <b>needs internet</b> to play. (If you fill both, the uploaded clip wins.)</p>
+                    <p><b>Tip:</b> keep videos short and focused. Five 1-minute clips beat one 5-minute clip — people find the part they need faster.</p>
+            </div></field>
+        </record>
     </data>
 </odoo>

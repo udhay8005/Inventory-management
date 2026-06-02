@@ -53,7 +53,6 @@ def main() -> None:
         sys.exit(f"Auth failed for {login}@{db}")
 
     models = xmlrpc.client.ServerProxy(f"{url}/xmlrpc/2/object")
-    ctx = {"force_company": False}
 
     # --- 1. Locate the demo products (templates + variants) -------------
     tmpl_ids = call(

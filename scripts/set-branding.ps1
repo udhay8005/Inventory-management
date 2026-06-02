@@ -24,6 +24,9 @@
     scripts\set-branding.ps1 -LogoPath 'D:\my-new-logo.jpg'
 #>
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSAvoidUsingPlainTextForPassword', 'Password',
+    Justification = 'The Odoo login password is forwarded to the _set_branding.py helper on its argv for an XML-RPC login, where it is plaintext regardless of the PowerShell type used to carry it. Default matches the stock local admin login.')]
 param(
     [string]$LogoPath,
     [string]$FaviconPath,

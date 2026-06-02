@@ -17,6 +17,12 @@ Usage:
     python _set_branding.py URL DB LOGIN PASSWORD LOGO_PATH FAVICON_PATH
 """
 
+# pyright: reportIndexIssue=false
+# xmlrpc.client.ServerProxy.execute_kw is typed to return the catch-all
+# _Marshallable union, so subscripting a known-list result (e.g. the row
+# from a search_read, or company["logo"]) trips reportIndexIssue. The shapes
+# are guaranteed by the Odoo RPC contract, so the indexing is safe here.
+
 from __future__ import annotations
 
 import base64
