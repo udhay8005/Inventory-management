@@ -7,7 +7,6 @@ str concatenated to a Markup body): the shared function strips any prior block
 first, then re-appends it correctly.
 """
 from odoo import SUPERUSER_ID, api
-
 from odoo.addons.wms_training.hooks import apply_visual_enrichment
 
 
