@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Weekly restore drill - prove the latest GPG-encrypted backup is recoverable
     WITHOUT touching the production database.
@@ -153,7 +153,8 @@ function Write-DrillAudit {
     param(
         [bool]$Success, [string]$FileName, [double]$SizeMb = 0,
         [int]$TocEntries = 0, [bool]$Verified = $false,
-        [double]$DurationSeconds = 0, [string]$Message = ''
+        [double]$DurationSeconds = 0, [string]$Message = '',
+        [string]$AuditDb = 'wms'
     )
     if (-not $DbUser -or -not $DbHost -or -not $DbPort) { return }
     try {
@@ -387,7 +388,7 @@ try {
     $mode = if ($DryRun) { "DryRun (TOC verify)" } else { "full restore" }
     Write-DrillAudit -Success $true -FileName (Split-Path -Leaf $BackupPath) `
         -SizeMb $drillSizeMb -TocEntries $tocLines -Verified $true `
-        -DurationSeconds $elapsed.TotalSeconds -Message "OK - $mode"
+        -DurationSeconds $elapsed.TotalSeconds -Message "OK - $mode" -AuditDb $AuditDb
     Send-Heartbeat -Url $DrillHeartbeatUrl
 }
 catch {
@@ -397,7 +398,7 @@ catch {
     $failName = if ($BackupPath) { Split-Path -Leaf $BackupPath } else { "drill-run" }
     Write-DrillAudit -Success $false -FileName $failName `
         -DurationSeconds ((Get-Date) - $started).TotalSeconds `
-        -Message "FAILED: $($_.Exception.Message)"
+        -Message "FAILED: $($_.Exception.Message)" -AuditDb $AuditDb
     Send-Heartbeat -Url $DrillHeartbeatUrl -Fail
     if (-not $exitCode -or $exitCode -eq $EXIT_OK) {
         $exitCode = $EXIT_RESTORE_FAILED

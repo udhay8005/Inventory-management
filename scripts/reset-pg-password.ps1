@@ -81,7 +81,7 @@ if (-not $pgService) {
 Write-Host "Service:           $($pgService.Name)" -ForegroundColor Gray
 
 # Locate psql.exe relative to the service path.
-$serviceBin = (Get-WmiObject Win32_Service -Filter "Name='$($pgService.Name)'").PathName
+$serviceBin = (Get-CimInstance Win32_Service -Filter "Name='$($pgService.Name)'").PathName
 $pgBinDir = ($serviceBin -split '"' | Where-Object { $_ -match 'pg_ctl\.exe$' }) -replace 'pg_ctl\.exe$',''
 $psqlExe = Join-Path $pgBinDir 'psql.exe'
 if (-not (Test-Path $psqlExe)) {

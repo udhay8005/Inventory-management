@@ -23,11 +23,11 @@
 param(
     [switch]$DryRun,
     [switch]$Force,
-    [string]$DbName   = 'wms',
-    [string]$Login    = 'admin',
-    [string]$Password = 'admin',
-    [string]$Url      = 'http://localhost:8069'
+    [string]$DbName   = 'wms'
 )
+# Note: DB credentials are read from config\odoo.native.conf below (this
+# script talks to Postgres directly via psql, not Odoo XML-RPC), so there
+# are deliberately no -Login/-Password/-Url parameters here.
 
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot

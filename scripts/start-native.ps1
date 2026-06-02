@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Start the WMS Odoo server natively (no Docker).
 
