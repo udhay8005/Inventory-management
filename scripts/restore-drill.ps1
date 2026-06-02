@@ -329,10 +329,12 @@ try {
     $tocFile = "$decrypted.toc"
     & pg_restore --list $decrypted > $tocFile
     if ($LASTEXITCODE -ne 0) {
+        $exitCode = $EXIT_TOC_FAILED
         throw "pg_restore --list failed (exit $LASTEXITCODE)."
     }
     $tocLines = (Get-Content -LiteralPath $tocFile | Measure-Object -Line).Lines
     if ($tocLines -lt 100) {
+        $exitCode = $EXIT_TOC_FAILED
         throw "TOC has only $tocLines lines - expected 1000+ for a real Odoo dump. Backup may be truncated."
     }
     Write-Drill 'OK' "TOC OK ($tocLines entries)."

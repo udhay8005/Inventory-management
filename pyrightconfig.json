@@ -32,7 +32,12 @@
   "typeCheckingMode": "basic",
   "useLibraryCodeForTypes": true,
 
-  "reportMissingImports": "warning",
+  // Odoo maps the `odoo.addons.<addon>` namespace across every addons-path
+  // directory at RUNTIME (odoo.addons.__path__ is extended on boot). Pyright
+  // can't replicate that, so `import odoo.addons.wms_location...` and
+  // `odoo.addons.web...` are unresolvable by static analysis even though they
+  // run fine. These are always false positives here, so silence them.
+  "reportMissingImports": "none",
   "reportMissingModuleSource": "none",
 
   "reportAttributeAccessIssue": "none",

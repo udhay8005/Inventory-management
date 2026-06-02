@@ -88,11 +88,11 @@ if ((Test-Path "$pgBin\psql.exe") -and ($env:Path -notlike "*$pgBin*")) {
 }
 
 # ─── Build command line ───────────────────────────────────────────────────
-$args = @('-c', $ConfPath, '-d', $DbName, '--http-port', $Port)
-if ($Upgrade) { $args += @('-u', $Upgrade) }
-if ($Dev)     { $args += @('--dev', $Dev) }
+$odooArgs = @('-c', $ConfPath, '-d', $DbName, '--http-port', $Port)
+if ($Upgrade) { $odooArgs += @('-u', $Upgrade) }
+if ($Dev)     { $odooArgs += @('--dev', $Dev) }
 
 Write-Host "`nStarting Odoo on http://localhost:$Port (db=$DbName)" -ForegroundColor Green
 Write-Host "Press Ctrl+C to stop.`n" -ForegroundColor DarkGray
 
-& $VenvPy $OdooBin @args
+& $VenvPy $OdooBin @odooArgs
