@@ -20,6 +20,7 @@
             <field name="video_caption">A short welcome video can be added here — see "How do I add a training video?"</field>
             <field name="body" type="html"><div>
                 <p>Welcome to the complete <b>Warehouse System training library</b>. Everything you need to learn this system on your own is here — no instructor required. Work top to bottom for your role.</p>
+                <p style="text-align:center"><img src="/wms_training/static/img/diagrams/warehouse-structure.svg" alt="Warehouse structure: Zone to Rack to Compartment to Slot" style="width:100%;max-width:320px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
                 <p><b>How the library works</b></p>
                 <ul>
                     <li>📖 <b>Read</b> the guides below in order (each is short and uses real trust examples).</li>

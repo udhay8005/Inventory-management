@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 560" font-family="Segoe UI, Arial, sans-serif" role="img" aria-label="Annotated screen-map of the Scan Receipt wizard">
+  <!-- ============================================================= -->
+  <!-- Annotated screen-map: Scan Receipt wizard                     -->
+  <!-- Stylized vector recreation (NOT a screenshot) with numbered   -->
+  <!-- callouts. Numbers follow the order a user fills the form.     -->
+  <!-- ============================================================= -->
+
+  <!-- dialog window frame -->
+  <rect x="16" y="16" width="380" height="528" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <!-- title bar -->
+  <path d="M16 28 a12 12 0 0 1 12 -12 h356 a12 12 0 0 1 12 12 v22 h-380 z" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="36" y="40" font-size="15" font-weight="700" fill="#334155">Scan Receipt</text>
+  <circle cx="372" cy="33" r="6" fill="#e2e8f0"/>
+  <path d="M369 30 l6 6 M375 30 l-6 6" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- info banner -->
+  <rect x="32" y="62" width="348" height="48" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="44" y="80" font-size="11" fill="#1e3a8a">Scanner ready — each barcode is processed</text>
+  <text x="44" y="94" font-size="11" fill="#1e3a8a">automatically; carton barcodes auto-fill</text>
+  <text x="44" y="104" font-size="11" fill="#1e3a8a">their count.</text>
+
+  <!-- field 1: Scan here -->
+  <rect x="32" y="122" width="348" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="140" font-size="13" font-weight="600" fill="#334155">Scan here</text>
+  <rect x="44" y="148" width="324" height="12" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="50" y="157" font-size="9" fill="#94a3b8">Scan product, carton, or slot…</text>
+
+  <!-- field 2: lines table -->
+  <rect x="32" y="178" width="348" height="92" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <!-- table header -->
+  <rect x="44" y="188" width="324" height="18" rx="3" fill="#eef2f7" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="52" y="200" font-size="10" font-weight="600" fill="#475569">Product</text>
+  <text x="200" y="200" font-size="10" font-weight="600" fill="#475569">Quantity</text>
+  <text x="280" y="200" font-size="10" font-weight="600" fill="#475569">Location Dest</text>
+  <line x1="192" y1="188" x2="192" y2="262" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="272" y1="188" x2="272" y2="262" stroke="#e2e8f0" stroke-width="1"/>
+  <!-- table rows -->
+  <rect x="52" y="212" width="120" height="8" rx="2" fill="#e2e8f0"/>
+  <rect x="200" y="212" width="40" height="8" rx="2" fill="#e2e8f0"/>
+  <rect x="280" y="212" width="80" height="8" rx="2" fill="#e2e8f0"/>
+  <rect x="52" y="230" width="120" height="8" rx="2" fill="#eef2f7"/>
+  <rect x="200" y="230" width="40" height="8" rx="2" fill="#eef2f7"/>
+  <rect x="280" y="230" width="80" height="8" rx="2" fill="#eef2f7"/>
+  <rect x="52" y="248" width="120" height="8" rx="2" fill="#eef2f7"/>
+  <rect x="200" y="248" width="40" height="8" rx="2" fill="#eef2f7"/>
+  <rect x="280" y="248" width="80" height="8" rx="2" fill="#eef2f7"/>
+
+  <!-- field 3: Quality check -->
+  <rect x="32" y="280" width="348" height="52" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="298" font-size="13" font-weight="600" fill="#334155">Quality check</text>
+  <rect x="44" y="306" width="14" height="14" rx="3" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5"/>
+  <path d="M47 313 l3 3 l5 -6" stroke="#16a34a" stroke-width="1.5" fill="none"/>
+  <rect x="66" y="307" width="302" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="72" y="316" font-size="9" fill="#94a3b8">Anything unusual? (optional)</text>
+
+  <!-- field 4: Store Keeper on duty -->
+  <rect x="32" y="342" width="348" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="360" font-size="13" font-weight="600" fill="#334155">Store Keeper on duty <tspan fill="#dc2626">*</tspan></text>
+  <rect x="44" y="368" width="324" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="50" y="377" font-size="9" fill="#94a3b8">On-duty Store Keeper</text>
+
+  <!-- field 5: Delivered by -->
+  <rect x="32" y="398" width="348" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="416" font-size="13" font-weight="600" fill="#334155">Delivered by</text>
+  <rect x="44" y="424" width="324" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="50" y="433" font-size="9" fill="#94a3b8">Driver / vendor / courier (optional)</text>
+
+  <!-- footer buttons -->
+  <line x1="32" y1="462" x2="380" y2="462" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="32" y="474" width="100" height="30" rx="6" fill="#e2e8f0"/>
+  <text x="82" y="493" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">Process scan</text>
+  <rect x="142" y="474" width="130" height="30" rx="6" fill="#f59e0b"/>
+  <text x="207" y="493" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">Validate &amp; Print</text>
+  <rect x="282" y="474" width="74" height="30" rx="6" fill="#e2e8f0"/>
+  <text x="319" y="493" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">Cancel</text>
+
+  <!-- ============================================================= -->
+  <!-- numbered callouts (right column)                              -->
+  <!-- ============================================================= -->
+
+  <!-- 1 -> Scan here -->
+  <line x1="380" y1="145" x2="408" y2="120" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="116" r="13" fill="#f59e0b"/>
+  <text x="420" y="121" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">1</text>
+  <text x="440" y="113" font-size="12" font-weight="600" fill="#7c2d12">Scan here</text>
+  <text x="440" y="127" font-size="12" fill="#7c2d12">Scan each item; lines</text>
+  <text x="440" y="141" font-size="12" fill="#7c2d12">appear automatically.</text>
+
+  <!-- 2 -> lines table -->
+  <line x1="380" y1="224" x2="408" y2="180" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="176" r="13" fill="#f59e0b"/>
+  <text x="420" y="181" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">2</text>
+  <text x="440" y="173" font-size="12" font-weight="600" fill="#7c2d12">Lines table</text>
+  <text x="440" y="187" font-size="12" fill="#7c2d12">Check what was added;</text>
+  <text x="440" y="201" font-size="12" fill="#7c2d12">set the destination slot.</text>
+
+  <!-- 3 -> Quality check -->
+  <line x1="380" y1="305" x2="408" y2="252" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="248" r="13" fill="#f59e0b"/>
+  <text x="420" y="253" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">3</text>
+  <text x="440" y="245" font-size="12" font-weight="600" fill="#7c2d12">Quality check</text>
+  <text x="440" y="259" font-size="12" fill="#7c2d12">Tick + note if a delivery</text>
+  <text x="440" y="273" font-size="12" fill="#7c2d12">looks wrong.</text>
+
+  <!-- 4 -> Store Keeper on duty -->
+  <line x1="380" y1="365" x2="408" y2="324" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="320" r="13" fill="#f59e0b"/>
+  <text x="420" y="325" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">4</text>
+  <text x="440" y="317" font-size="12" font-weight="600" fill="#7c2d12">Store Keeper on duty</text>
+  <text x="440" y="331" font-size="12" fill="#7c2d12">Required: who is at the</text>
+  <text x="440" y="345" font-size="12" fill="#7c2d12">desk now (from the roster).</text>
+
+  <!-- 5 -> Delivered by -->
+  <line x1="380" y1="421" x2="408" y2="396" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="392" r="13" fill="#f59e0b"/>
+  <text x="420" y="397" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">5</text>
+  <text x="440" y="389" font-size="12" font-weight="600" fill="#7c2d12">Delivered by</text>
+  <text x="440" y="403" font-size="12" fill="#7c2d12">Optional: driver / vendor /</text>
+  <text x="440" y="417" font-size="12" fill="#7c2d12">courier.</text>
+
+  <!-- 6 -> Validate &amp; Print -->
+  <line x1="207" y1="474" x2="430" y2="468" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="464" r="13" fill="#f59e0b"/>
+  <text x="420" y="469" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">6</text>
+  <text x="440" y="461" font-size="12" font-weight="600" fill="#7c2d12">Validate &amp; Print</text>
+  <text x="440" y="475" font-size="12" fill="#7c2d12">Confirms the receipt and</text>
+  <text x="440" y="489" font-size="12" fill="#7c2d12">prints labels.</text>
+</svg>
