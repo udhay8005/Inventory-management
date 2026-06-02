@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Training Library hub. A NEW record (safe to load even though the
+        original help_articles.xml is noupdate="1"): it becomes the single
+        "start here" index that links the whole curriculum together and tells
+        staff where the training videos appear. noupdate="0" so we can keep
+        improving this one article on module upgrade without touching the
+        admin-editable seed articles.
+    -->
+    <data noupdate="0">
+        <record id="help_training_library_index" model="wms.help.article">
+            <field name="slug">training-library-index</field>
+            <field name="name">📚 Training Library — Start Here</field>
+            <field name="category">role</field>
+            <field name="audience">all</field>
+            <field name="sequence">5</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">training library index curriculum start here videos sop guide learn onboarding course</field>
+            <field name="video_caption">A short welcome video can be added here — see "How do I add a training video?"</field>
+            <field name="body" type="html"><div>
+                <p>Welcome to the complete <b>Warehouse System training library</b>. Everything you need to learn this system on your own is here — no instructor required. Work top to bottom for your role.</p>
+                <p><b>How the library works</b></p>
+                <ul>
+                    <li>📖 <b>Read</b> the guides below in order (each is short and uses real trust examples).</li>
+                    <li>▶️ <b>Watch</b> — where an article has a video player at the top, press play. Videos are added over time; an empty player just means that clip isn't recorded yet.</li>
+                    <li>🔎 <b>Search</b> the Help Center any time you hit a word you don't know (try "FIFO", "compartment", "slot").</li>
+                    <li>💡 <b>Beginner Mode</b> (ON by default) shows extra hints under fields. Turn it off in your Preferences once you're confident.</li>
+                </ul>
+
+                <h3>🟢 New Store Keeper — your path</h3>
+                <p>You receive, put away, issue, and return stock, and you report damage. Learn in this order:</p>
+                <ol>
+                    <li><b>Getting started as a Store Keeper</b> — what you do each shift.</li>
+                    <li><b>Barcodes &amp; scanners</b> — how scanning works.</li>
+                    <li><b>Receiving stock</b> — Scan Receipt: log what arrives, record who was on duty.</li>
+                    <li><b>Putaway</b> — get each item to its slot (Rack → Shelf → Compartment → Slot).</li>
+                    <li><b>Issuing stock (FIFO)</b> — the system hands you the oldest stock first; take a photo, record the keeper.</li>
+                    <li><b>Returns</b> — booking returnable items back in (fluids/consumables are refused).</li>
+                    <li><b>Damaged goods</b> &amp; <b>Repairs</b> — what to do when something breaks.</li>
+                    <li><b>Stock counts / audits</b> — counting a shelf and submitting the result (it locks once submitted).</li>
+                </ol>
+
+                <h3>🔵 Admin / Manager — your path</h3>
+                <p>You build the warehouse map, onboard products, manage people, and watch the dashboards. Learn in this order:</p>
+                <ol>
+                    <li><b>What this system is and what it does</b> — the big picture.</li>
+                    <li><b>Warehouse structure</b> — Zones, Racks, Compartments, Slots, and the three Generators that create them in seconds.</li>
+                    <li><b>Onboard products</b> — paste a list from Excel; each item gets an auto-SKU, barcode, and label.</li>
+                    <li><b>Users &amp; permissions</b> — Manager vs Store Keeper, the capability tick-boxes, and the on-duty roster.</li>
+                    <li><b>Stock flow: FIFO / FEFO</b> — how the system decides what leaves first.</li>
+                    <li><b>Audit trail &amp; roster</b> — who did what, and why audits lock.</li>
+                    <li><b>Reports</b> — occupancy, movement history, oldest stock, expiry alerts, forecasts.</li>
+                    <li><b>Backups &amp; restore drill</b>, then <b>Observability / health</b> — keeping the data safe and the system green.</li>
+                    <li><b>Damage &amp; repair oversight</b> and <b>Troubleshooting</b>.</li>
+                </ol>
+
+                <h3>⚪ Read-only Viewer — your path</h3>
+                <ol>
+                    <li><b>What you can and cannot do</b>.</li>
+                    <li><b>Using reports</b> and <b>Searching stock</b> — find anything without changing it.</li>
+                    <li><b>Audit visibility</b> — read the history.</li>
+                    <li><b>Safe viewing</b> — you can't break anything; look freely.</li>
+                </ol>
+
+                <h3>🎬 For trainers — adding the videos</h3>
+                <p>Each workflow has a ready-to-record script and an exact click-path checklist (kept with the project in <code>docs/training/</code>). To publish a recorded clip, open the matching article and use the <b>Training video (upload)</b> field or the <b>Video link</b> field — see <i>"How do I add a training video?"</i> for the steps.</p>
+
+                <p class="text-muted"><i>This index links the existing terminology, role-training, workflow, FAQ, troubleshooting, and safety articles into one course. Use the Help Center search or the category groups to open any of them directly.</i></p>
+            </div></field>
+        </record>
+    </data>
+</odoo>
