@@ -37,20 +37,12 @@
         # the code is more careful than the rule assumes.
         'PSAvoidUsingConvertToSecureStringWithPlainText',
 
-        # ---- PSAvoidUsingPlainTextForPassword --------------------------
-        # Every secret these scripts handle must reach an EXTERNAL tool as
-        # plaintext regardless of the PowerShell type used to carry it:
-        #   - psql 'ALTER USER ... PASSWORD ''...'''  (reset-pg-password)
-        #   - gpg --passphrase-fd 0                   (restore-native)
-        #   - a Python helper's argv / process env    (set-branding, ai)
-        # PowerShell's SecureString is in-process obfuscation, not
-        # encryption, and a [SecureString] parameter cannot be passed on
-        # the command line or through UAC self-elevation -- it would break
-        # the very invocation these tools rely on. The scripts that handle
-        # the real backup passphrase already offer Read-Host -AsSecureString
-        # for interactive entry; the [string] params are explicit, optional
-        # automation overrides. Accepted for this local threat model.
-        'PSAvoidUsingPlainTextForPassword',
+        # NOTE: PSAvoidUsingPlainTextForPassword is intentionally NOT excluded
+        # here -- it is handled per-occurrence at each password parameter with
+        # an inline [SuppressMessageAttribute] + Justification, and
+        # restore-native.ps1 was converted to a [SecureString] passphrase.
+        # Keeping the rule active means a NEW plaintext-password parameter in
+        # a future script is still flagged at the source.
 
         # ---- PSUseShouldProcessForStateChangingFunctions ---------------
         # The only functions this rule flags here (Start-GpgPipe,

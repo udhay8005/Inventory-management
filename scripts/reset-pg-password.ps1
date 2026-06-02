@@ -31,6 +31,9 @@
     scripts\reset-pg-password.ps1 -NewPassword 'my_new_secret'
 #>
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSAvoidUsingPlainTextForPassword', 'NewPassword',
+    Justification = 'Local recovery tool. The new password must reach psql as plaintext (ALTER USER ... PASSWORD, and PGPASSWORD for the verify step) and is re-passed through UAC self-elevation on the process command line. A SecureString cannot protect any of those boundaries and would break the -NewPassword default and CLI override.')]
 param(
     [string]$NewPassword = 'odoo_local_dev_pw',
     [string]$PgDataDir
