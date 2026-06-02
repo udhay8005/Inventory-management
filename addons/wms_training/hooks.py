@@ -25,24 +25,99 @@ MARKER = "data-wms-visual"
 
 # slug -> (diagram filename, max-width px, action xmlid or None, alt text)
 PLAN = {
-    "workflow-receiving-stock": ("receiving.svg", 340, "wms_barcode.action_wms_scan_receipt", "Receiving flow"),
-    "workflow-putaway-moving-stock-to-its-spot": ("putaway.svg", 340, "wms_barcode.action_wms_scan_receipt", "Putaway flow"),
-    "workflow-fifo-issuing": ("fifo-issue.svg", 340, "wms_barcode.action_wms_scan_issue", "FIFO issue flow"),
+    "workflow-receiving-stock": (
+        "receiving.svg",
+        340,
+        "wms_barcode.action_wms_scan_receipt",
+        "Receiving flow",
+    ),
+    "workflow-putaway-moving-stock-to-its-spot": (
+        "putaway.svg",
+        340,
+        "wms_barcode.action_wms_scan_receipt",
+        "Putaway flow",
+    ),
+    "workflow-fifo-issuing": (
+        "fifo-issue.svg",
+        340,
+        "wms_barcode.action_wms_scan_issue",
+        "FIFO issue flow",
+    ),
     "workflow-returns": ("returns.svg", 540, "wms_barcode.action_wms_scan_return", "Returns flow"),
-    "workflow-cycle-count-checking": ("cycle-count-audit.svg", 340, "wms_reports.action_wms_audit", "Cycle count / audit flow"),
-    "workflow-creating-zones-and-floor-areas": ("warehouse-structure.svg", 340, "wms_location.action_wms_zone_generator", "Warehouse structure"),
-    "workflow-creating-racks": ("warehouse-structure.svg", 340, "wms_location.action_wms_rack_generator", "Warehouse structure"),
-    "workflow-assigning-slots": ("warehouse-structure.svg", 340, "wms_location.action_wms_slots", "Warehouse structure"),
-    "workflow-damage-handling": ("damage-repair.svg", 540, "wms_repair_damage.action_wms_damage", "Damage to repair flow"),
-    "workflow-repairs": ("damage-repair.svg", 540, "wms_repair_damage.action_wms_repair", "Damage to repair flow"),
-    "workflow-backup-verification": ("backup-restore-health.svg", 340, "wms_reports.action_wms_backup_audit", "Backup / restore / health flow"),
-    "workflow-restore-drill": ("backup-restore-health.svg", 340, "wms_reports.action_wms_backup_audit", "Backup / restore / health flow"),
-    "workflow-using-reports": ("forecast-reorder.svg", 340, "wms_reports.action_wms_occupancy", "Forecast and reorder flow"),
-    "workflow-low-stock-handling": ("forecast-reorder.svg", 340, "wms_reports.action_wms_low_stock_alerts", "Forecast and reorder flow"),
+    "workflow-cycle-count-checking": (
+        "cycle-count-audit.svg",
+        340,
+        "wms_reports.action_wms_audit",
+        "Cycle count / audit flow",
+    ),
+    "workflow-creating-zones-and-floor-areas": (
+        "warehouse-structure.svg",
+        340,
+        "wms_location.action_wms_zone_generator",
+        "Warehouse structure",
+    ),
+    "workflow-creating-racks": (
+        "warehouse-structure.svg",
+        340,
+        "wms_location.action_wms_rack_generator",
+        "Warehouse structure",
+    ),
+    "workflow-assigning-slots": (
+        "warehouse-structure.svg",
+        340,
+        "wms_location.action_wms_slots",
+        "Warehouse structure",
+    ),
+    "workflow-damage-handling": (
+        "damage-repair.svg",
+        540,
+        "wms_repair_damage.action_wms_damage",
+        "Damage to repair flow",
+    ),
+    "workflow-repairs": (
+        "damage-repair.svg",
+        540,
+        "wms_repair_damage.action_wms_repair",
+        "Damage to repair flow",
+    ),
+    "workflow-backup-verification": (
+        "backup-restore-health.svg",
+        340,
+        "wms_reports.action_wms_backup_audit",
+        "Backup / restore / health flow",
+    ),
+    "workflow-restore-drill": (
+        "backup-restore-health.svg",
+        340,
+        "wms_reports.action_wms_backup_audit",
+        "Backup / restore / health flow",
+    ),
+    "workflow-using-reports": (
+        "forecast-reorder.svg",
+        340,
+        "wms_reports.action_wms_occupancy",
+        "Forecast and reorder flow",
+    ),
+    "workflow-low-stock-handling": (
+        "forecast-reorder.svg",
+        340,
+        "wms_reports.action_wms_low_stock_alerts",
+        "Forecast and reorder flow",
+    ),
     "welcome": ("warehouse-structure.svg", 340, None, "Warehouse structure"),
     "admin-path-system-overview": ("roles-permissions.svg", 600, None, "Roles and permissions"),
-    "keeper-path-getting-started": ("receiving.svg", 340, "wms_barcode.action_wms_scan_receipt", "Receiving flow"),
-    "readonly-path-what-you-can-do": ("forecast-reorder.svg", 340, "wms_reports.action_wms_occupancy", "Reports overview"),
+    "keeper-path-getting-started": (
+        "receiving.svg",
+        340,
+        "wms_barcode.action_wms_scan_receipt",
+        "Receiving flow",
+    ),
+    "readonly-path-what-you-can-do": (
+        "forecast-reorder.svg",
+        340,
+        "wms_reports.action_wms_occupancy",
+        "Reports overview",
+    ),
     "what-is-fifo": ("fifo-vs-fefo.svg", 520, None, "FIFO vs FEFO"),
     "what-is-fefo": ("fifo-vs-fefo.svg", 520, None, "FIFO vs FEFO"),
     "what-is-a-rack": ("warehouse-structure.svg", 340, None, "Warehouse structure"),
@@ -74,12 +149,12 @@ _ANNO = (
 _BTN = (
     '<p style="text-align:center">'
     '<a href="/odoo/action-{aid}" class="btn btn-primary" target="_self">'
-    'Open this screen in the app &#8594;</a></p>'
+    "Open this screen in the app &#8594;</a></p>"
 )
 _NOTE = (
     '<p class="text-muted">&#9654; A short training video for this topic can be '
-    'added here &#8212; open this article and use the <b>Training video</b> field '
-    '(see the Recording Kit).</p>'
+    "added here &#8212; open this article and use the <b>Training video</b> field "
+    "(see the Recording Kit).</p>"
 )
 
 # start markers of a previously-applied block (proper or mis-escaped)
@@ -111,7 +186,7 @@ def _build_block(env, slug, fname, width, action_xmlid, alt):
         afile, acap = ANNOTATED[slug]
         anno = _ANNO.format(f=afile, alt=acap)
     return (
-        '<hr/><div ' + MARKER + '="1">'
+        "<hr/><div " + MARKER + '="1">'
         "<h3>&#128202; Visual guide</h3>"
         + _IMG.format(f=fname, w=width, alt=alt)
         + anno
@@ -138,7 +213,8 @@ def apply_visual_enrichment(env):
         enriched += 1
     _logger.info(
         "STEP7 visual enrichment: %s articles enriched, %s slugs missing",
-        enriched, missing,
+        enriched,
+        missing,
     )
     return enriched
 
