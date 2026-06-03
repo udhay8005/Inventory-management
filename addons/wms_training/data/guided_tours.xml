@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- noupdate="0": these guided tours are content we expect to refine over
+         time, so they are re-applied (improved) on every module upgrade. -->
+    <data noupdate="0">
+
+        <!-- ============================================================
+             1. First-Login Tour (everyone)
+             ============================================================ -->
+        <record id="help_tour_first_login" model="wms.help.article">
+            <field name="slug">tour-first-login</field>
+            <field name="name">🧭 First-Login Tour (everyone)</field>
+            <field name="category">role</field>
+            <field name="audience">all</field>
+            <field name="sequence">6</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">tour first login guided walkthrough getting started new beginner orientation everyone start here</field>
+            <field name="video_caption">A 4-stop click-through tour of the warehouse app — about 5 minutes.</field>
+            <field name="body" type="html"><div>
+                    <h2>Welcome — let's take a quick look around</h2>
+                    <p>New here? This 4-stop tour shows you around. Click each button, look at the screen, then come back.</p>
+                    <p><i>Tip: each button opens the real screen in this same tab. After a peek, use your browser's Back button to return here and carry on to the next stop.</i></p>
+                    <hr/>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/warehouse-structure.svg" alt="Warehouse structure: Zone to Rack to Compartment to Slot" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <h3>The 4 stops</h3>
+                    <ol>
+                    <li><b>Open the Help Center</b> — this is your library. Any word you don't know, search it here.<br/>
+                        <a href="/odoo/action-476" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Open Getting Started</b> — your friendly home page with the lessons picked just for your role.<br/>
+                        <a href="/odoo/action-477" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>See the warehouse map (Slots)</b> — every shelf and spot where stock can live. Have a scroll; you don't need to change anything.<br/>
+                        <a href="/odoo/action-426" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>See a live report: Slot Occupancy</b> — a real dashboard showing how full the warehouse is right now.<br/>
+                        <a href="/odoo/action-449" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
+                    <hr/>
+                    <p><b>That's the lay of the land.</b> Now open your role tour below.</p>
+                    <ul>
+                    <li>A Store Keeper? Read <b>🟢 Store Keeper Guided Tour</b>.</li>
+                    <li>An Admin or Manager? Read <b>🔵 Admin / Manager Guided Tour</b>.</li>
+                    <li>Just here to look at reports? Read <b>⚪ Read-only Viewer Guided Tour</b>.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <!-- ============================================================
+             2. Store Keeper Guided Tour
+             ============================================================ -->
+        <record id="help_tour_storekeeper" model="wms.help.article">
+            <field name="slug">tour-storekeeper</field>
+            <field name="name">🟢 Store Keeper Guided Tour</field>
+            <field name="category">role</field>
+            <field name="audience">keeper</field>
+            <field name="sequence">7</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">tour store keeper guided daily loop receive issue return damage fifo scan walkthrough keeper</field>
+            <field name="video_caption">Walk through a Store Keeper's daily loop — receive, putaway, issue, return, damage.</field>
+            <field name="body" type="html"><div>
+                    <h2>Your daily loop, one click at a time</h2>
+                    <p>This is the day in the life of a Store Keeper: stock comes <b>in</b>, it gets <b>put away</b>, it goes <b>out</b> for the cows and the pooja room, some comes <b>back</b>, and anything broken gets <b>reported</b>. Click each button to open the real screen, take a look, then come back here with the Back button.</p>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/receiving.svg" alt="Receiving flow: scan, check, put away" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <h3>The daily loop</h3>
+                    <ol>
+                    <li><b>Receive stock</b> — a delivery arrives. Scan each item, tick the quality check, pick your name, and validate.<br/>
+                        <a href="/odoo/action-440" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Putaway</b> — give the new stock its home. The system suggests a slot; here you can see all the Slots and how stock sits in them.<br/>
+                        <a href="/odoo/action-426" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Issue stock (FIFO)</b> — hand stock out. The wizard tells you the exact slot to take from, oldest first.<br/>
+                        <a href="/odoo/action-442" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/fifo-issue.svg" alt="FIFO issue: the oldest stock leaves first" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <ol start="4">
+                    <li><b>Returns</b> — a borrowed tool or unused spare comes back. Scan it back in so it's available again.<br/>
+                        <a href="/odoo/action-441" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Report damage</b> — found something broken, expired, or spoiled? Move it off the shelf so nobody issues it by mistake.<br/>
+                        <a href="/odoo/action-446" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/damage-repair.svg" alt="Damage and repair flow" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <hr/>
+                    <p><b>Nicely done — that's the whole loop.</b> When you're ready for the detail behind each step, read:</p>
+                    <ul>
+                    <li><b>Keeper Path 1: Getting started as a Store Keeper</b> (slug <i>keeper-path-getting-started</i>) — the full first-day walkthrough.</li>
+                    <li><b>FIFO issuing workflow</b> (slug <i>workflow-fifo-issuing</i>) — a step-by-step on taking stock out the right way.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <!-- ============================================================
+             3. Admin / Manager Guided Tour
+             ============================================================ -->
+        <record id="help_tour_admin" model="wms.help.article">
+            <field name="slug">tour-admin</field>
+            <field name="name">🔵 Admin / Manager Guided Tour</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">8</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">tour admin manager guided setup build zone rack onboard products roster reports backup health walkthrough</field>
+            <field name="video_caption">Build and run the warehouse — zones, racks, products, people, reports, backups.</field>
+            <field name="body" type="html"><div>
+                    <h2>Build it, then run it</h2>
+                    <p>As an Admin you do two jobs: <b>build</b> the warehouse (zones, racks, products, people) and <b>run</b> it (watch the reports, keep the backups safe). This tour clicks through both, in order. Open each screen, have a look, then use Back to return here.</p>
+                    <h3>Part 1 — Build the warehouse</h3>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/warehouse-structure.svg" alt="Warehouse structure: Zone to Rack to Compartment to Slot" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <ol>
+                    <li><b>Create a Zone</b> — a Zone is a room or area (Pharmacy, Feed Store). Start here so your racks have a home.<br/>
+                        <a href="/odoo/action-432" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Create a Rack</b> — a Rack is one shelving unit, laid out as a grid of shelves and columns. The generator builds it and its slots for you.<br/>
+                        <a href="/odoo/action-429" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Onboard products</b> — tell the system what the trust buys and uses (feed, medicine, ghee, tools), each with a clear SKU.<br/>
+                        <a href="/odoo/action-465" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
+                    <h3>Part 2 — Run the warehouse</h3>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/roles-permissions.svg" alt="Roles and permissions: Manager, Store Keeper, and capability switches" style="width:100%;max-width:600px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <ol start="4">
+                    <li><b>Manage the storekeeper roster</b> — add one row per real person so wizards can record who was on duty.<br/>
+                        <a href="/odoo/action-439" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Review reports</b> — Slot Occupancy shows you, at a glance, how full the warehouse is.<br/>
+                        <a href="/odoo/action-449" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/backup-restore-health.svg" alt="Backup, restore drill, and health check" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <ol start="6">
+                    <li><b>Check backups &amp; health</b> — the safety net. Confirm a recent backup ran and the weekly restore drill is passing.<br/>
+                        <a href="/odoo/action-474" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
+                    <hr/>
+                    <p><b>That's the whole job — build and run.</b> For the reasoning behind each part, read:</p>
+                    <ul>
+                    <li><b>Admin Path 1: What this system is and what it does</b> (slug <i>admin-path-system-overview</i>) — the big picture before the detail.</li>
+                    <li><b>Backup verification workflow</b> (slug <i>workflow-backup-verification</i>) — how to be sure your data is truly safe.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <!-- ============================================================
+             4. Read-only Viewer Guided Tour
+             ============================================================ -->
+        <record id="help_tour_readonly" model="wms.help.article">
+            <field name="slug">tour-readonly</field>
+            <field name="name">⚪ Read-only Viewer Guided Tour</field>
+            <field name="category">role</field>
+            <field name="audience">readonly</field>
+            <field name="sequence">9</field>
+            <field name="is_onboarding" eval="True"/>
+            <field name="keywords">tour read-only viewer guided reports occupancy movement history fifo expiry audit look only no edit</field>
+            <field name="video_caption">A look-only tour of the live reports — occupancy, movements, expiry, and audits.</field>
+            <field name="body" type="html"><div>
+                    <h2>Look without touching</h2>
+                    <p>You're here to <b>see</b> what's going on, not to change it — and that's exactly right. Everything in this tour is read-only, so click freely: nothing you open can alter the stock. Open each screen, have a look, then use Back to return here.</p>
+                    <hr/>
+                    <h3>The 5 reports worth knowing</h3>
+                    <ol>
+                    <li><b>Slot Occupancy</b> — how full the warehouse is, slot by slot. Your best first glance.<br/>
+                        <a href="/odoo/action-449" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Movement history</b> — every receipt, issue, and return: what moved, when, and who handled it.<br/>
+                        <a href="/odoo/action-452" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Oldest stock / FIFO</b> — what has been sitting longest, so nothing is forgotten at the back of a rack.<br/>
+                        <a href="/odoo/action-448" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Expiry alerts</b> — medicine, feed, and fluids that are close to their expiry date.<br/>
+                        <a href="/odoo/action-466" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    <li><b>Audit history</b> — the inventory audits (counts) and how they turned out.<br/>
+                        <a href="/odoo/action-467" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
+                    <hr/>
+                    <p><b>That's everything you need to keep an eye on the store.</b> To get more from the reports, read:</p>
+                    <ul>
+                    <li><b>Read-only Path: Using the reports</b> (slug <i>readonly-path-using-reports</i>) — how to read each dashboard.</li>
+                    <li><b>Read-only Path: Audit visibility</b> (slug <i>readonly-path-audit-visibility</i>) — understanding the count history and the audit trail.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+    </data>
+</odoo>
