@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Encrypted backup of the native WMS install - Postgres dump + filestore.
 

@@ -32,7 +32,7 @@
 param(
     [Parameter(Mandatory)] [string]$BackupFile,
     [string]$DbName = 'wms',
-    [string]$Passphrase,
+    [SecureString]$Passphrase,
     [switch]$Force,
     [string]$DbHost,
     [int]$DbPort,
@@ -74,16 +74,21 @@ if (-not (Test-Path $BackupFile)) {
 }
 
 # --- Resolve passphrase --------------------------------------------------
+# Keep the passphrase as a [SecureString] in this script's variable space
+# (matches backup-native.ps1 / restore-drill.ps1); it is converted to
+# plaintext only at the gpg stdin boundary inside Start-GpgDecrypt.
 if (-not $Passphrase) {
     if (Test-Path $EnvPath) {
         $line = (Select-String -Path $EnvPath -Pattern '^BACKUP_PASSPHRASE=(.+)$' | Select-Object -First 1)
-        if ($line) { $Passphrase = $line.Matches.Groups[1].Value.Trim() }
+        if ($line) {
+            $envPass = $line.Matches.Groups[1].Value.Trim()
+            if ($envPass) { $Passphrase = ConvertTo-SecureString $envPass -AsPlainText -Force }
+            $envPass = $null   # wipe the plaintext local immediately
+        }
     }
 }
 if (-not $Passphrase) {
-    $sec = Read-Host "Enter BACKUP_PASSPHRASE" -AsSecureString
-    $Passphrase = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+    $Passphrase = Read-Host "Enter BACKUP_PASSPHRASE" -AsSecureString
 }
 
 # --- Find gpg.exe --------------------------------------------------------
@@ -98,19 +103,30 @@ if (-not $gpg) {
 if (-not $gpg) { Write-Host "gpg.exe not found." -ForegroundColor Red; exit 1 }
 
 function Start-GpgDecrypt {
-    param([string]$Pass, [string]$InputFile, [string]$OutputFile)
-    # Capture stderr; only print it if gpg actually failed (gpg-agent
-    # logs aren't errors).
+    param(
+        [Parameter(Mandatory)] [SecureString]$Pass,
+        [Parameter(Mandatory)] [string]$InputFile,
+        [Parameter(Mandatory)] [string]$OutputFile
+    )
+    # Convert to plaintext ONLY here, in a short-lived local, and pipe it to
+    # gpg's stdin via cmd's `echo|` (mirrors backup-native.ps1's Start-GpgPipe).
+    # Capture stderr; only print it if gpg actually failed (gpg-agent logs
+    # aren't errors).
     $errFile = [System.IO.Path]::GetTempFileName()
-    $cmd = "echo $Pass| `"$gpg`" --batch --yes --passphrase-fd 0 --decrypt -o `"$OutputFile`" `"$InputFile`" 2> `"$errFile`""
-    & cmd /c $cmd
-    $rc = $LASTEXITCODE
-    if ($rc -ne 0) {
-        $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+    $plain = $null
+    try {
+        $plain = [System.Net.NetworkCredential]::new('', $Pass).Password
+        $cmd = "echo $plain| `"$gpg`" --batch --yes --passphrase-fd 0 --decrypt -o `"$OutputFile`" `"$InputFile`" 2> `"$errFile`""
+        & cmd /c $cmd
+        $rc = $LASTEXITCODE
+        if ($rc -ne 0) {
+            $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
+            throw "gpg decryption failed (exit $rc) on $InputFile. Wrong passphrase?`n$stderr"
+        }
+    } finally {
+        $plain = $null   # wipe the plaintext local
         Remove-Item $errFile -Force -ErrorAction SilentlyContinue
-        throw "gpg decryption failed (exit $rc) on $InputFile. Wrong passphrase?`n$stderr"
     }
-    Remove-Item $errFile -Force -ErrorAction SilentlyContinue
 }
 
 # --- 1. Decrypt the DB dump ---------------------------------------------
