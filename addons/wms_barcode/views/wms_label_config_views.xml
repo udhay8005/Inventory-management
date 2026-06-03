@@ -15,15 +15,16 @@
                         </div>
                         <div class="alert alert-info">
                             All measurements are in millimetres. The default
-                            layout is 102 × 25 mm (4 × 1 inch) — a standard
-                            thermal roll. Change any value and re-print to see
-                            it move. Set a width or height to <b>0</b> to hide
-                            that element entirely.
+                            layout is 101.6 × 50.8 mm (4 × 2 inch) die-cut —
+                            change any value and re-print to see it move. Set a
+                            width or height to <b>0</b> to hide that element
+                            entirely.
                         </div>
                         <group>
                             <group string="Sticker size">
                                 <field name="paper_width_mm"/>
                                 <field name="paper_height_mm"/>
+                                <field name="gap_mm"/>
                                 <field name="active"/>
                                 <field name="company_id" groups="base.group_multi_company"/>
                             </group>
@@ -91,8 +92,8 @@
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">No label profile yet.</p>
                 <p>Create one profile to control where the barcode, logo and text
-                appear on every thermal sticker. The defaults match a 4 × 1 inch
-                roll printer at 203 DPI — adjust to taste.</p>
+                appear on every thermal sticker. The defaults match the 4 × 2 inch
+                die-cut roll on the TSC TE244 at 203 DPI — adjust to taste.</p>
             </field>
         </record>
 
