@@ -45,6 +45,9 @@
     scripts\start-ai-worker.ps1 -IntervalHours 12 -User svc_ai
 #>
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSAvoidUsingPlainTextForPassword', 'Password',
+    Justification = 'Optional override for the service-account password, exported to the child worker process via the ODOO_PASSWORD environment variable (plaintext at that boundary regardless of carrying type). Normally supplied via .env (ODOO_USER_PASSWORD); placeholder values are rejected at startup.')]
 param(
     [string]$OdooUrl,
     [string]$DbName,
