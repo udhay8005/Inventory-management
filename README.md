@@ -11,7 +11,7 @@ Runs **natively on Windows** — no Docker required.
 - 🧾 **Audit trail invariant** — every stock-moving action records `wms_taken_by` / `wms_ordered_by` / `wms_storekeeper_id` on the resulting `stock.picking` plus a chatter message
 - 👥 **Two-role security** — WMS Manager (Admin) vs WMS Store Keeper, with an admin-maintained roster of human keepers
 - 🔧 **Damage / Repair workflow** — smart recommendation engine (urgent buy / repair / note only) + one-click Create Repair Order, full state machine (draft → in_repair → done / scrapped / cancelled) with chatter audit on every transition
-- 🏷 **Thermal labels** — customisable 4×1 inch layout (logo zone + content zone), barcode rendered inline
+- 🏷 **Thermal labels** — customisable 4×2 inch die-cut layout (logo / title / SKU / barcode), inline barcode, printer gap-sensor aware
 - 🔁 **Returnability classification** — product Kind (Raw / Packaging / Fluid / Finished Good / WIP / Consumable / Tool / Spare) drives whether Scan Return accepts it
 - 📈 **Buying recommendations** — daily-average usage + 7-day buffer for non-returnables; concurrent-users heuristic for tools/spares
 - 📊 **Reports** — Where-is-it / Warehouse map / Oldest stock (FIFO) / Slot occupancy / Cycle count due / Movement history / Low stock alerts / Dead stock / Reorder summary
@@ -46,6 +46,7 @@ immediately under your user profile). In **Apps** install in this order:
 4. `wms_repair_damage` — damage / repair / return workflows
 5. `wms_ai_forecast` — offline statsmodels forecasting + reorder
 6. `wms_reports` — SQL-view dashboards
+7. `wms_training` — Help Center, guided tours, visual academy, SOPs
 
 ## Initial user setup
 
@@ -92,6 +93,11 @@ scripts\start-native.ps1 -Upgrade wms_barcode  # Restart upgrading a module
 scripts\start-native.ps1 -Dev "reload,qweb"    # Dev mode (auto-reload)
 scripts\stop-native.ps1                        # Graceful stop
 
+# Run as an auto-starting Windows service (recommended for production)
+scripts\install-odoo-service.ps1               # Create Odoo-WMS service (UAC) — auto-start + restart-on-failure
+scripts\uninstall-odoo-service.ps1             # Remove the service
+scripts\set-user-passwords.ps1 -Users "admin,storekeeper"  # Set strong unique passwords (printed once)
+
 # Backup + recovery
 scripts\backup-native.ps1                      # Dump DB + zip filestore
 scripts\reset-pg-password.ps1                  # Forgot postgres password? Run this (UAC).
@@ -128,7 +134,8 @@ Inventory_mngt/
     ├── wms_barcode/            scan wizards + barcode aliases + storekeeper roster + label printing
     ├── wms_repair_damage/      damage / repair / return flows + recommendation engine
     ├── wms_ai_forecast/        offline statsmodels forecasting + reorder
-    └── wms_reports/            SQL-view dashboards (Where-is-it, FIFO age, occupancy, ...)
+    ├── wms_reports/            SQL-view dashboards (Where-is-it, FIFO age, occupancy, ...)
+    └── wms_training/           Help Center, guided tours, visual academy, SOPs
 ```
 
 ## Read the docs
@@ -153,6 +160,9 @@ Architecture, design notes, and operational guides:
 - [`docs/16-hardware-guide.md`](docs/16-hardware-guide.md) — scanners + thermal printers
 - [`docs/17-ci-cd.md`](docs/17-ci-cd.md) — GitHub Actions pipeline + release flow
 - [`docs/20-end-to-end-flow.md`](docs/20-end-to-end-flow.md) — full lifecycle ASCII diagram
+- [`docs/PRODUCTION-READINESS.md`](docs/PRODUCTION-READINESS.md) — production sign-off checklist
+- [`docs/RUN-AS-SERVICE.md`](docs/RUN-AS-SERVICE.md) — run Odoo as an auto-starting Windows service
+- [`docs/LABEL-PRINTING.md`](docs/LABEL-PRINTING.md) — thermal 4×2 labels + printer gap calibration
 
 ## Mobile access (phones / tablets / off-site)
 
@@ -174,9 +184,9 @@ optional item photo (required for liquid / weight / volume items).
 
 USB / Bluetooth HID barcode scanners "just work" — they keyboard-type into the
 focused field on the scan wizards. Any thermal printer your **host OS** can see
-will print the generated PDF labels through the user's browser. Tested with
-4×1 inch direct-thermal stock; layout is admin-configurable so other label
-sizes work too.
+will print the generated PDF labels. Tested with 4×2 inch die-cut direct-thermal
+stock on a TSC TE244 (gap-sensor); layout is admin-configurable so other label
+sizes work too. See [docs/LABEL-PRINTING.md](docs/LABEL-PRINTING.md).
 
 ## Run tests
 
