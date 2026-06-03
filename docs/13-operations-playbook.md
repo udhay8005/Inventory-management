@@ -32,12 +32,15 @@ Already complete:
 ```
 Warehouse (YourCompany)
   └─ Stock (WH/Stock)
-       └─ Rack R-01 .. R-32
-            └─ Level L-1 .. L-6
-                 └─ Divider D-1 .. D-4
-                      └─ Slot S-1 .. S-3   ← 2,304 unique stocking locations
+       └─ Rack R-01 ..            (a shelf × column grid, default 6 × 3)
+            └─ Compartment        (a 2D rectangle on that grid)
+                 └─ Slot          (holds stock; 1+ slots per compartment)
 ```
-- Each slot has its own auto-generated barcode like `R-12-L3-D2-S1`.
+- The hierarchy is 3 levels: Rack → Compartment → Slot. "Shelf" and
+  "Column" are grid coordinates, not separate location records. Floor /
+  open-area zones (`wms_location_type = floor`) hold stock directly.
+- Each slot has its own auto-generated barcode; total slot count depends
+  on each rack's grid + how compartments are laid out (not a fixed number).
 - Visual heat-map per rack at `/wms/rack/<id>/grid`.
 
 ### Physical alignment
@@ -182,7 +185,7 @@ Four built-in groups (Settings → Users & Companies → Groups, filtered by WMS
 
 | Group | Can | Cannot |
 |---|---|---|
-| **WMS / User** | Scan receipt, issue, internal transfer; view stock | Approve damage, edit racks |
+| **WMS / Store Keeper** | Scan receipt, issue, internal transfer; view stock | Approve damage, edit racks |
 | **WMS / Manager** | Everything WMS User can + cancel pickings, edit racks, run cycle count, see all reports | — |
 | **WMS / Repair Tech** | Start / finish repair, scrap from repair | Manage stock outside repair |
 | **WMS / Buyer** | View forecasts, create draft POs, see vendor data | Move stock |
@@ -192,8 +195,8 @@ Four built-in groups (Settings → Users & Companies → Groups, filtered by WMS
 | Role | Software group | Name in your org |
 |---|---|---|
 | Inventory In-charge | WMS / Manager | _______________ |
-| Receiver | WMS / User | _______________ |
-| Issuer / Despatcher | WMS / User | _______________ |
+| Receiver | WMS / Store Keeper | _______________ |
+| Issuer / Despatcher | WMS / Store Keeper | _______________ |
 | Repair Tech | WMS / Repair Tech | _______________ |
 | Buyer / Procurement | WMS / Buyer | _______________ |
 | Auditor | WMS / Manager (read-only sub-group if needed) | _______________ |
@@ -226,7 +229,7 @@ Before you onboard anyone:
 - [ ] Train the Issuer: complete one Scan Issue end-to-end with FIFO.
 - [ ] Run one mock damage + repair cycle so the team has muscle memory.
 - [ ] Set a daily 9am calendar reminder: "Yesterday's stock moves match physical?"
-- [ ] Schedule `./scripts/backup.sh` in Windows Task Scheduler — 02:00 daily.
+- [ ] Schedule `scripts\backup-native.ps1` in Windows Task Scheduler — 02:00 daily.
 - [ ] Print the responsibility table.
 
 That's the bar. Everything beyond is optimisation.

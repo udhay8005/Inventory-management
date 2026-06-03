@@ -12,6 +12,21 @@
             <field name="model">stock.picking</field>
             <field name="inherit_id" ref="stock.view_picking_form"/>
             <field name="arch" type="xml">
+                <!--
+                    Recent-keeper-edit warning banner. Inserted right
+                    before the sheet so it sits above all fields and
+                    is the first thing the Admin reads when they open
+                    a picking the keeper just touched.
+                -->
+                <xpath expr="//sheet" position="before">
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not wms_keeper_edit_warning">
+                        <field name="wms_keeper_edit_warning" invisible="1"/>
+                        <i class="fa fa-clock-o me-1"/>
+                        <field name="wms_keeper_edit_summary"
+                               readonly="1" nolabel="1"/>
+                    </div>
+                </xpath>
                 <xpath expr="//sheet/group" position="after">
                     <group string="Audit trail"
                            invisible="not wms_taken_by and not wms_ordered_by and not wms_storekeeper_id">

@@ -1,6 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_wms_damage_user,wms.damage user,model_wms_damage,wms_location.group_wms_user,1,1,1,0
-access_wms_damage_mgr,wms.damage mgr,model_wms_damage,wms_location.group_wms_manager,1,1,1,1
+access_wms_damage_mgr,wms.damage mgr,model_wms_damage,wms_location.group_wms_manager,1,1,1,0
 access_wms_repair_user,wms.repair user,model_wms_repair_order,wms_location.group_wms_user,1,0,1,0
 access_wms_repair_tech,wms.repair tech,model_wms_repair_order,group_repair_tech,1,1,1,0
-access_wms_repair_mgr,wms.repair mgr,model_wms_repair_order,wms_location.group_wms_manager,1,1,1,1
+access_wms_repair_mgr,wms.repair mgr,model_wms_repair_order,wms_location.group_wms_manager,1,1,1,0

@@ -13,9 +13,6 @@ FIFO scans on large quant tables.
     "license": "LGPL-3",
     "category": "Inventory/Warehouse",
     "depends": ["wms_location"],
-    "data": [
-        "data/post_init.xml",
-    ],
     "post_init_hook": "post_init_hook",
     "installable": True,
 }

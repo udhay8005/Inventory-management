@@ -1,5 +1,5 @@
-from odoo import api, fields, models
-from odoo.exceptions import ValidationError
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
 
 LOCATION_TYPES = [
     ("warehouse_view", "Warehouse view"),
@@ -251,20 +251,100 @@ class StockLocation(models.Model):
                         % (parent.wms_location_type if parent else "<none>")
                     )
 
-    # ---- FIFO helper (unchanged contract) ---------------------------------
+    # ---- FIFO / FEFO planner ----------------------------------------------
     @api.model
     def find_oldest_quants_for_product(self, product_id, qty_needed, parent_location_id=None):
-        """FIFO helper: returns (plan, missing) where `plan` is an ordered
-        list of (quant, take_qty) tuples consuming the oldest quants first.
+        """Plan a deduction across slots, returning (plan, missing) where
+        ``plan`` is an ordered list of (quant, take_qty) tuples.
+
+        Ordering rule:
+          * **FEFO** (First-Expiry-First-Out) when the scanned product
+            belongs to an expiry-sensitive kind (medicine / feed / fluid /
+            pooja) or has an explicit ``wms_expiry_date``. Quants are
+            picked by (``template.wms_expiry_date`` asc, ``in_date`` asc).
+            The lookup is also widened to every variant with the same
+            ``name`` + kind so a freshly received batch with a far-future
+            expiry never gets picked while an older batch is still on the
+            shelf — Trust pharmacy rule.
+          * **FIFO** (First-In-First-Out, the classic warehouse default)
+            for every other kind. Quants are picked by (``in_date`` asc).
+
+        Location scoping:
+          * Strict pass first: ``child_of parent_location_id`` (typically
+            the warehouse's ``lot_stock_id``). Keeps multi-warehouse
+            issues tidy.
+          * Fallback: if the strict pass finds nothing AND a parent was
+            requested, retry across every internal location in the
+            active company. Rescues the common single-warehouse setup
+            where the trust placed racks under a branded top-level
+            location (e.g. "Dakshin Vrindavan") instead of the default
+            ``WH/Stock`` tree.
         """
-        domain = [
-            ("product_id", "=", product_id),
+        # Lazy import to avoid a circular import at module load.
+        from odoo.addons.wms_location.models.product_template import EXPIRY_SENSITIVE_KINDS
+
+        Product = self.env["product.product"]
+        scanned = Product.browse(product_id).exists()
+        if not scanned:
+            return [], qty_needed
+        kind = scanned.product_tmpl_id.wms_product_kind
+        has_expiry = bool(scanned.product_tmpl_id.wms_expiry_date)
+        use_fefo = (kind in EXPIRY_SENSITIVE_KINDS) or has_expiry
+
+        # When FEFO is in play, widen the search to every variant with
+        # the same name + kind so sibling batches participate. Same name
+        # is the cheapest reliable signal that two SKUs are the same
+        # *product* (e.g. two batches of "Calcium Bolus", one expiring
+        # Dec 2026 and the other June 2027).
+        if use_fefo and scanned.name:
+            siblings = Product.search(
+                [
+                    ("name", "=", scanned.name),
+                    ("product_tmpl_id.wms_product_kind", "=", kind),
+                ]
+            )
+            product_ids = (siblings | scanned).ids
+        else:
+            product_ids = [scanned.id]
+
+        base_domain = [
+            ("product_id", "in", product_ids),
             ("quantity", ">", 0),
             ("location_id.usage", "=", "internal"),
         ]
+        strict = list(base_domain)
         if parent_location_id:
-            domain.append(("location_id.id", "child_of", parent_location_id))
-        quants = self.env["stock.quant"].search(domain, order="in_date asc, id asc")
+            strict.append(("location_id.id", "child_of", parent_location_id))
+        # We sort manually after fetch in FEFO mode because expiry lives
+        # on product.template, not on stock.quant — so SQL ORDER BY
+        # can't reach it without a join we don't need for FIFO.
+        quants = self.env["stock.quant"].search(strict, order="in_date asc, id asc")
+        if not quants and parent_location_id:
+            company_id = self.env.company.id
+            fallback = list(base_domain) + [
+                "|",
+                ("company_id", "=", company_id),
+                ("company_id", "=", False),
+            ]
+            quants = self.env["stock.quant"].search(fallback, order="in_date asc, id asc")
+
+        if use_fefo:
+            # Future-date sentinel so quants without an expiry sort
+            # LAST — they may be safe to ship, but anything with a
+            # known expiry should leave first.
+            far_future = "9999-12-31"
+            quants = quants.sorted(
+                key=lambda q: (
+                    (
+                        q.product_id.product_tmpl_id.wms_expiry_date.isoformat()
+                        if q.product_id.product_tmpl_id.wms_expiry_date
+                        else far_future
+                    ),
+                    q.in_date or far_future,
+                    q.id,
+                )
+            )
+
         plan = []
         remaining = qty_needed
         for q in quants:
@@ -277,6 +357,70 @@ class StockLocation(models.Model):
             plan.append((q, take))
             remaining -= take
         return plan, remaining
+
+    @api.ondelete(at_uninstall=False)
+    def _wms_block_delete_when_used(self):
+        """Refuse to delete a rack / compartment / slot / floor that still
+        holds stock or has move history. Tell the operator to archive
+        instead. Guards against an admin accidentally orphaning audit
+        history with one click on the standard form Delete button.
+        """
+        protected_types = {"rack", "compartment", "slot", "floor"}
+        Move = self.env["stock.move"].sudo()
+        for loc in self:
+            if loc.wms_location_type not in protected_types:
+                continue  # leave Odoo core paths untouched
+
+            # 1. Children still hanging off?
+            child_count = self.search_count([("location_id", "=", loc.id)])
+            if child_count:
+                raise UserError(
+                    _(
+                        "You can't delete %(name)s because it still has %(n)d "
+                        "sub-location(s) inside it (shelves, compartments, or "
+                        "slots). Delete the smallest units first (work from "
+                        "slots up to compartments), then delete the rack."
+                    )
+                    % {"name": loc.complete_name or loc.display_name, "n": child_count}
+                )
+
+            # 2. Live stock?
+            on_hand = sum(loc.quant_ids.mapped("quantity") or [0.0])
+            if on_hand > 0.001:
+                raise UserError(
+                    _(
+                        "%(name)s still has %(qty).3f unit(s) of stock in it "
+                        "(across %(n)d quant(s)). Empty it first by issuing, "
+                        "scrapping, or moving the stock to another slot. Once "
+                        "it's empty, you can archive (deactivate) it."
+                    )
+                    % {
+                        "name": loc.complete_name or loc.display_name,
+                        "qty": on_hand,
+                        "n": len(loc.quant_ids),
+                    }
+                )
+
+            # 3. Any move history? Then archive, do not delete.
+            history = Move.search_count(
+                [
+                    "|",
+                    ("location_id", "=", loc.id),
+                    ("location_dest_id", "=", loc.id),
+                ],
+                limit=1,
+            )
+            if history:
+                raise UserError(
+                    _(
+                        "%(name)s has history in the warehouse records (past "
+                        "issues, receipts, returns). You can't delete it "
+                        "because the trust needs to keep the audit trail "
+                        "intact. Instead, mark it as 'Archived' (inactive) "
+                        "on the location form."
+                    )
+                    % {"name": loc.complete_name or loc.display_name}
+                )
 
 
 def _shelf_label(top, bottom):

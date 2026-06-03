@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Override the backend favicon `<link rel="shortcut icon">` so it
+        points at /favicon.ico - the trust-branded route handled by
+        wms_location/controllers/favicon.py - instead of Odoo's bundled
+        /web/static/img/favicon.ico.
+
+        The static-file router serves /web/static/* directly from disk
+        and beats controller routes for those URLs, so we can't just
+        register at the original path. Pointing the <link> at the
+        plain /favicon.ico moves the request into our controller's
+        URL map entry and the trust icon ships.
+
+        priority="1" makes sure this lands even if some other addon
+        later inherits web.layout.
+    -->
+    <template id="layout_favicon_override"
+              inherit_id="web.layout"
+              priority="1"
+              name="WMS branded favicon">
+        <xpath expr="//link[@rel='shortcut icon']" position="replace">
+            <link type="image/png" rel="shortcut icon"
+                  t-att-href="x_icon or '/favicon.ico'"/>
+            <link rel="apple-touch-icon" type="image/png" href="/favicon.ico"/>
+        </xpath>
+    </template>
+</odoo>

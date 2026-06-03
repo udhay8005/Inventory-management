@@ -33,6 +33,12 @@
                         <field name="state" widget="statusbar"
                                statusbar_visible="draft,in_repair,done"/>
                     </header>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not wms_keeper_edit_warning">
+                        <field name="wms_keeper_edit_warning" invisible="1"/>
+                        <i class="fa fa-clock-o me-1"/>
+                        <field name="wms_keeper_edit_summary" readonly="1" nolabel="1"/>
+                    </div>
                     <sheet>
                         <h1><field name="name" readonly="1"/></h1>
                         <group>

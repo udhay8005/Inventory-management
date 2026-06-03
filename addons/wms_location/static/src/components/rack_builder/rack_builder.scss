@@ -29,19 +29,31 @@
         flex: 1 1 auto;
         min-width: 300px;
         display: grid;
-        gap: 4px;
+        gap: 0;  /* per-cell borders provide the spacing */
         background: var(--rb-bg);
         padding: 6px;
         border-radius: 4px;
     }
 
+    /*
+     * Per-cell rendering. Each cell is a 1x1 grid item with a 2px
+     * border on all four sides. When two adjacent cells belong to
+     * the same compartment, the shared edge is suppressed via the
+     * --no-top/--no-bottom/--no-left/--no-right modifier classes
+     * applied by the OWL template. The visual effect is a single
+     * outlined polyomino, no matter the shape.
+     *
+     * `gap` is set to 0 on the grid (overriding the default 4px)
+     * because gaps between same-compartment cells would defeat the
+     * border-hiding trick. Different compartments get visual
+     * separation purely from the per-side borders.
+     */
     &__cell {
         background: var(--rb-cell);
         color: var(--rb-text);
         padding: 6px 8px;
         cursor: pointer;
-        border: 2px solid transparent;
-        border-radius: 3px;
+        border: 2px solid #1c2530;  /* matches grid bg = looks like a gap */
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -53,7 +65,7 @@
             background: var(--rb-cell-hover);
         }
 
-        &--span {
+        &--multi {
             background: var(--rb-cell-span);
 
             &:hover {
@@ -61,8 +73,29 @@
             }
         }
 
+        /* Highlighted selection wraps every cell of the compartment. */
         &--selected {
-            border-color: var(--rb-cell-selected-border);
+            border-color: var(--rb-cell-selected-border) !important;
+        }
+
+        /* When the adjacent cell is in the same compartment, drop the
+           shared border so the two cells visually merge. */
+        &--no-top    { border-top-color:    transparent; }
+        &--no-bottom { border-bottom-color: transparent; }
+        &--no-left   { border-left-color:   transparent; }
+        &--no-right  { border-right-color:  transparent; }
+
+        /* Add-cell mode: highlight every OTHER compartment's cells so
+           the user can see what they can click to grow the selection.
+           Hover shows a green tint to suggest "click to add". */
+        &--addable {
+            cursor: copy;
+            outline: 1px dashed #28a745;
+            outline-offset: -3px;
+
+            &:hover {
+                background: #1f4530;
+            }
         }
     }
 

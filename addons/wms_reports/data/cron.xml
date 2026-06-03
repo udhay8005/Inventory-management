@@ -17,5 +17,42 @@
             <field name="nextcall"
                    eval="(DateTime.now() + timedelta(days=(7 - DateTime.now().weekday()) % 7)).replace(hour=9, minute=0, second=0)"/>
         </record>
+
+        <!--
+            Weekly Monday 09:00 digest of perishable products that
+            are already expired or about to expire within 30 days.
+            Quiet when nothing matches (the model bails on empty set).
+        -->
+        <record id="cron_wms_expiry_digest" model="ir.cron">
+            <field name="name">WMS — Weekly expiry alert digest</field>
+            <field name="model_id" ref="model_wms_expiry_alert"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_post_expiry_digest()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">7</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=(7 - DateTime.now().weekday()) % 7)).replace(hour=9, minute=5, second=0)"/>
+        </record>
+
+        <!--
+            Daily 08:00 backup-freshness check. Escalates a stale backup
+            (> 24h) or stale restore drill (> 7d) into an append-only
+            staleness_warning row + a Discuss notice to WMS Managers.
+            Quiet when healthy; at most one warning row per ~day.
+        -->
+        <record id="cron_wms_backup_freshness" model="ir.cron">
+            <field name="name">WMS — Daily backup freshness check</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_backup_freshness()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=0, second=0)"/>
+        </record>
     </data>
 </odoo>

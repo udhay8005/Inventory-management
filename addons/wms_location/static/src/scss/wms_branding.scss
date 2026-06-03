@@ -1,0 +1,297 @@
+// Dakshin Vrindavan Trust brand — applied to the Odoo backend.
+//
+// The trust's public website (dakshinvrindavan.org) anchors on:
+//   * Saffron-yellow  #EAAF00  — primary accent / call-to-action
+//   * Charcoal        #232220  — dark sections / chrome
+//   * Mid-grey        #666666  — body text
+//   * Headings        Lora (serif, weight 700)
+//   * Body            Open Sans (sans, weight 400/500)
+//
+// Odoo 19 ships its component palette as CSS custom properties so we
+// can re-point them globally without re-writing the underlying widget
+// SCSS. Anything we override here applies to every record form,
+// list view, dialog, button, breadcrumb, tab strip, and chatter
+// surface in the WMS app.
+//
+// Scope: this file lands in web.assets_backend so it only affects
+// signed-in users. The login screen is themed separately via
+// web.assets_frontend (see ``wms_login_branding.scss``).
+
+// ----- Brand tokens ---------------------------------------------------------
+$wms-saffron:        #EAAF00;
+$wms-saffron-dark:   #C99700;       // hover / pressed
+$wms-saffron-light:  #F8DE6E;       // subtle backgrounds
+$wms-charcoal:       #232220;       // primary dark surface
+$wms-charcoal-soft:  #5B5B5B;       // secondary dark
+$wms-body-text:      #4A4A4A;       // slightly darker than 666 for AAA
+$wms-heading-text:   #232220;
+$wms-page-bg:        #FAF7F0;       // very faint warm cream — keeps the
+                                    // app from looking like a sterile
+                                    // spreadsheet without fighting
+                                    // record-content readability.
+
+// Google Fonts (Lora + Open Sans) are loaded via a <link> tag injected
+// into <head> by the XML template ``wms_branding_head`` so the
+// SCSS bundler can't split the @import url(...) and break the bundle.
+
+// ----- Core CSS variable overrides ------------------------------------------
+// Odoo derives buttons, links, focus rings, kanban accents, breadcrumbs,
+// and a dozen other things from these. Override them centrally on :root
+// so the whole backend re-skins in one shot.
+:root,
+.o_web_client {
+    --o-brand-primary: #{$wms-saffron};
+    --o-brand-secondary: #{$wms-charcoal};
+    --o-action: #{$wms-saffron};
+    --o-action-active: #{$wms-saffron-dark};
+    --o-action-text-color: #{$wms-charcoal};   // contrast on saffron
+    --o-component-active-color: #{$wms-saffron};
+    --o-component-active-bg: #{rgba($wms-saffron, 0.12)};
+    --o-list-footer-bg-color: #{rgba($wms-saffron, 0.06)};
+
+    --o-main-text-color: #{$wms-body-text};
+    --o-main-headings-color: #{$wms-heading-text};
+
+    // Bootstrap base — buttons / alerts derive from these
+    --bs-primary: #{$wms-saffron};
+    --bs-primary-rgb: 234, 175, 0;
+    --bs-link-color: #{$wms-saffron-dark};
+    --bs-link-hover-color: #{$wms-charcoal};
+
+    // Font stacks
+    --o-font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --o-font-family-heading: "Lora", Georgia, "Times New Roman", serif;
+}
+
+// ----- Top navigation bar ---------------------------------------------------
+// One consistent charcoal band across the WHOLE navbar — Odoo's
+// default skin shows the secondary-section block in its own lighter
+// indigo/purple (rgb(113, 99, 158)), which fights the trust palette.
+// Force every container AND every button inside the navbar to be
+// either charcoal or transparent (so it inherits the charcoal from
+// its parent), punctuated only by the 3 px saffron underline.
+.o_main_navbar {
+    background-color: $wms-charcoal !important;
+    background-image: none !important;
+    border-bottom: 3px solid $wms-saffron !important;
+    border-top-color: transparent !important;
+    border-left-color: transparent !important;
+    border-right-color: transparent !important;
+}
+
+// Every direct + descendant container: charcoal background
+.o_main_navbar > *,
+.o_main_navbar .o_menu_sections,
+.o_main_navbar .o_menu_systray,
+.o_main_navbar .o_navbar_apps_menu,
+.o_main_navbar .o_menu_brand,
+.o_main_navbar .o_navbar_breadcrumbs,
+.o_main_navbar .o_user_menu {
+    background-color: $wms-charcoal !important;
+    background-image: none !important;
+    border-color: transparent !important;
+}
+
+// CRITICAL: kill the purple on the dropdown BUTTONS themselves —
+// they're direct children of .o_menu_sections and ship with Odoo's
+// own purple. Transparent so they inherit the parent's charcoal.
+.o_main_navbar button,
+.o_main_navbar .o-dropdown,
+.o_main_navbar .o-dropdown.dropdown-toggle,
+.o_main_navbar .o_menu_sections > button,
+.o_main_navbar .o_menu_sections > a,
+.o_main_navbar .o_menu_sections .dropdown-toggle,
+.o_main_navbar .o_menu_systray > button,
+.o_main_navbar .o_menu_systray .dropdown-toggle,
+.o_main_navbar .o_user_menu > button,
+.o_main_navbar .o_user_menu .dropdown-toggle {
+    background-color: transparent !important;
+    background-image: none !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+// Every label / icon / dropdown header inside the navbar reads white.
+.o_main_navbar .o_menu_brand,
+.o_main_navbar .o_nav_entry,
+.o_main_navbar .o_menu_sections .dropdown-toggle,
+.o_main_navbar .o_user_menu .dropdown-toggle,
+.o_main_navbar button,
+.o_main_navbar > * > .fa,
+.o_main_navbar .o_menu_brand .fa {
+    color: #FFFFFF !important;
+    font-family: "Open Sans", sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+// Hover / active section — saffron text + faint white wash, no
+// purple/blue tint anywhere.
+.o_main_navbar .o_menu_sections .o_nav_entry:hover,
+.o_main_navbar .o_menu_sections .dropdown-toggle:hover,
+.o_main_navbar .o_menu_sections .show > .dropdown-toggle,
+.o_main_navbar .o_menu_sections .o_nav_entry.active,
+.o_main_navbar .o_menu_sections > button:hover,
+.o_main_navbar .o_menu_systray > button:hover,
+.o_main_navbar .o_user_menu > button:hover {
+    color: $wms-saffron !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+.o_main_navbar .o_menu_sections .show > .dropdown-toggle {
+    border-bottom: 2px solid $wms-saffron !important;
+}
+
+// Dropdown panels that float out of the navbar (apps menu, user
+// menu, messaging) — white background, charcoal text. Without
+// this the panel would inherit the navbar's charcoal and the
+// menu items would disappear into the surface.
+.o_popover.o-dropdown--menu,
+.o_main_navbar + * .dropdown-menu,
+.o_main_navbar .dropdown-menu {
+    background-color: #FFFFFF !important;
+    border: 1px solid rgba($wms-charcoal, 0.12) !important;
+
+    .dropdown-item,
+    .o-dropdown-item {
+        color: $wms-charcoal !important;
+        font-weight: 500;
+    }
+    .dropdown-item:hover,
+    .dropdown-item:focus,
+    .o-dropdown-item:hover,
+    .o-dropdown-item:focus {
+        background-color: rgba($wms-saffron, 0.18) !important;
+        color: $wms-charcoal !important;
+    }
+}
+
+// ----- App switcher tiles ---------------------------------------------------
+.o_home_menu {
+    background-color: $wms-charcoal;
+    .o_app .o_caption {
+        color: #FFFFFF;
+        font-family: "Lora", serif;
+        font-weight: 500;
+    }
+    .o_app:hover {
+        background-color: rgba($wms-saffron, 0.12);
+    }
+}
+
+// ----- Page surfaces --------------------------------------------------------
+body.o_web_client {
+    font-family: "Open Sans", sans-serif;
+    color: $wms-body-text;
+    background-color: $wms-page-bg;
+}
+.o_action_manager,
+.o_content {
+    background-color: $wms-page-bg;
+}
+
+// Headings on every form and breadcrumb
+h1, h2, h3,
+.o_form_view .oe_title h1,
+.breadcrumb-item.active,
+.o_control_panel .o_breadcrumb {
+    font-family: "Lora", serif !important;
+    font-weight: 700;
+    color: $wms-heading-text;
+}
+
+// ----- Primary call-to-action buttons --------------------------------------
+.btn-primary,
+.o_form_button_create,
+.o_form_button_save,
+.o_kanban_view .o_kanban_quick_create .o_kanban_add,
+.o_list_button_save {
+    background-color: $wms-saffron !important;
+    border-color: $wms-saffron !important;
+    color: $wms-charcoal !important;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+
+    &:hover,
+    &:focus,
+    &:active {
+        background-color: $wms-saffron-dark !important;
+        border-color: $wms-saffron-dark !important;
+        color: #FFFFFF !important;
+    }
+}
+
+// Secondary buttons stay neutral but pick up the saffron focus ring
+.btn-secondary:focus,
+.btn-secondary:active {
+    box-shadow: 0 0 0 0.2rem rgba($wms-saffron, 0.35) !important;
+}
+
+// ----- Form view chrome -----------------------------------------------------
+// Status bar (Draft → Done) — active step in saffron, the rest charcoal/grey
+.o_statusbar_status > .btn.o_arrow_button_current,
+.o_statusbar_status > .btn.o_arrow_button_current:hover {
+    background-color: $wms-saffron !important;
+    color: $wms-charcoal !important;
+    border-color: $wms-saffron !important;
+}
+
+// Notebook tabs underline in saffron when active
+.o_form_view .o_notebook .nav-tabs .nav-link.active {
+    border-bottom: 2px solid $wms-saffron;
+    color: $wms-charcoal;
+    font-weight: 600;
+}
+
+// Required-field decoration
+.o_field_widget.o_required_modifier:not(.o_readonly_modifier) .o_input,
+.o_field_widget.o_required_modifier:not(.o_readonly_modifier) input {
+    border-color: rgba($wms-saffron, 0.55);
+}
+
+// Saved snackbar
+.o_notification_manager .o_notification.bg-success {
+    background-color: $wms-saffron !important;
+    color: $wms-charcoal !important;
+}
+
+// ----- List view ------------------------------------------------------------
+// Selected rows + group headers get a faint saffron tint instead of
+// Odoo's default purple.
+.o_list_view .o_data_row.o_data_row_selected > .o_data_cell {
+    background-color: rgba($wms-saffron, 0.10);
+}
+.o_list_view .o_group_header {
+    background-color: rgba($wms-charcoal, 0.04);
+    font-weight: 600;
+}
+
+// ----- Kanban view ----------------------------------------------------------
+.o_kanban_view .o_kanban_record .oe_kanban_card_color_2,
+.o_kanban_view .o_kanban_record:hover {
+    border-left-color: $wms-saffron;
+}
+
+// ----- Search facets --------------------------------------------------------
+.o_searchview .o_facet_value {
+    background-color: rgba($wms-saffron, 0.15);
+    color: $wms-charcoal;
+    border-color: rgba($wms-saffron, 0.5);
+}
+
+// ----- Chatter --------------------------------------------------------------
+.o-mail-Chatter-topbar,
+.o-mail-Composer {
+    border-color: rgba($wms-saffron, 0.30);
+}
+.o-mail-Message-author {
+    color: $wms-charcoal;
+    font-weight: 600;
+}
+
+// ----- Rack Builder integration --------------------------------------------
+// Tint the active-cell border to saffron so the Visual Builder grid in
+// Create Rack matches the rest of the brand. Selector must match the
+// BEM class emitted by rack_builder.xml.
+.o_wms_rack_builder .o_wms_rack_builder__cell--selected {
+    outline: 2px solid $wms-saffron !important;
+}

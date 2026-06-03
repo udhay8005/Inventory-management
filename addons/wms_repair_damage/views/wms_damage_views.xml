@@ -17,6 +17,19 @@
                                 invisible="state == 'cancelled'"/>
                         <field name="state" widget="statusbar"/>
                     </header>
+                    <!--
+                        Recent-keeper-edit warning. Surfaces when a
+                        Store Keeper (non-manager) saved this damage
+                        within the last 30 minutes, so the Admin
+                        notices before they overwrite the keeper's
+                        changes.
+                    -->
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not wms_keeper_edit_warning">
+                        <field name="wms_keeper_edit_warning" invisible="1"/>
+                        <i class="fa fa-clock-o me-1"/>
+                        <field name="wms_keeper_edit_summary" readonly="1" nolabel="1"/>
+                    </div>
                     <sheet>
                         <div class="oe_button_box" name="button_box">
                             <button name="action_create_repair_order" type="object"

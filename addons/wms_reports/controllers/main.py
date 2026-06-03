@@ -23,7 +23,10 @@ def _slot_color(occupancy_pct, on_hand):
     if occupancy_pct >= 100:
         return "bg-danger text-white"
     if occupancy_pct >= 75:
-        return "bg-warning"
+        # text-dark is required: bg-warning is saffron-on-white and the
+        # default Bootstrap btn-text colour (white) fails WCAG 1.4.3
+        # contrast against it. Matches the legend's "bg-warning text-dark".
+        return "bg-warning text-dark"
     return "bg-success text-white"
 
 
