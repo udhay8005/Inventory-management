@@ -58,7 +58,8 @@ output "monitor only — no prediction".
 
 ## Trigger
 
-- Cron daily 02:30 server time (`wms_ai_forecast/data/cron.xml`).
+- Cron retrains daily (`wms_ai_forecast/data/cron.xml`: interval 1 day, no
+  fixed clock time — runs on the scheduler's daily tick).
 - Manual "Retrain now" button on `wms.forecast` form for ops.
 - Optional `ai_worker` container can call `run_all_forecasts()` over XML-RPC
   to offload from Odoo container.

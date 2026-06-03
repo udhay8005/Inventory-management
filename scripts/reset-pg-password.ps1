@@ -31,6 +31,9 @@
     scripts\reset-pg-password.ps1 -NewPassword 'my_new_secret'
 #>
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSAvoidUsingPlainTextForPassword', 'NewPassword',
+    Justification = 'Local recovery tool. The new password must reach psql as plaintext (ALTER USER ... PASSWORD, and PGPASSWORD for the verify step) and is re-passed through UAC self-elevation on the process command line. A SecureString cannot protect any of those boundaries and would break the -NewPassword default and CLI override.')]
 param(
     [string]$NewPassword = 'odoo_local_dev_pw',
     [string]$PgDataDir
@@ -81,7 +84,7 @@ if (-not $pgService) {
 Write-Host "Service:           $($pgService.Name)" -ForegroundColor Gray
 
 # Locate psql.exe relative to the service path.
-$serviceBin = (Get-WmiObject Win32_Service -Filter "Name='$($pgService.Name)'").PathName
+$serviceBin = (Get-CimInstance Win32_Service -Filter "Name='$($pgService.Name)'").PathName
 $pgBinDir = ($serviceBin -split '"' | Where-Object { $_ -match 'pg_ctl\.exe$' }) -replace 'pg_ctl\.exe$',''
 $psqlExe = Join-Path $pgBinDir 'psql.exe'
 if (-not (Test-Path $psqlExe)) {

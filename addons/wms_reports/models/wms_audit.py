@@ -356,3 +356,24 @@ class WmsAuditLine(models.Model):
     def _compute_variance(self):
         for line in self:
             line.variance = line.counted_qty - line.expected_qty
+
+    def unlink(self):
+        """Block deletion of audit lines once the parent audit has left
+        'draft'. Lines are auto-populated at creation and ARE the count of
+        record; deleting them after submission would let a Store Keeper
+        (or any RPC caller) silently rewrite audit history. Defence-in-depth
+        on top of perm_unlink=0 for group_wms_user in ir.model.access.csv —
+        this ORM guard also fires on sudo() and manager paths. If a line is
+        wrong, the Admin rejects the audit and the keeper re-walks it.
+        """
+        locked = self.filtered(lambda ln: ln.audit_id.state not in ("draft", False))
+        if locked:
+            raise UserError(
+                _(
+                    "Cannot delete audit line(s) on a submitted or reviewed "
+                    "audit — the count of record is immutable once submitted. "
+                    "Reject the audit instead and have the Store Keeper "
+                    "re-walk it (a fresh audit is created)."
+                )
+            )
+        return super().unlink()

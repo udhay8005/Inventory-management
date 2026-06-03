@@ -9,8 +9,13 @@
 ## What we test, per module
 
 ### wms_location
-- Creating a rack auto-creates 6 dividers × 3 slots = 18 slot records.
-- Constraint violations: 7th divider / 4th slot rejected.
+- Creating a rack (default 6 shelves × 3 columns) auto-generates its
+  compartments + slots via `wms.rack.generator`.
+- Constraint violations: a compartment whose shelf/column range falls
+  outside the rack grid is rejected; a slot's parent must be a compartment,
+  a compartment's parent a rack.
+- `@api.ondelete` blocks deleting a rack/compartment/slot/floor that still
+  has children, live quants, or stock-move history (archive instead).
 - Slot barcode unique inside warehouse.
 
 ### wms_fifo

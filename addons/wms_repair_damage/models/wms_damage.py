@@ -63,10 +63,11 @@ class WmsDamage(models.Model):
         for rec in self:
             if rec.reason == "other" and not (rec.note or "").strip():
                 raise ValidationError(
-                    "Reason 'Other' needs a note explaining what happened. "
-                    "Pick a specific reason (Broken / Expired / "
-                    "Contaminated) if the explanation fits one of those, "
-                    "otherwise type a short sentence in the Note field."
+                    "If the damage reason is 'Other', you must write a quick "
+                    "note explaining what happened (e.g., 'Spilled during "
+                    "morning feed'). If the reason fits one of the pre-set "
+                    "options (Broken, Expired, or Contaminated), pick that "
+                    "instead."
                 )
 
     picking_id = fields.Many2one("stock.picking", readonly=True, copy=False)
@@ -316,11 +317,11 @@ class WmsDamage(models.Model):
                 # issue to release stock.
                 if reserved > 0 and rec.quantity <= total + 0.0001:
                     raise UserError(
-                        "Slot %s holds %g × %s, but %g unit(s) are already "
-                        "reserved for an in-flight Scan Issue. Only %g are "
-                        "free to damage right now. Wait for the issue to "
-                        "validate (or be cancelled), or reduce the damage "
-                        "quantity to %g."
+                        "Slot %s has %g × %s, but %g unit(s) are already "
+                        "spoken for by a pending issue that hasn't finished "
+                        "yet. Only %g are really free to mark as damaged. "
+                        "Either wait for that issue to finish, cancel it, or "
+                        "mark fewer units as damaged (up to %g)."
                         % (
                             rec.source_slot_id.display_name,
                             total,

@@ -83,8 +83,8 @@ scripts\backup-native.ps1
 
 Writes timestamped artifacts to `.\backups\`:
 
-- `wms-<timestamp>.dump` — `pg_dump` custom format
-- `wms-<timestamp>-filestore.zip` — the `data_dir\filestore\wms` tree
+- `wms-<timestamp>.dump.gpg` — `pg_dump` custom format, encrypted with `BACKUP_PASSPHRASE` from `.env` (the plaintext `.dump` is piped through GPG and never persisted)
+- `wms-<timestamp>-filestore.zip.gpg` — the `data_dir\filestore\wms` tree, GPG-encrypted
 
 Default retention is 14 backups; pass `-Retain 30` for longer.
 

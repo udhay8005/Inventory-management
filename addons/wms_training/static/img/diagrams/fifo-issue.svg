@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 604" font-family="Segoe UI, Arial, sans-serif" role="img" aria-label="FIFO issue flow">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker></defs>
+  <rect x="30" y="20" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="180" y="48" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">Set Requested Qty</text>
+  <text x="180" y="68" text-anchor="middle" font-size="12" fill="#1e40af">how much is needed</text>
+  <line x1="180" y1="84" x2="180" y2="116" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="116" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="180" y="144" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">Scan product / carton</text>
+  <text x="180" y="164" text-anchor="middle" font-size="12" fill="#1e40af">confirm the right item</text>
+  <line x1="180" y1="180" x2="180" y2="212" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="212" width="300" height="64" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="180" y="240" text-anchor="middle" font-size="15" font-weight="600" fill="#713f12">System plans pick</text>
+  <text x="180" y="260" text-anchor="middle" font-size="12" fill="#854d0e">FIFO oldest in-date / FEFO soonest-expiry</text>
+  <line x1="180" y1="276" x2="180" y2="308" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="308" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="180" y="336" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">Take from shown slot(s)</text>
+  <text x="180" y="356" text-anchor="middle" font-size="12" fill="#1e40af">follow the suggested locations</text>
+  <line x1="180" y1="372" x2="180" y2="404" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="404" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="180" y="432" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">Photo if measured + Audit trail</text>
+  <text x="180" y="452" text-anchor="middle" font-size="12" fill="#1e40af">Taken by / Ordered by / Keeper / Reason</text>
+  <line x1="180" y1="468" x2="180" y2="500" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="500" width="300" height="64" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="2"/>
+  <text x="180" y="528" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">Validate -&gt; Trust internal use</text>
+  <text x="180" y="548" text-anchor="middle" font-size="12" fill="#115e59">stock consumed by the trust</text>
+</svg>

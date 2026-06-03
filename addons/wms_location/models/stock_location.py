@@ -376,8 +376,10 @@ class StockLocation(models.Model):
             if child_count:
                 raise UserError(
                     _(
-                        "Cannot delete %(name)s - it still has %(n)d sub-location(s). "
-                        "Delete or archive them first (slot -> compartment -> rack)."
+                        "You can't delete %(name)s because it still has %(n)d "
+                        "sub-location(s) inside it (shelves, compartments, or "
+                        "slots). Delete the smallest units first (work from "
+                        "slots up to compartments), then delete the rack."
                     )
                     % {"name": loc.complete_name or loc.display_name, "n": child_count}
                 )
@@ -387,9 +389,10 @@ class StockLocation(models.Model):
             if on_hand > 0.001:
                 raise UserError(
                     _(
-                        "Cannot delete %(name)s - it still holds %(qty).3f unit(s) "
-                        "across %(n)d quant(s). Issue, scrap, or transfer the stock "
-                        "first, then archive the location."
+                        "%(name)s still has %(qty).3f unit(s) of stock in it "
+                        "(across %(n)d quant(s)). Empty it first by issuing, "
+                        "scrapping, or moving the stock to another slot. Once "
+                        "it's empty, you can archive (deactivate) it."
                     )
                     % {
                         "name": loc.complete_name or loc.display_name,
@@ -410,9 +413,11 @@ class StockLocation(models.Model):
             if history:
                 raise UserError(
                     _(
-                        "Cannot delete %(name)s - it appears in past stock moves "
-                        "and the audit trail must be preserved. Tick 'Archived' "
-                        "on the location form instead (set active = False)."
+                        "%(name)s has history in the warehouse records (past "
+                        "issues, receipts, returns). You can't delete it "
+                        "because the trust needs to keep the audit trail "
+                        "intact. Instead, mark it as 'Archived' (inactive) "
+                        "on the location form."
                     )
                     % {"name": loc.complete_name or loc.display_name}
                 )
