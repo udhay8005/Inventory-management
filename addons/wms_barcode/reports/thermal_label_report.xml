@@ -5,31 +5,27 @@
         <!--
             Paper format for the trust's thermal hardware:
 
-              * Label stock:  4 × 2 inch (101.6 × 50.8 mm) DIE-CUT labels
-                              with a gap between each sticker. The page is
-                              sized to exactly ONE label; the printer's gap
-                              sensor advances across the gap to the next
-                              label, so every print lands on a sticker.
+              * Label stock:  True-Ally 100 x 25 mm (4 x 1 inch) DIE-CUT
+                              direct-thermal roll (1000 stickers / roll) with a
+                              gap between each sticker. The page is sized to
+                              exactly ONE label; the printer's gap sensor
+                              advances across the gap to the next.
               * Printer:      TSC TE244, 203 DPI, USB. Set the media type to
                               GAP / die-cut and run auto-calibration so it
                               "follows the gap" on every print
                               (see docs/LABEL-PRINTING.md).
               * Margins zero: lets the Admin position barcode / logo / text
                               right to the printable edge via
-                              Configuration → Label Settings.
+                              Configuration -> Label Settings.
 
-            Orientation stays Portrait — wkhtmltopdf swaps width/height on
+            Orientation stays Portrait - wkhtmltopdf swaps width/height on
             Landscape, which would squash the label.
         -->
-        <record id="paperformat_wms_thermal_4x2" model="report.paperformat">
-            <field name="name">WMS Thermal Label 4×2 in (101.6×50.8 mm)</field>
+        <record id="paperformat_wms_thermal_4x1" model="report.paperformat">
+            <field name="name">WMS Thermal Label 100×25 mm (4×1 in)</field>
             <field name="format">custom</field>
-            <!-- report.paperformat page_width/height are INTEGER mm; the
-                 exact 101.6 x 50.8 mm label rounds to 102 x 51 (the 0.4 mm
-                 sits inside the TE244 hardware margin). The element canvas
-                 keeps the exact float size via wms.label.config. -->
-            <field name="page_width">102</field>
-            <field name="page_height">51</field>
+            <field name="page_width">100</field>
+            <field name="page_height">25</field>
             <field name="orientation">Portrait</field>
             <field name="margin_top">0</field>
             <field name="margin_bottom">0</field>
@@ -41,31 +37,31 @@
         </record>
 
         <!--
-            Thermal product label — one sticker per product on the 4×2
-            inch die-cut roll. Layout is driven by the Admin's
-            wms.label.config (Configuration → Label Settings) so the
-            barcode / logo / text can be placed anywhere on the sticker.
+            Thermal product label - one sticker per product on the 100 x 25 mm
+            (4 x 1 inch) die-cut roll. Layout is driven by the Admin's
+            wms.label.config (Configuration -> Label Settings) so the barcode /
+            logo / text can be placed anywhere on the sticker.
         -->
         <record id="action_report_wms_product_label_thermal" model="ir.actions.report">
-            <field name="name">WMS Product Label (4×2 in)</field>
+            <field name="name">WMS Product Label (100×25mm)</field>
             <field name="model">product.product</field>
             <field name="report_type">qweb-pdf</field>
             <field name="report_name">wms_barcode.report_product_label_thermal</field>
             <field name="report_file">wms_barcode.report_product_label_thermal</field>
             <field name="print_report_name">'Thermal-product-labels-%d' % len(docs)</field>
-            <field name="paperformat_id" ref="paperformat_wms_thermal_4x2"/>
+            <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
             <field name="binding_model_id" ref="product.model_product_product"/>
             <field name="binding_type">report</field>
         </record>
 
         <record id="action_report_wms_location_label_thermal" model="ir.actions.report">
-            <field name="name">WMS Location Label (4×2 in)</field>
+            <field name="name">WMS Location Label (100×25mm)</field>
             <field name="model">stock.location</field>
             <field name="report_type">qweb-pdf</field>
             <field name="report_name">wms_barcode.report_location_label_thermal</field>
             <field name="report_file">wms_barcode.report_location_label_thermal</field>
             <field name="print_report_name">'Thermal-location-labels-%d' % len(docs)</field>
-            <field name="paperformat_id" ref="paperformat_wms_thermal_4x2"/>
+            <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
             <field name="binding_model_id" ref="stock.model_stock_location"/>
             <field name="binding_type">report</field>
         </record>

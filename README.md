@@ -11,7 +11,7 @@ Runs **natively on Windows** — no Docker required.
 - 🧾 **Audit trail invariant** — every stock-moving action records `wms_taken_by` / `wms_ordered_by` / `wms_storekeeper_id` on the resulting `stock.picking` plus a chatter message
 - 👥 **Two-role security** — WMS Manager (Admin) vs WMS Store Keeper, with an admin-maintained roster of human keepers
 - 🔧 **Damage / Repair workflow** — smart recommendation engine (urgent buy / repair / note only) + one-click Create Repair Order, full state machine (draft → in_repair → done / scrapped / cancelled) with chatter audit on every transition
-- 🏷 **Thermal labels** — customisable 4×2 inch die-cut layout (logo / title / SKU / barcode), inline barcode, printer gap-sensor aware
+- 🏷 **Thermal labels** — customisable 4×1 inch (100×25 mm) die-cut layout (logo / title / SKU / barcode), inline barcode, printer gap-sensor aware
 - 🔁 **Returnability classification** — product Kind (Raw / Packaging / Fluid / Finished Good / WIP / Consumable / Tool / Spare) drives whether Scan Return accepts it
 - 📈 **Buying recommendations** — daily-average usage + 7-day buffer for non-returnables; concurrent-users heuristic for tools/spares
 - 📊 **Reports** — Where-is-it / Warehouse map / Oldest stock (FIFO) / Slot occupancy / Cycle count due / Movement history / Low stock alerts / Dead stock / Reorder summary
@@ -184,9 +184,9 @@ optional item photo (required for liquid / weight / volume items).
 
 USB / Bluetooth HID barcode scanners "just work" — they keyboard-type into the
 focused field on the scan wizards. Any thermal printer your **host OS** can see
-will print the generated PDF labels. Tested with 4×2 inch die-cut direct-thermal
-stock on a TSC TE244 (gap-sensor); layout is admin-configurable so other label
-sizes work too. See [docs/LABEL-PRINTING.md](docs/LABEL-PRINTING.md).
+will print the generated PDF labels. Tested with True-Ally 4×1 inch (100×25 mm)
+die-cut direct-thermal stock on a TSC TE244 (gap-sensor); layout is admin-
+configurable so other label sizes work too. See [docs/LABEL-PRINTING.md](docs/LABEL-PRINTING.md).
 
 ## Run tests
 
