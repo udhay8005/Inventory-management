@@ -1,6 +1,6 @@
 {
     "name": "WMS — Barcode scan & print",
-    "version": "19.0.1.10.0",
+    "version": "19.0.1.11.0",
     "summary": "Receive/Issue scan wizards, carton aliases, label printing.",
     "depends": ["wms_location", "wms_fifo", "stock", "barcodes", "mail"],
     "author": "WMS",
@@ -16,8 +16,6 @@
         "wizards/scan_receipt_views.xml",
         "wizards/scan_issue_views.xml",
         "wizards/wms_product_onboard_views.xml",
-        "reports/barcode_label_report.xml",
-        "reports/barcode_label_template.xml",
         "reports/thermal_label_report.xml",
         "reports/thermal_label_template.xml",
         "views/menus.xml",
