@@ -90,7 +90,10 @@ class TestAuditTrailInvariant(TransactionCase):
         # rolls back at tearDown, which is exactly what we want for test
         # isolation).
         self.env.cr.execute("SELECT state FROM stock_picking WHERE id=%s", (pk.id,))
-        self.assertEqual(self.env.cr.fetchone()[0], "done")
+        row = self.env.cr.fetchone()
+        if row is None:
+            self.fail("expected a row for the picking")
+        self.assertEqual(row[0], "done")
 
     def test_db_check_allows_legacy_flag(self):
         """Rows flagged wms_audit_legacy=TRUE are grandfathered — the
@@ -113,6 +116,8 @@ class TestAuditTrailInvariant(TransactionCase):
             (pk.id,),
         )
         row = self.env.cr.fetchone()
+        if row is None:
+            self.fail("expected a row for the picking")
         self.assertEqual(row[0], "done")
         self.assertTrue(row[1])
 
@@ -131,4 +136,7 @@ class TestAuditTrailInvariant(TransactionCase):
             ("done", keeper.id, pk.id),
         )
         self.env.cr.execute("SELECT state FROM stock_picking WHERE id=%s", (pk.id,))
-        self.assertEqual(self.env.cr.fetchone()[0], "done")
+        row = self.env.cr.fetchone()
+        if row is None:
+            self.fail("expected a row for the picking")
+        self.assertEqual(row[0], "done")
