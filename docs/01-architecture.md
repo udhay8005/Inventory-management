@@ -5,10 +5,10 @@
 | Layer | Choice | Why |
 |---|---|---|
 | ERP core | **Odoo CE 19** | Free, mature inventory + barcode primitives, audited security |
-| DB | **PostgreSQL 16** | Odoo's native DB; supports partial indexes for fast quant lookups |
+| DB | **PostgreSQL 15 / 16 / 17 (auto-detected)** | Odoo's native DB; the install script detects whichever postgresql-x64 service is present. Supports partial indexes for fast quant lookups |
 | Forecasting | **statsmodels (Holt-Winters / SES)** | CPU-only, ~30MB resident, runs on a Pi 4 |
-| Container | **Docker Compose** | Single command bring-up; mount addons read-write for dev |
-| Optional AI worker | Python 3.12 slim container | Detach forecasts from Odoo when memory is tight |
+| Deployment | **Native Windows (no Docker)** | `scripts/install-native.ps1` + `start-native.ps1`; Odoo runs in a venv against the local PostgreSQL service. Docker was removed. |
+| Optional AI worker | Native Python process (`scripts/start-ai-worker.ps1`) | Detach forecasts from Odoo when memory is tight |
 
 ## Module layering
 
@@ -24,7 +24,7 @@
 +----------------------------------------------------+
 | wms_fifo           (FIFO removal strategy)         |
 +----------------------------------------------------+
-| wms_location       (rack/divider/slot data model)  |
+| wms_location    (rack/compartment/slot data model) |
 +----------------------------------------------------+
 | Odoo CE 19 stock, product, purchase, repair        |
 +----------------------------------------------------+
@@ -35,8 +35,10 @@ the foundation; everything else degrades gracefully without the AI module.
 
 ## Design principles
 
-1. **Reuse, never replace.** Rack/Divider/Slot are `stock.location` records, not
-   a parallel table. Every `stock.quant` movement keeps working unchanged.
+1. **Reuse, never replace.** Rack/Compartment/Slot are `stock.location` records,
+   not a parallel table (a compartment is a shelf×column span within a rack's 2D
+   grid, not a separate "level" entity). Every `stock.quant` movement keeps
+   working unchanged.
 2. **Deterministic before AI.** Reorder math is rule-based (ROP, safety stock).
    AI only adjusts the *forecast* that feeds those rules.
 3. **One source of truth for quantity.** Never duplicate qty across tables.
@@ -47,11 +49,14 @@ the foundation; everything else degrades gracefully without the AI module.
 
 ## Process model
 
-- **Single Odoo container** runs HTTP workers + cron threads (default).
-- **Optional AI worker** for ops who prefer separation (compose profile `ai`).
+- **Single native Odoo process** runs HTTP workers + cron threads (default),
+  started by `scripts/start-native.ps1` against the local PostgreSQL service.
+- **Optional AI worker** for ops who prefer separation (`scripts/start-ai-worker.ps1`).
 - **No external services** required. All AI is local.
 
 ## Networking
 
-- `db` and `odoo` on private bridge; only Odoo's 8069/8072 published.
-- For HTTPS, put nginx/Caddy in front; set `proxy_mode = True` (already set).
+- Odoo listens on `localhost:8069` (HTTP + WebSocket share the port; `workers = 0`).
+- For remote access, `scripts/start-tunnel.ps1` fronts it with a Cloudflare tunnel
+  (HTTPS). Behind a reverse proxy, set `proxy_mode = True`.
+- The database-manager web UI is disabled (`list_db = False`, `db_listing = False`).

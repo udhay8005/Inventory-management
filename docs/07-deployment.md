@@ -1,23 +1,38 @@
 # 07 — Deployment
 
-## First-time bring-up
+The WMS runs natively on Windows — no Docker, no virtualisation. PostgreSQL
+runs as a Windows service; Odoo runs in a Python venv. The same layout works
+on Linux (apt-installed Postgres + a venv) with one Makefile target.
 
-```bash
-cp .env.example .env
-# edit .env — change all default passwords
+## First-time bring-up (Windows)
 
-docker compose build
-docker compose up -d            # db + odoo
-docker compose --profile ai up -d   # add AI worker (optional)
+```powershell
+# From Administrator PowerShell:
+git clone https://github.com/udhay8005/Inventory-management.git
+cd Inventory-management
+copy .env.example .env
+# Edit .env: set DB_PASSWORD to something strong.
 
-# initialize a database via UI:
-#   http://localhost:8069/web/database/manager
-#   master pwd = ODOO_ADMIN_PASSWD from .env
-#   db name    = ODOO_DB from .env
-#   tick "Load demonstration data" if you want sample racks/products
+scripts\install-native.ps1
 ```
 
-After login: **Apps → Update Apps List → search "wms" → install in order**:
+The installer:
+
+1. Installs **PostgreSQL 16**, **Python 3.12**, **wkhtmltopdf**, **Git** via winget (skips any that are already present)
+2. Creates the `odoo` Postgres role with `CREATEDB` + the password from `.env`
+3. Creates the `wms` database
+4. Clones Odoo 19.0 source into `.odoo\`
+5. Creates a Python venv at `.venv\` and installs Odoo's deps + this project's extras
+6. Generates `config\odoo.native.conf` keyed for the local Postgres
+7. Runs Odoo's first-time DB init (`-i base --without-demo=all --stop-after-init`)
+
+Then start the server:
+
+```powershell
+scripts\start-native.ps1
+```
+
+…and install the WMS modules in **Apps → Update Apps List → search "wms"**:
 
 1. `wms_location`
 2. `wms_fifo`
@@ -26,67 +41,181 @@ After login: **Apps → Update Apps List → search "wms" → install in order**
 5. `wms_ai_forecast`
 6. `wms_reports`
 
-## Day-2 ops
+## First-time bring-up (Linux / macOS)
 
 ```bash
-# Logs
-docker compose logs -f odoo
+# Install PostgreSQL 16 + Python 3.12 via your package manager first.
+sudo apt-get install -y postgresql-16 postgresql-client python3.12 python3.12-venv \
+                        wkhtmltopdf libldap2-dev libsasl2-dev git
 
-# Shell into Odoo container
-docker compose exec odoo bash
+# Create the odoo role + db (one-time):
+sudo -u postgres psql <<EOF
+CREATE ROLE odoo WITH LOGIN CREATEDB PASSWORD '$(grep DB_PASSWORD .env | cut -d= -f2)';
+CREATE DATABASE wms OWNER odoo;
+EOF
+
+make install            # clone Odoo, make venv, pip install
+make start              # run odoo
+```
+
+## Day-2 ops
+
+```powershell
+# Logs (tail-follow)
+Get-Content .runtime\logs\odoo.log -Wait
+
+# Restart Odoo with a module upgrade
+scripts\stop-native.ps1
+scripts\start-native.ps1 -Upgrade wms_repair_damage
 
 # psql
-docker compose exec db psql -U odoo -d wms
+psql -U odoo -h localhost -d wms
 
-# Restart only Odoo (DB stays up)
-docker compose restart odoo
+# Odoo Python shell
+.venv\Scripts\python .odoo\odoo-bin shell -c config\odoo.native.conf -d wms --no-http
 ```
 
 ## Backups
 
-```bash
-chmod +x scripts/backup.sh
-./scripts/backup.sh
+```powershell
+scripts\backup-native.ps1
 ```
 
-Schedule via host cron / Task Scheduler. Default retention: 14 days, both DB
-dump and filestore tarball.
+Writes timestamped artifacts to `.\backups\`:
 
-Restore:
+- `wms-<timestamp>.dump.gpg` — `pg_dump` custom format, encrypted with `BACKUP_PASSPHRASE` from `.env` (the plaintext `.dump` is piped through GPG and never persisted)
+- `wms-<timestamp>-filestore.zip.gpg` — the `data_dir\filestore\wms` tree, GPG-encrypted
 
-```bash
-# DB
-docker compose exec -T db pg_restore -U odoo -C -d postgres < backups/wms_YYYYMMDD.dump
+Default retention is 14 backups; pass `-Retain 30` for longer.
 
-# Filestore
-docker run --rm --volumes-from wms_odoo \
-  -v "$(pwd)/backups":/backup alpine \
-  tar xzf /backup/filestore_YYYYMMDD.tar.gz -C /var/lib/odoo
+Schedule via **Windows Task Scheduler**:
+
+```powershell
+# One-line setup, runs nightly at 02:00:
+$action  = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-File D:\path\to\Inventory_mngt\scripts\backup-native.ps1'
+$trigger = New-ScheduledTaskTrigger -Daily -At 02:00
+Register-ScheduledTask -TaskName 'WMS nightly backup' -Action $action -Trigger $trigger
 ```
 
-## HTTPS / production
+### Restore
 
-Put nginx or Caddy in front:
+> **Note:** Backups are encrypted with `BACKUP_PASSPHRASE` from `.env`. Losing
+> the passphrase = losing the backups. Store the passphrase OFF the server.
+
+```powershell
+# Create an empty database first
+dropdb -U odoo -h localhost --if-exists wms_restore
+createdb -U odoo -h localhost wms_restore
+
+# Two-step encrypted restore: decrypts the .dump.gpg then runs pg_restore,
+# and expands the matching filestore archive.
+scripts\restore-native.ps1 `
+    -DumpFile .\backups\wms-20260520-091500.dump.gpg `
+    -TargetDb wms_restore
+```
+
+Then start Odoo against `wms_restore` to verify before swapping over.
+
+### Restore drill
+
+A weekly drill verifies the latest backup is recoverable WITHOUT touching the production database. The drill decrypts the most recent `.dump.gpg`, runs `pg_restore --list` against it, and (optionally) restores into a throwaway `wms_drill_<timestamp>` database which is dropped on exit.
+
+```powershell
+# Cheap weekly check (TOC verification only):
+scripts\restore-drill.ps1
+
+# Quarterly: full restore into a drill DB:
+scripts\restore-drill.ps1 -DryRun:$false
+```
+
+See `docs/18-restore-drill.md` for the full runbook (scheduling, exit codes, troubleshooting).
+
+## Running Odoo as a Windows service
+
+For production, you'll want Odoo to auto-start on boot and recover from
+crashes. Two options:
+
+### Option A — NSSM (recommended)
+
+[NSSM](https://nssm.cc/download) wraps any executable as a Windows service:
+
+```powershell
+# After scripts\install-native.ps1 completes:
+nssm install OdooWMS `
+    "D:\path\to\Inventory_mngt\.venv\Scripts\python.exe" `
+    "D:\path\to\Inventory_mngt\.odoo\odoo-bin" `
+    "-c" "D:\path\to\Inventory_mngt\config\odoo.native.conf" `
+    "-d" "wms"
+
+nssm set OdooWMS AppDirectory "D:\path\to\Inventory_mngt"
+nssm set OdooWMS Start SERVICE_AUTO_START
+nssm set OdooWMS AppStdout "D:\path\to\Inventory_mngt\.runtime\logs\service.out.log"
+nssm set OdooWMS AppStderr "D:\path\to\Inventory_mngt\.runtime\logs\service.err.log"
+Start-Service OdooWMS
+```
+
+### Option B — Task Scheduler (no extra binary)
+
+Create a task that runs on system startup, executes `scripts\start-native.ps1`,
+restart on failure, no user logon needed.
+
+## HTTPS / production reverse proxy
+
+Put nginx or Caddy in front. Example Caddyfile:
 
 ```
-upstream odoo  { server odoo:8069; }
-upstream chat  { server odoo:8072; }
-server {
-  listen 443 ssl http2;
-  location /websocket { proxy_pass http://chat;  proxy_http_version 1.1; ... }
-  location /          { proxy_pass http://odoo; ... }
+wms.example.org {
+    reverse_proxy /websocket localhost:8069 {
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+    }
+    reverse_proxy localhost:8069
 }
 ```
 
-`proxy_mode=True` is already set in `config/odoo.conf`.
+Then set `proxy_mode = True` in `config\odoo.native.conf` so Odoo trusts the
+forwarded headers. WebSocket and HTTP share port 8069 (single-process server)
+so one upstream is enough.
 
-## Logging
+## Optional thermal printer
 
-- `docker logs wms_odoo` mirrors `/var/log/odoo/odoo.log`.
-- Ship to Loki/ELK with the standard Docker logging driver if needed.
+Any thermal printer the host OS can see. The Odoo report engine generates the
+PDF; the user's browser downloads it and sends it to the OS printer dialog.
+Tested with 4×1 inch direct-thermal labels; layout is admin-configurable.
 
-## Optional barcode printer
+## Mobile / off-site access
 
-Any thermal printer the **host OS** can see. Container generates PDF via the
-existing report engine; PDF download is sent to the printer through the user's
-browser (no special driver inside container).
+The simplest local path:
+
+```powershell
+# Right-click PowerShell → Run as Administrator:
+New-NetFirewallRule -DisplayName "WMS Odoo" -Direction Inbound -LocalPort 8069 -Protocol TCP -Action Allow
+```
+
+Phones on the same WiFi can then open `http://<host-IP>:8069`.
+
+For internet access, run a [Cloudflare named tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+via `cloudflared.exe` pointing at `localhost:8069`. Get a permanent HTTPS URL
+on your own domain — see [12-mobile-access.md](12-mobile-access.md).
+
+## Upgrades
+
+```powershell
+# Pull the latest WMS code
+git pull origin main
+
+# Upgrade affected modules without losing data
+scripts\start-native.ps1 -Upgrade wms_location,wms_barcode,wms_repair_damage
+```
+
+For an Odoo minor-version upgrade (19.0 → 19.x stable updates):
+
+```powershell
+cd .odoo
+git pull origin 19.0
+cd ..
+.venv\Scripts\pip install -r .odoo\requirements.txt --upgrade
+scripts\start-native.ps1 -Upgrade all
+```
+
+Always run a backup first.

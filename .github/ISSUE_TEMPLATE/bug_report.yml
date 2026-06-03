@@ -32,8 +32,9 @@ body:
       label: Environment
       value: |
         - Odoo version: 19.0
-        - Docker version:
-        - Browser:
+        - PostgreSQL version:
+        - Python version:
+        - OS / browser:
         - Module touched (if known):
     validations: { required: false }
 
@@ -42,6 +43,7 @@ body:
     attributes:
       label: Logs
       description: |
-        Output of `docker compose logs --tail 100 odoo` around the error.
+        Tail of `.runtime\logs\odoo.log` around the error
+        (e.g. `Get-Content .runtime\logs\odoo.log -Tail 100`).
         Paste only the relevant section. Redact secrets.
       render: shell

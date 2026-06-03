@@ -7,7 +7,7 @@
             <field name="model">wms.floor.zone.generator</field>
             <field name="arch" type="xml">
                 <form string="Generate Floor Zones">
-                    <div class="alert alert-info" role="alert">
+                    <div class="alert alert-info">
                         Use floor zones for items <em>not</em> stored in a
                         multi-tier rack — pallet areas, single-shelf slabs,
                         outside yard bays, receiving/staging benches. Each

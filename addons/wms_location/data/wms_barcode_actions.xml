@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Bulk back-fill action: appears in the 'Action' dropdown on
+            the Inventory / WMS Products list. Admin selects rows
+            (or All), clicks 'Generate missing barcodes', and any row
+            that lacks a Code128 barcode gets one (= its SKU). Any
+            row that lacks a unit-quantity wms.barcode.alias gets a
+            fresh EAN-13 stamped on top.
+
+            Idempotent: re-running over the same selection makes no
+            further changes.
+
+            Targeted at product.template so the action stays visible
+            in the WMS / Inventory app product list (Odoo's product
+            list shows templates by default).
+        -->
+        <record id="action_generate_missing_barcodes" model="ir.actions.server">
+            <field name="name">Generate missing barcodes</field>
+            <field name="model_id" ref="product.model_product_template"/>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="binding_view_types">list,form</field>
+            <field name="state">code</field>
+            <field name="code">action = records.action_generate_missing_barcodes()</field>
+        </record>
+    </data>
+</odoo>

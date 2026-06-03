@@ -4,7 +4,16 @@ __pycache__/
 *.log
 *.swp
 .idea/
-.vscode/
+# .vscode: keep settings + recommended extensions, ignore user-specific files
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
 backups/
 *.dump
 .claude/
+
+# Native-install artifacts (created by scripts/install-native.ps1)
+.odoo/
+.venv/
+.runtime/
+config/odoo.native.conf

@@ -149,7 +149,7 @@ slots, maintains the Store Keeper roster, prints sticker labels,
 configures the thermal printer layout, reviews buying recommendations,
 opens repair orders.
 
-**Store Keeper (WMS / User)** — scans receipts in, scans issues out,
+**Store Keeper (WMS / Store Keeper)** — scans receipts in, scans issues out,
 notes who took what, validates returns, records damage events. Cannot
 edit products, slots, the storekeeper roster, or label settings.
 Reads every report (occupancy, oldest stock, where-is-X, cycle count

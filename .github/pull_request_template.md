@@ -17,7 +17,7 @@
 - [ ] wms_repair_damage
 - [ ] wms_ai_forecast
 - [ ] wms_reports
-- [ ] docs / scripts / docker
+- [ ] docs / scripts / CI
 
 ## How was it tested?
 <!-- e.g. "make test", "manual scan receipt round-trip on a fresh DB", "added unit

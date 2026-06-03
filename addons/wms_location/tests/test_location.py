@@ -319,3 +319,256 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(plan[0][1], 5.0)
         self.assertEqual(plan[1][0], q2)
         self.assertEqual(plan[1][1], 1.0)
+
+    def test_fifo_helper_falls_back_outside_warehouse_tree(self):
+        """When a Trust parks its rack under a custom top-level location
+        (e.g. ``Dakshin Vrindavan``) instead of ``WH/Stock``, the strict
+        ``child_of lot_stock_id`` lookup misses the stock. The planner
+        must fall back to internal locations of the same company so
+        Scan Issue doesn't wrongly report STOCK OUT.
+        """
+        # Build a parent location that's a sibling of WH/Stock, not a
+        # descendant — mimics the Trust's "Dakshin Vrindavan" branded
+        # top-level location. company_id stays the same so the company
+        # guard in the fallback still matches.
+        outside_parent = self.env["stock.location"].create(
+            {
+                "name": "Dakshin Vrindavan (test)",
+                "usage": "internal",
+                "location_id": False,
+                "company_id": self.env.company.id,
+            }
+        )
+        gen = self.env["wms.rack.generator"].create(
+            {
+                "rack_code": "R-OUT",
+                "parent_location_id": outside_parent.id,
+                "shelf_count": 1,
+                "column_count": 1,
+                "default_slot_count": 1,
+            }
+        )
+        gen.action_generate()
+        slot = self.env["stock.location"].search(
+            [
+                ("wms_location_type", "=", "slot"),
+                ("location_id.location_id.wms_rack_code", "=", "R-OUT"),
+            ],
+            limit=1,
+        )
+        self.assertTrue(slot, "Rack didn't create the slot")
+        product = self.env["product.product"].create(
+            {
+                "name": "Out-of-tree Widget",
+                "type": "consu",
+                "is_storable": True,
+            }
+        )
+        self.env["stock.quant"].create(
+            {
+                "product_id": product.id,
+                "location_id": slot.id,
+                "quantity": 3,
+                "in_date": "2025-03-01 10:00:00",
+            }
+        )
+        # Sanity: the strict pass returns no quants because the slot
+        # sits outside the warehouse's lot_stock_id subtree.
+        strict_hits = self.env["stock.quant"].search_count(
+            [
+                ("product_id", "=", product.id),
+                ("quantity", ">", 0),
+                ("location_id.usage", "=", "internal"),
+                ("location_id.id", "child_of", self.warehouse.lot_stock_id.id),
+            ]
+        )
+        self.assertEqual(strict_hits, 0, "Slot should be outside WH/Stock")
+        # Fallback rescues us.
+        plan, missing = self.env["stock.location"].find_oldest_quants_for_product(
+            product.id,
+            2,
+            parent_location_id=self.warehouse.lot_stock_id.id,
+        )
+        self.assertEqual(missing, 0, "Fallback should have found the out-of-tree quant")
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0][1], 2.0)
+
+    def test_fefo_for_medicine_picks_earliest_expiry(self):
+        """For expiry-sensitive kinds (medicine / feed / fluid / pooja)
+        the planner uses FEFO, not FIFO. Even if the OLDER batch was
+        received first, the planner picks the batch with the EARLIEST
+        expiry. And it crosses sibling SKUs with the same product name
+        so the storekeeper can scan any batch's barcode and the system
+        still routes them to the soon-to-expire one."""
+        self._gen_rack("R-MED", shelves=1, columns=2, slots=1)
+        slots = self.env["stock.location"].search(
+            [
+                ("wms_location_type", "=", "slot"),
+                ("location_id.location_id.wms_rack_code", "=", "R-MED"),
+            ],
+            limit=2,
+        )
+        self.assertEqual(len(slots), 2)
+
+        # Batch A: arrived FIRST (in_date Jan), expires LATER (Dec 2027)
+        batch_a = (
+            self.env["product.template"]
+            .create(
+                {
+                    "name": "Calcium Bolus",
+                    "type": "consu",
+                    "is_storable": True,
+                    "wms_product_kind": "medicine",
+                    "wms_expiry_date": "2027-12-31",
+                }
+            )
+            .product_variant_ids[:1]
+        )
+
+        # Batch B: arrived LATER (in_date Mar), expires SOONER (Jun 2026)
+        batch_b = (
+            self.env["product.template"]
+            .create(
+                {
+                    "name": "Calcium Bolus",
+                    "type": "consu",
+                    "is_storable": True,
+                    "wms_product_kind": "medicine",
+                    "wms_expiry_date": "2026-06-30",
+                }
+            )
+            .product_variant_ids[:1]
+        )
+
+        self.env["stock.quant"].create(
+            {
+                "product_id": batch_a.id,
+                "location_id": slots[0].id,
+                "quantity": 10,
+                "in_date": "2026-01-01 10:00:00",
+            }
+        )
+        self.env["stock.quant"].create(
+            {
+                "product_id": batch_b.id,
+                "location_id": slots[1].id,
+                "quantity": 10,
+                "in_date": "2026-03-01 10:00:00",
+            }
+        )
+
+        # Storekeeper scans Batch A's barcode (earliest in_date).
+        # Pure FIFO would have picked A first. FEFO must pick B because
+        # B expires June 2026, A expires Dec 2027.
+        plan, missing = self.env["stock.location"].find_oldest_quants_for_product(
+            batch_a.id,
+            3,
+        )
+        self.assertEqual(missing, 0)
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(
+            plan[0][0].product_id.id, batch_b.id, "Should pick the earlier-expiring sibling batch"
+        )
+        self.assertEqual(plan[0][1], 3.0)
+
+        # If we ask for MORE than batch B holds, the planner should
+        # finish on batch A.
+        plan2, missing2 = self.env["stock.location"].find_oldest_quants_for_product(
+            batch_a.id,
+            15,
+        )
+        self.assertEqual(missing2, 0)
+        self.assertEqual(len(plan2), 2)
+        # First line: all of batch B (10 units)
+        self.assertEqual(plan2[0][0].product_id.id, batch_b.id)
+        self.assertEqual(plan2[0][1], 10.0)
+        # Second line: 5 from batch A
+        self.assertEqual(plan2[1][0].product_id.id, batch_a.id)
+        self.assertEqual(plan2[1][1], 5.0)
+
+    def test_overuse_cap_fields_default_to_zero(self):
+        """``wms_max_per_issue`` and ``wms_daily_cap`` exist on
+        product.template, default to 0 (no cap), and can be set
+        per-product. Cap enforcement itself lives in the Scan Issue
+        wizard (wms_barcode), so we only assert the schema here."""
+        p = self.env["product.template"].create(
+            {
+                "name": "Cap Test",
+                "type": "consu",
+                "is_storable": True,
+                "wms_product_kind": "tool",
+            }
+        )
+        self.assertEqual(p.wms_max_per_issue, 0.0)
+        self.assertEqual(p.wms_daily_cap, 0.0)
+        # Admin sets a cap.
+        p.write({"wms_max_per_issue": 3.0, "wms_daily_cap": 10.0})
+        self.assertEqual(p.wms_max_per_issue, 3.0)
+        self.assertEqual(p.wms_daily_cap, 10.0)
+
+    def test_fifo_unchanged_for_non_expiry_kinds(self):
+        """Tool / spare / consumable / etc. stay strict FIFO — the FEFO
+        path should only kick in for expiry-sensitive kinds."""
+        self._gen_rack("R-TOOL", shelves=1, columns=2, slots=1)
+        slots = self.env["stock.location"].search(
+            [
+                ("wms_location_type", "=", "slot"),
+                ("location_id.location_id.wms_rack_code", "=", "R-TOOL"),
+            ],
+            limit=2,
+        )
+        # Same name, same kind, but kind="tool" (not expiry-sensitive).
+        tool_old = (
+            self.env["product.template"]
+            .create(
+                {
+                    "name": "Hammer",
+                    "type": "consu",
+                    "is_storable": True,
+                    "wms_product_kind": "tool",
+                    # Even with expiry filled (unusual on a tool), it's
+                    # the KIND that drives FEFO, not the raw date field —
+                    # so it stays FIFO unless the kind is expiry-sensitive.
+                }
+            )
+            .product_variant_ids[:1]
+        )
+        tool_new = (
+            self.env["product.template"]
+            .create(
+                {
+                    "name": "Hammer",
+                    "type": "consu",
+                    "is_storable": True,
+                    "wms_product_kind": "tool",
+                }
+            )
+            .product_variant_ids[:1]
+        )
+
+        self.env["stock.quant"].create(
+            {
+                "product_id": tool_old.id,
+                "location_id": slots[0].id,
+                "quantity": 5,
+                "in_date": "2026-01-01 10:00:00",
+            }
+        )
+        self.env["stock.quant"].create(
+            {
+                "product_id": tool_new.id,
+                "location_id": slots[1].id,
+                "quantity": 5,
+                "in_date": "2026-03-01 10:00:00",
+            }
+        )
+        # FIFO on tool: scan tool_new, planner sees ONLY tool_new's
+        # quants (no sibling expansion for non-expiry kinds), picks
+        # the only available row.
+        plan, missing = self.env["stock.location"].find_oldest_quants_for_product(
+            tool_new.id,
+            3,
+        )
+        self.assertEqual(missing, 0)
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0][0].product_id.id, tool_new.id, "Tools must not cross batches")

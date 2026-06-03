@@ -84,7 +84,7 @@ Five minutes once the scanner arrives:
    - **Digits only, no newline** → scanner is missing the Enter suffix. Look in the manual for "Set Enter Suffix" or "CR/LF" — there's a config barcode to enable it.
    - **Nothing appears** → driver or pairing issue. Check Windows Device Manager.
    - **Both work** → ready for production.
-4. Open `http://localhost:8169` → WMS → Scan Receipt → tap the scan field → scan a product. Line should appear with no clicks needed.
+4. Open `http://localhost:8069` → WMS → Scan Receipt → tap the scan field → scan a product. Line should appear with no clicks needed.
 
 If those four steps pass, the scanner is fully compatible.
 

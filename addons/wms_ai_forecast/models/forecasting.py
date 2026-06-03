@@ -160,7 +160,7 @@ def reorder_recommendation(
     lead_time_days: int,
     safety_stock: float,
     horizon_days: int,
-) -> tuple[float, float | None]:
+) -> tuple[float, datetime | None]:
     """Returns (suggested_order_qty, reorder_date_or_None).
 
     Pure deterministic — no AI here. AI's job ended at producing daily_avg.

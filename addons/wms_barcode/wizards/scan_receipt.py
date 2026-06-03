@@ -1,3 +1,4 @@
+from markupsafe import Markup
 from odoo import fields, models
 from odoo.exceptions import UserError
 
@@ -26,6 +27,15 @@ class WmsScanReceipt(models.TransientModel):
     )
     feedback = fields.Char(readonly=True)
     line_ids = fields.One2many("wms.scan.receipt.line", "wizard_id")
+    picking_id = fields.Many2one(
+        "stock.picking",
+        readonly=True,
+        copy=False,
+        help="The receipt this scan created. Set once validated so a "
+        "double-click or a refreshed re-submit cannot receive the same "
+        "delivery twice — the second attempt just re-opens the receipt "
+        "that was already made.",
+    )
 
     # ---- Return-entry mode ----------------------------------------------
     is_return = fields.Boolean(
@@ -109,6 +119,11 @@ class WmsScanReceipt(models.TransientModel):
 
     def action_validate(self):
         self.ensure_one()
+        # Idempotency: a double-click / refresh re-submit must not receive
+        # the delivery twice (which would add the stock twice). Once a
+        # receipt exists, re-open it instead of making another.
+        if self.picking_id:
+            return self._open_picking()
         if not self.line_ids:
             raise UserError("No lines to receive.")
 
@@ -208,27 +223,36 @@ class WmsScanReceipt(models.TransientModel):
         picking.button_validate()
 
         # Audit-trail message — matches the Scan Issue chatter pattern.
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        audit_body = Markup(
+            "<p><b>%(kind)s.</b> "
+            "Delivered by <b>%(delivered)s</b>; "
+            "Store Keeper on duty: <b>%(keeper)s</b>; "
+            "logged in as: <b>%(login)s</b>.</p>"
+        ) % {
+            "kind": "Return received" if self.is_return else "Receipt received",
+            "delivered": picking.wms_taken_by or "(unspecified)",
+            "keeper": self.storekeeper_id.name or "(unknown)",
+            "login": self.env.user.display_name or "(system)",
+        }
         picking.message_post(
-            body=(
-                "<p><b>%(kind)s.</b> "
-                "Delivered by <b>%(delivered)s</b>; "
-                "Store Keeper on duty: <b>%(keeper)s</b>; "
-                "logged in as: <b>%(login)s</b>.</p>"
-            )
-            % {
-                "kind": "Return received" if self.is_return else "Receipt received",
-                "delivered": picking.wms_taken_by or "(unspecified)",
-                "keeper": self.storekeeper_id.name or "(unknown)",
-                "login": self.env.user.display_name or "(system)",
-            },
+            body=audit_body,
             subject="Receipt audit",
             message_type="notification",
         )
+        # Record the picking so a re-submit is a no-op (idempotency guard).
+        self.picking_id = picking.id
 
+        return self._open_picking()
+
+    def _open_picking(self):
+        """Open the receipt this scan created (also the no-op target a
+        double-submit lands on)."""
+        self.ensure_one()
         return {
             "type": "ir.actions.act_window",
             "res_model": "stock.picking",
-            "res_id": picking.id,
+            "res_id": self.picking_id.id,
             "view_mode": "form",
         }
 

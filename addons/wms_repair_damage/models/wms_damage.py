@@ -1,5 +1,6 @@
+from markupsafe import Markup
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 class WmsDamage(models.Model):
@@ -10,7 +11,11 @@ class WmsDamage(models.Model):
 
     _name = "wms.damage"
     _description = "Damage event"
-    _inherit = ["mail.thread", "mail.activity.mixin"]
+    _inherit = [
+        "mail.thread",
+        "mail.activity.mixin",
+        "wms.keeper.warning.mixin",
+    ]
     _order = "create_date desc, id desc"
 
     name = fields.Char(default="New", readonly=True, copy=False)
@@ -23,9 +28,14 @@ class WmsDamage(models.Model):
     quantity = fields.Float(required=True, default=1.0, tracking=True)
     source_slot_id = fields.Many2one(
         "stock.location",
-        domain=[("wms_location_type", "=", "slot")],
+        # Stock can live in slots (inside racks) OR floor zones (open
+        # storage areas) — both count as wms storage. Mirrors the
+        # STOCK_TYPES tuple in scan_receipt._auto_assign_slot so the
+        # damage form can target any place where stock physically sits.
+        domain=[("wms_location_type", "in", ("slot", "floor"))],
         required=True,
         tracking=True,
+        ondelete="restrict",
     )
     reason = fields.Selection(
         [
@@ -37,7 +47,29 @@ class WmsDamage(models.Model):
         default="broken",
         required=True,
     )
-    note = fields.Text()
+    note = fields.Text(
+        help="Free-text explanation of the damage event. Mandatory when "
+        "reason='other' so the audit trail isn't a black hole — for "
+        "broken/expired/contaminated the reason field already explains "
+        "what happened.",
+    )
+
+    # Enforce note when reason='other' so picking "Other" doesn't bypass
+    # the accountability requirement. The constraint runs at create/write
+    # and on action_confirm so the damage can't escape draft state
+    # without explanatory text when one is needed.
+    @api.constrains("reason", "note")
+    def _check_note_required_for_other(self):
+        for rec in self:
+            if rec.reason == "other" and not (rec.note or "").strip():
+                raise ValidationError(
+                    "If the damage reason is 'Other', you must write a quick "
+                    "note explaining what happened (e.g., 'Spilled during "
+                    "morning feed'). If the reason fits one of the pre-set "
+                    "options (Broken, Expired, or Contaminated), pick that "
+                    "instead."
+                )
+
     picking_id = fields.Many2one("stock.picking", readonly=True, copy=False)
     warehouse_id = fields.Many2one(
         "stock.warehouse",
@@ -86,11 +118,26 @@ class WmsDamage(models.Model):
 
     @api.depends("source_slot_id")
     def _compute_warehouse(self):
+        """Walk the location hierarchy upward looking for a warehouse
+        binding. If no ancestor is bound to a warehouse (common for
+        trust-branded top-level locations like "Dakshin Vrindavan"
+        where the rack sits OUTSIDE the WH/Stock subtree), fall back
+        to the active company's primary warehouse so action_confirm
+        can still find a Damage location and an internal-transfer
+        picking type — same pattern as the FIFO out-of-tree fallback
+        in stock_location.find_oldest_quants_for_product.
+        """
+        Warehouse = self.env["stock.warehouse"]
         for rec in self:
             loc = rec.source_slot_id
             while loc and not loc.warehouse_id:
                 loc = loc.location_id
-            rec.warehouse_id = loc.warehouse_id if loc else False
+            if loc and loc.warehouse_id:
+                rec.warehouse_id = loc.warehouse_id
+            else:
+                rec.warehouse_id = Warehouse.search(
+                    [("company_id", "=", rec.env.company.id)], limit=1
+                )
 
     # ---- Smart "what should we do about this?" recommendation ------------
     remaining_on_hand = fields.Float(
@@ -144,17 +191,28 @@ class WmsDamage(models.Model):
                 rec.recommendation_message = ""
                 continue
 
+            # We want "what's still usable across the warehouse" — that
+            # means internal storage MINUS the damage/repair stations.
+            # Without this exclusion, the qty we just moved to the Damage
+            # location still gets counted as "on hand" after confirm,
+            # which makes the form claim 5000 still on hand right after
+            # damaging 1 unit out of 5000. Misleading.
             quants = Quant.search(
                 [
                     ("product_id", "=", rec.product_id.id),
                     ("location_id.usage", "=", "internal"),
+                    ("location_id.wms_is_damage", "=", False),
+                    ("location_id.wms_is_repair", "=", False),
                     ("quantity", ">", 0),
                 ]
             )
             total = sum(q.quantity for q in quants)
-            # The damaged qty hasn't been moved yet for a draft record;
-            # for a confirmed one the picking already removed it from the
-            # source slot, so the leftover total already excludes it.
+            # For a draft record the picking hasn't run yet, so subtract
+            # the qty we're about to damage to show the user how many will
+            # be left over once they confirm. For a confirmed record the
+            # picking already moved the qty out of the source slot to the
+            # Damage location — which the search above excludes — so the
+            # total already reflects "what's left usable".
             if rec.state == "draft":
                 remaining = max(0.0, total - (rec.quantity or 0.0))
             else:
@@ -196,9 +254,9 @@ class WmsDamage(models.Model):
                     "work isn't blocked. Open a Repair Order to bring this "
                     "one back into service."
                 ) % (qty, product_name, remaining)
-            elif rec.product_id.wms_product_kind in ("tool", "spare", "equipment"):
-                # Non-returnable but the product is a tool / spare /
-                # equipment that COULD in principle be reconditioned
+            elif rec.product_id.wms_product_kind in ("tool", "spare"):
+                # Non-returnable but the product is a tool / spare
+                # that COULD in principle be reconditioned
                 # (worn drill bit, partial spool, etc.). Other units cover
                 # the gap so it isn't urgent, but flag it so the Admin
                 # can decide whether to repair or scrap.
@@ -259,11 +317,11 @@ class WmsDamage(models.Model):
                 # issue to release stock.
                 if reserved > 0 and rec.quantity <= total + 0.0001:
                     raise UserError(
-                        "Slot %s holds %g × %s, but %g unit(s) are already "
-                        "reserved for an in-flight Scan Issue. Only %g are "
-                        "free to damage right now. Wait for the issue to "
-                        "validate (or be cancelled), or reduce the damage "
-                        "quantity to %g."
+                        "Slot %s has %g × %s, but %g unit(s) are already "
+                        "spoken for by a pending issue that hasn't finished "
+                        "yet. Only %g are really free to mark as damaged. "
+                        "Either wait for that issue to finish, cancel it, or "
+                        "mark fewer units as damaged (up to %g)."
                         % (
                             rec.source_slot_id.display_name,
                             total,
@@ -369,17 +427,19 @@ class WmsDamage(models.Model):
             # Mirror the audit-trail summary into the chatter so the
             # damage history stands on its own without cross-referencing
             # the picking.
+            # Markup() so Odoo 19 renders the <p>/<b> tags instead of
+            # escaping them to visible text in the chatter.
+            audit_body = Markup(
+                "<p><b>Damage confirmed.</b> "
+                "Reported by <b>%s</b>; authorised by <b>%s</b>; "
+                "Store Keeper on duty: <b>%s</b>.</p>"
+            ) % (
+                rec.wms_reported_by or "(unspecified)",
+                rec.wms_authorized_by or "(unspecified)",
+                rec.wms_storekeeper_id.name or "(unknown)",
+            )
             rec.message_post(
-                body=(
-                    "<p><b>Damage confirmed.</b> "
-                    "Reported by <b>%s</b>; authorised by <b>%s</b>; "
-                    "Store Keeper on duty: <b>%s</b>.</p>"
-                )
-                % (
-                    rec.wms_reported_by or "(unspecified)",
-                    rec.wms_authorized_by or "(unspecified)",
-                    rec.wms_storekeeper_id.name or "(unknown)",
-                ),
+                body=audit_body,
                 subject="Damage audit",
                 message_type="notification",
             )
@@ -396,9 +456,9 @@ class WmsDamage(models.Model):
         confirm. Silently skips if no Managers are configured."""
         self.ensure_one()
         group = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
-        if not group or not group.users:
+        if not group or not group.all_user_ids:
             return
-        body = (
+        body = Markup(
             "<p><b>⚠ URGENT BUY required.</b></p>"
             "<p>%(qty)g × <b>%(product)s</b> just got filed as damaged at "
             "<b>%(slot)s</b>, and the trust has <b>zero spares</b> of this "
@@ -416,7 +476,7 @@ class WmsDamage(models.Model):
             "auth": self.wms_authorized_by or "(unspecified)",
             "keeper": (self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"),
         }
-        for user in group.users:
+        for user in group.all_user_ids:
             user.partner_id.message_post(
                 body=body,
                 subject="WMS — URGENT BUY: %s" % self.product_id.display_name,

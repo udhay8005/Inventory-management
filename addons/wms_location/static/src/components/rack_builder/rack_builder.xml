@@ -32,17 +32,36 @@
 
             <div class="o_wms_rack_builder__layout">
 
+                <!--
+                    One DOM element per grid cell (shelf, column). Cells
+                    belonging to the same compartment share the
+                    `selected` highlight, and the interior borders are
+                    hidden via the borderTop/borderBottom/borderLeft/
+                    borderRight flags on the cell object - the visual
+                    effect is a single outlined polyomino regardless of
+                    its shape.
+                -->
                 <div class="o_wms_rack_builder__grid" t-att-style="gridStyle()">
-                    <t t-foreach="state.compartments" t-as="comp" t-key="comp.id">
+                    <t t-foreach="gridCells" t-as="cell" t-key="cell.shelf + '_' + cell.column">
                         <div
                             class="o_wms_rack_builder__cell"
-                            t-att-class="{ 'o_wms_rack_builder__cell--selected': state.selectedId === comp.id, 'o_wms_rack_builder__cell--span': isSpan(comp) }"
-                            t-att-style="cellStyle(comp)"
-                            t-on-click="() => this.selectCompartment(comp.id)">
-                            <div class="o_wms_rack_builder__cell-label" t-esc="cellLabel(comp)"/>
-                            <div class="o_wms_rack_builder__cell-slots" t-if="comp.slot_count > 1">
-                                <t t-esc="comp.slot_count"/> slots
-                            </div>
+                            t-att-class="{
+                                'o_wms_rack_builder__cell--selected': cell.selected,
+                                'o_wms_rack_builder__cell--multi':    cell.multiCell,
+                                'o_wms_rack_builder__cell--no-top':    !cell.borderTop,
+                                'o_wms_rack_builder__cell--no-bottom': !cell.borderBottom,
+                                'o_wms_rack_builder__cell--no-left':   !cell.borderLeft,
+                                'o_wms_rack_builder__cell--no-right':  !cell.borderRight,
+                                'o_wms_rack_builder__cell--addable':
+                                    state.addCellMode and cell.compartmentId !== state.selectedId,
+                            }"
+                            t-att-style="cellStyle(cell)"
+                            t-on-click="() => this.onCellClick(cell.shelf, cell.column)">
+                            <t t-if="cell.isAnchor">
+                                <div class="o_wms_rack_builder__cell-label" t-esc="cell.label"/>
+                                <div class="o_wms_rack_builder__cell-slots" t-if="cell.slotBadge"
+                                     t-esc="cell.slotBadge"/>
+                            </t>
                         </div>
                     </t>
                 </div>
@@ -50,32 +69,53 @@
                 <div class="o_wms_rack_builder__panel">
                     <t t-if="selectedCompartment">
                         <div class="o_wms_rack_builder__panel-title">
-                            Selected: <strong t-esc="cellLabel(selectedCompartment)"/>
+                            Selected: <strong t-esc="compartmentLabel(selectedCompartment)"/>
                         </div>
 
                         <div class="o_wms_rack_builder__panel-section">
-                            <div class="o_wms_rack_builder__panel-label">Merge with neighbour</div>
+                            <div class="o_wms_rack_builder__panel-label">Merge with neighbour (rectangle)</div>
                             <div class="o_wms_rack_builder__dpad">
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-up"
                                         t-att-disabled="!canMergeUp()"
                                         t-on-click="() => this.mergeUp()"
-                                        title="Extend up — consumes every cell on the row above that lies within this compartment's column range">↑</button>
+                                        title="Extend up — works only on rectangular compartments">↑</button>
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-left"
                                         t-att-disabled="!canMergeLeft()"
                                         t-on-click="() => this.mergeLeft()"
-                                        title="Extend left — consumes every cell on the column to the left that lies within this compartment's shelf range">←</button>
+                                        title="Extend left — works only on rectangular compartments">←</button>
                                 <button class="btn btn-sm btn-outline-warning o_wms_rack_builder__dpad-center"
                                         t-att-disabled="!canSplit()"
                                         t-on-click="() => this.split()"
-                                        title="Split this compartment back into single cells">Split</button>
+                                        title="Split back into single cells">Split</button>
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-right"
                                         t-att-disabled="!canMergeRight()"
                                         t-on-click="() => this.mergeRight()"
-                                        title="Extend right — consumes every cell on the column to the right that lies within this compartment's shelf range">→</button>
+                                        title="Extend right — works only on rectangular compartments">→</button>
                                 <button class="btn btn-sm btn-outline-primary o_wms_rack_builder__dpad-down"
                                         t-att-disabled="!canMergeDown()"
                                         t-on-click="() => this.mergeDown()"
-                                        title="Extend down — consumes every cell on the row below that lies within this compartment's column range">↓</button>
+                                        title="Extend down — works only on rectangular compartments">↓</button>
+                            </div>
+                        </div>
+
+                        <!--
+                            New: free-shape merge. Toggle the button on,
+                            then click any 4-adjacent cell to add it to
+                            the selected compartment. Build L / T / U
+                            shapes one cell at a time.
+                        -->
+                        <div class="o_wms_rack_builder__panel-section">
+                            <div class="o_wms_rack_builder__panel-label">Free-shape (L / T / U etc.)</div>
+                            <button class="btn btn-sm w-100"
+                                    t-att-class="state.addCellMode ? 'btn-success' : 'btn-outline-success'"
+                                    t-on-click="() => this.toggleAddCellMode()">
+                                <t t-if="state.addCellMode">✓ Click adjacent cells to add</t>
+                                <t t-else="">+ Add adjacent cell</t>
+                            </button>
+                            <div class="text-muted small mt-2" t-if="state.addCellMode">
+                                Click any cell that touches the selected
+                                compartment (edge-adjacent). It joins
+                                immediately. Click the button again to stop.
                             </div>
                         </div>
 
@@ -94,10 +134,9 @@
                     <t t-else="">
                         <p class="text-muted">Click a compartment in the grid to edit it.</p>
                         <ul class="text-muted small">
-                            <li><b>Merge ↑/↓</b> combines this cell vertically — creates a tall compartment.</li>
-                            <li><b>Merge ←/→</b> combines this cell horizontally — creates a wide compartment.</li>
-                            <li>Merging in both directions builds a 2D block (e.g. a corner cabinet).</li>
-                            <li><b>Split</b> breaks a spanning compartment back into single-shelf, single-column cells.</li>
+                            <li><b>Merge ↑/↓/←/→</b> grows a rectangular compartment one row/column at a time.</li>
+                            <li><b>+ Add adjacent cell</b> grows the compartment into any L / T / U shape, one cell per click.</li>
+                            <li><b>Split</b> breaks any multi-cell compartment back into single cells.</li>
                             <li><b>Slots</b> sub-divides the compartment into N storable positions.</li>
                         </ul>
                     </t>

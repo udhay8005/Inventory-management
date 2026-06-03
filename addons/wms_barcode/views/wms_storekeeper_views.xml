@@ -6,9 +6,16 @@
             <field name="name">wms.storekeeper.list</field>
             <field name="model">wms.storekeeper</field>
             <field name="arch" type="xml">
-                <list string="Store Keepers" editable="bottom">
+                <list string="Store Keepers">
                     <field name="name"/>
                     <field name="phone" optional="show"/>
+                    <field name="user_id" optional="show" string="Odoo login"/>
+                    <field name="has_login" widget="boolean_toggle"
+                           optional="hide" readonly="1"/>
+                    <field name="can_scan_receive" widget="boolean_toggle" optional="hide"/>
+                    <field name="can_scan_issue" widget="boolean_toggle" optional="hide"/>
+                    <field name="can_file_damage" widget="boolean_toggle" optional="hide"/>
+                    <field name="can_submit_audit" widget="boolean_toggle" optional="hide"/>
                     <field name="note" optional="hide"/>
                     <field name="active" widget="boolean_toggle"/>
                 </list>
@@ -20,6 +27,17 @@
             <field name="model">wms.storekeeper</field>
             <field name="arch" type="xml">
                 <form string="Store Keeper">
+                    <header>
+                        <button name="action_create_login" type="object"
+                                string="Create Odoo login"
+                                class="oe_highlight"
+                                invisible="has_login"
+                                groups="wms_location.group_wms_manager"/>
+                        <button name="action_open_login" type="object"
+                                string="Open login record"
+                                invisible="not has_login"
+                                groups="wms_location.group_wms_manager"/>
+                    </header>
                     <sheet>
                         <div class="oe_title">
                             <h1>
@@ -27,9 +45,74 @@
                             </h1>
                         </div>
                         <group>
-                            <field name="phone"/>
-                            <field name="active"/>
+                            <group>
+                                <field name="phone"/>
+                                <field name="email"/>
+                                <field name="active"/>
+                            </group>
+                            <group>
+                                <field name="user_id" readonly="1"
+                                       invisible="not has_login"/>
+                                <field name="has_login" invisible="1"/>
+                            </group>
                         </group>
+
+                        <!--
+                            Login creation block. Only shown when no
+                            res.users is linked yet. The Admin fills
+                            these two, clicks 'Create Odoo login' in
+                            the header, and the system spins up a real
+                            login + grants the default capabilities.
+                            initial_password gets cleared right after.
+                        -->
+                        <group string="Set up individual Odoo login"
+                               invisible="has_login">
+                            <field name="login"
+                                   placeholder="e.g. suresh (lowercase, no spaces)"/>
+                            <field name="initial_password"
+                                   password="True"
+                                   placeholder="Temporary - the keeper changes it on first login"/>
+                            <div colspan="2" class="text-muted">
+                                Click <b>Create Odoo login</b> in the toolbar
+                                above. The five default capabilities will be
+                                turned on; untick what you do not want this
+                                keeper to do.
+                            </div>
+                        </group>
+
+                        <!--
+                            Capability toggles. Visible once the login
+                            exists; ticking writes through to
+                            res.users.group_ids via the inverse methods
+                            on the model. Manager-only edit because
+                            keepers should not be granting themselves
+                            new abilities.
+                        -->
+                        <group string="Capabilities (advantages)"
+                               invisible="not has_login"
+                               groups="wms_location.group_wms_manager">
+                            <group>
+                                <field name="can_scan_receive"
+                                       widget="boolean_toggle"/>
+                                <field name="can_scan_issue"
+                                       widget="boolean_toggle"/>
+                                <field name="can_file_damage"
+                                       widget="boolean_toggle"/>
+                            </group>
+                            <group>
+                                <field name="can_submit_audit"
+                                       widget="boolean_toggle"/>
+                                <field name="can_manage_catalog"
+                                       widget="boolean_toggle"/>
+                            </group>
+                            <div colspan="2" class="alert alert-info">
+                                Each tick maps to a specific Odoo group. To
+                                grant <b>finer</b> permissions (e.g. edit a
+                                custom report), add the user to that group
+                                under Settings -&gt; Users -&gt; Permissions.
+                            </div>
+                        </group>
+
                         <field name="note" placeholder="Optional notes (shift, role, etc.)"/>
                     </sheet>
                 </form>

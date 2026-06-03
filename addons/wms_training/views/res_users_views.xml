@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add the Beginner Mode toggle to each user's own Preferences form,
+         so anyone can turn it on/off without manager rights. -->
+    <record id="view_users_form_simple_modif_wms_beginner" model="ir.ui.view">
+        <field name="name">res.users.preferences.wms.beginner</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form_simple_modif"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group" position="inside">
+                <group string="Warehouse (WMS)">
+                    <field name="wms_beginner_mode"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- (The full manager user-form inheritance was removed: beginner mode is
+         a self-service preference, set from the Preferences form above, which
+         managers can also open per user. Avoids a fragile xpath into the core
+         user form whose structure shifts between Odoo versions.) -->
+</odoo>

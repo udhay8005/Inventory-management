@@ -1,7 +1,7 @@
 {
     "name": "WMS — Reports & Dashboards",
-    "version": "19.0.1.0.0",
-    "summary": "Live SQL-view dashboards: oldest stock, occupancy, dead stock, reorder summary.",
+    "version": "19.0.2.0.0",
+    "summary": "Live SQL-view dashboards + backup/DR observability (health endpoint, backup audit).",
     "depends": ["wms_location", "wms_ai_forecast", "wms_repair_damage", "stock"],
     "author": "WMS",
     "license": "LGPL-3",
@@ -15,6 +15,10 @@
         "views/wms_product_stock_views.xml",
         "views/wms_movement_history_views.xml",
         "views/wms_cycle_count_views.xml",
+        "views/wms_tool_fleet_summary_views.xml",
+        "views/wms_storekeeper_activity_views.xml",
+        "views/wms_expiry_alert_views.xml",
+        "views/wms_audit_views.xml",
         "views/rack_grid_template.xml",
         "views/rack_form_inherit.xml",
         "views/warehouse_map_template.xml",
@@ -22,6 +26,8 @@
         # menu_wms_reports_root for cycle-count-due lives here too rather
         # than inside its view file.
         "views/menus.xml",
+        # Loaded after menus.xml: its menuitem is parented to menu_wms_reports_root.
+        "views/wms_backup_audit_views.xml",
         "data/cron.xml",
     ],
     "installable": True,

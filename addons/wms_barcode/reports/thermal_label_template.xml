@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            One sticker per page on a thermal roll printer.
+
+            The label is a fixed-size box (config.paper_width_mm ×
+            config.paper_height_mm) with `position: relative`; every
+            element (logo, title, sub-title, barcode, barcode digits)
+            is absolutely positioned in mm so the Admin can move them
+            anywhere on the sticker via the Label Settings form.
+
+            Set width/height to 0 in the config to hide an element.
+        -->
+
+        <template id="thermal_label_layout" name="WMS — Thermal label layout">
+            <t t-call="web.html_container">
+                <t t-set="config" t-value="env['wms.label.config'].sudo().get_active()"/>
+                <t t-set="paper_w" t-value="config.paper_width_mm or 100"/>
+                <t t-set="paper_h" t-value="config.paper_height_mm or 25"/>
+
+                <!--
+                    CSS @page rule — locks the browser's print pipeline
+                    to the exact sticker size so the TSC TE244 driver's
+                    misconfigured USER stock can't expand the page to
+                    4×4 / 4×6 inch and feed 3 blank stickers per print.
+
+                    The browser's print engine honors @page over the
+                    printer driver's default media size, so even if
+                    the operator forgets to set USER = 100×25 mm in
+                    the TE244 preferences, this rule overrides it.
+
+                    media="print" so it applies ONLY when printing,
+                    not when viewing the HTML preview in the browser.
+                -->
+                <style>
+                    @media print {
+                        @page {
+                            size: <t t-esc="paper_w"/>mm <t t-esc="paper_h"/>mm;
+                            margin: 0 !important;
+                        }
+                        html, body {
+                            width:  <t t-esc="paper_w"/>mm !important;
+                            height: <t t-esc="paper_h"/>mm !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            background: white !important;
+                            -webkit-print-color-adjust: exact !important;
+                            print-color-adjust: exact !important;
+                        }
+                    }
+                </style>
+
+                <t t-foreach="labels" t-as="lbl">
+                    <!-- page-break-after: always on every label EXCEPT the
+                         last one. Otherwise the final label produces an
+                         extra blank page after itself. -->
+                    <div t-att-style="('width: %smm; height: %smm; position: relative; '
+                                       'overflow: hidden; page-break-after: %s; '
+                                       'font-family: sans-serif;') % (
+                                       paper_w, paper_h,
+                                       'auto' if lbl_index == lbl_size - 1 else 'always')">
+
+                        <!-- Logo -->
+                        <img t-if="config.logo and config.logo_width_mm &gt; 0"
+                             t-att-src="'data:image/*;base64,' + config.logo.decode()"
+                             t-att-style="('position: absolute; top: %smm; left: %smm; '
+                                           'width: %smm; height: %smm; object-fit: contain;') % (
+                                           config.logo_y_mm, config.logo_x_mm,
+                                           config.logo_width_mm, config.logo_height_mm)"/>
+
+                        <!-- Title (product name / location name) -->
+                        <div t-if="config.show_title and lbl.get('title')"
+                             t-att-style="('position: absolute; top: %smm; left: %smm; '
+                                           'width: %smm; font-size: %spt; '
+                                           'font-weight: %s; line-height: 1.1; '
+                                           'overflow: hidden; white-space: nowrap; '
+                                           'text-overflow: ellipsis;') % (
+                                           config.title_y_mm, config.title_x_mm,
+                                           config.title_width_mm,
+                                           config.title_size_pt,
+                                           700 if config.title_bold else 400)"
+                             t-esc="lbl['title']"/>
+
+                        <!-- Sub-title (SKU / complete name) -->
+                        <div t-if="config.show_subtitle and lbl.get('subtitle')"
+                             t-att-style="('position: absolute; top: %smm; left: %smm; '
+                                           'width: %smm; font-size: %spt; '
+                                           'color: #555; line-height: 1.1; '
+                                           'overflow: hidden; white-space: nowrap; '
+                                           'text-overflow: ellipsis;') % (
+                                           config.subtitle_y_mm, config.subtitle_x_mm,
+                                           config.subtitle_width_mm,
+                                           config.subtitle_size_pt)"
+                             t-esc="lbl['subtitle']"/>
+
+                        <!-- Barcode bars (rendered inline as base64 so
+                             wkhtmltopdf doesn't need to fetch /report/barcode
+                             over HTTP, which fails without a DB context). -->
+                        <img t-if="lbl.get('barcode') and config.barcode_width_mm &gt; 0"
+                             t-att-src="config.barcode_data_uri(lbl['barcode'])"
+                             t-att-style="('position: absolute; top: %smm; left: %smm; '
+                                           'width: %smm; height: %smm; '
+                                           'object-fit: fill;') % (
+                                           config.barcode_y_mm, config.barcode_x_mm,
+                                           config.barcode_width_mm, config.barcode_height_mm)"/>
+
+                        <!-- Human-readable barcode number -->
+                        <div t-if="config.show_human_readable and lbl.get('barcode')"
+                             t-att-style="('position: absolute; top: %smm; left: %smm; '
+                                           'width: %smm; font-size: %spt; '
+                                           'font-family: monospace; text-align: center; '
+                                           'line-height: 1;') % (
+                                           config.barcode_y_mm + config.barcode_height_mm + 0.5,
+                                           config.barcode_x_mm,
+                                           config.barcode_width_mm,
+                                           config.human_readable_size_pt)"
+                             t-esc="lbl['barcode']"/>
+                    </div>
+                </t>
+            </t>
+        </template>
+
+        <template id="report_product_label_thermal">
+            <t t-set="labels"
+               t-value="[{
+                   'title': p.name,
+                   'subtitle': 'SKU: ' + (p.default_code or '-'),
+                   'barcode': p.barcode,
+               } for p in docs]"/>
+            <t t-call="wms_barcode.thermal_label_layout"/>
+        </template>
+
+        <template id="report_location_label_thermal">
+            <t t-set="labels"
+               t-value="[{
+                   'title': loc.display_name,
+                   'subtitle': loc.complete_name,
+                   'barcode': loc.barcode,
+               } for loc in docs]"/>
+            <t t-call="wms_barcode.thermal_label_layout"/>
+        </template>
+
+    </data>
+</odoo>
