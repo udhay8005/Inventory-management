@@ -24,8 +24,12 @@
         <record id="paperformat_wms_thermal_4x2" model="report.paperformat">
             <field name="name">WMS Thermal Label 4×2 in (101.6×50.8 mm)</field>
             <field name="format">custom</field>
-            <field name="page_width">101.6</field>
-            <field name="page_height">50.8</field>
+            <!-- report.paperformat page_width/height are INTEGER mm; the
+                 exact 101.6 x 50.8 mm label rounds to 102 x 51 (the 0.4 mm
+                 sits inside the TE244 hardware margin). The element canvas
+                 keeps the exact float size via wms.label.config. -->
+            <field name="page_width">102</field>
+            <field name="page_height">51</field>
             <field name="orientation">Portrait</field>
             <field name="margin_top">0</field>
             <field name="margin_bottom">0</field>
