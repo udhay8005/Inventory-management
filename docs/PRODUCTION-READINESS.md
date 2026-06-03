@@ -123,6 +123,8 @@ Backed by the security-group structure (single-assignment roles) + reachability 
 
 ## 9. Operator action items 🟡
 
+> **Recommended run mode:** install Odoo as an auto-starting service — `.\scripts\install-odoo-service.ps1` (auto-start on boot + restart on failure; see [RUN-AS-SERVICE.md](RUN-AS-SERVICE.md)). Without it, Odoo must be launched by hand and stops on reboot.
+
 1. **Set strong unique passwords** — run once before go-live:
    ```powershell
    .\scripts\set-user-passwords.ps1 -Users "admin,storekeeper"
