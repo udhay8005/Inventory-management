@@ -1,22 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <data>
+        <!--
+            Scan / catalog menus are gated by per-keeper capability
+            sub-groups instead of the broad group_wms_user role. An
+            Admin can grant or revoke each from the Store Keeper form.
+            Users without the matching capability never see the menu.
+        -->
         <menuitem id="menu_wms_scan_receipt"
                   name="Scan Receipt"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_scan_receipt"
+                  groups="wms_location.group_wms_can_scan_receive"
                   sequence="20"/>
+
+        <menuitem id="menu_wms_scan_return"
+                  name="Scan Return"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_scan_return"
+                  groups="wms_location.group_wms_can_scan_receive"
+                  sequence="22"/>
 
         <menuitem id="menu_wms_scan_issue"
                   name="Scan Issue (FIFO)"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_scan_issue"
+                  groups="wms_location.group_wms_can_scan_issue"
                   sequence="25"/>
 
         <menuitem id="menu_wms_barcode_alias"
                   name="Carton Barcodes"
-                  parent="wms_location.menu_wms_config"
+                  parent="wms_location.menu_wms_operations"
                   action="action_wms_barcode_alias"
-                  sequence="30"/>
+                  groups="wms_location.group_wms_can_manage_catalog"
+                  sequence="60"/>
+
+        <!--
+            Onboard Products wizard — adds catalog rows + initial stock.
+
+            Lives under Configuration (alongside Generate Zone / Create Rack)
+            because it is a SETUP wizard, not daily warehouse work, and it
+            opens as a modal (target=new). When it was the lowest-sequence
+            child of Operations, an Admin clicking the WMS app icon fell
+            straight through into a modal over an unrelated page — confusing
+            UX. With it here, clicking WMS lands cleanly on Operations -> Slots
+            (a real page), and Admins still find Onboard Products easily
+            under Configuration when adding new items.
+        -->
+        <menuitem id="menu_wms_product_onboard"
+                  name="Onboard Products"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_product_onboard"
+                  groups="wms_location.group_wms_manager"
+                  sequence="35"/>
     </data>
 </odoo>

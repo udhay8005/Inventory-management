@@ -1,0 +1,12 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.black-formatter",
+    "ms-python.isort",
+    "ms-python.flake8",
+    "redhat.vscode-xml",
+    "redhat.vscode-yaml",
+    "ms-vscode.powershell"
+  ]
+}

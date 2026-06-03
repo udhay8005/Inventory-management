@@ -7,7 +7,7 @@
             <field name="model">wms.zone.generator</field>
             <field name="arch" type="xml">
                 <form string="Generate Zone">
-                    <div class="alert alert-info" role="alert">
+                    <div class="alert alert-info">
                         A <b>Zone</b> groups racks and floor areas under a
                         single named umbrella — e.g. "1st Floor",
                         "Ground Floor / East", "Outside Yard". Use this
@@ -25,7 +25,11 @@
                                invisible="rack_count == 0"/>
                         <field name="rack_prefix"
                                invisible="rack_count == 0"/>
-                        <field name="dividers_per_level"
+                        <field name="rack_shelf_count"
+                               invisible="rack_count == 0"/>
+                        <field name="rack_column_count"
+                               invisible="rack_count == 0"/>
+                        <field name="rack_slot_count"
                                invisible="rack_count == 0"/>
                         <field name="rack_capacity_per_slot"
                                invisible="rack_count == 0"/>
@@ -74,6 +78,12 @@
             <field name="binding_view_types">list,form</field>
             <field name="state">code</field>
             <field name="code">
+# Manager-only: ir.actions.server has no groups_id in Odoo 19, so gate
+# in code. Without this, the '☰ Action -> Move to Zone' entry showed for
+# Store Keepers and failed confusingly at wizard submit; now it gives an
+# immediate, clear message (the wms.move.to.zone wizard is manager-ACL'd).
+if not env.user.has_group('wms_location.group_wms_manager'):
+    raise UserError("Only WMS Managers can move racks or zones. Ask an admin.")
 # Opens the picker wizard for the selected records.
 records = records.filtered(lambda r: r.wms_location_type in ('rack', 'floor'))
 if not records:

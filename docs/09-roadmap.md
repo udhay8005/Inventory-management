@@ -3,13 +3,14 @@
 ## Phase 0 — Bring-up (Day 1)
 - [x] Docker compose, Dockerfile, odoo.conf, env example
 - [x] Doc skeleton
+- [x] Migrated off Docker to native Windows install (PostgreSQL service + Python venv + Odoo source clone). See `scripts\install-native.ps1`.
 
 ## Phase 1 — Core hierarchy (Days 2-4) — `wms_location`
 - [x] `stock.location` extension with `wms_location_type` + position fields
 - [x] Constraints (6 dividers / 3 slots)
 - [x] `wms.rack.generator` wizard to spin up a rack with all slots in one click
 - [x] Tree, kanban, search views for slots
-- [x] Demo data: 1 warehouse, 3 racks (54 slots), 10 products
+- [x] Demo data: 1 warehouse, 1 demo rack (R-01) with auto-generated compartments + slots, demo products
 
 ## Phase 2 — FIFO removal (Day 5) — `wms_fifo`
 - [x] Register `removal_strategy = wms_fifo_global` on stock.location.route

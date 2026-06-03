@@ -7,7 +7,7 @@
             <field name="arch" type="xml">
                 <form string="Scan Issue (FIFO)">
                     <sheet>
-                        <div class="alert alert-info" role="alert">
+                        <div class="alert alert-info">
                             <strong>Set qty, then scan.</strong>
                             FIFO pulls the oldest stock first across all slots.
                             Scan a carton barcode to use its preset count.
@@ -40,6 +40,9 @@
                                 <field name="product_id"/>
                                 <field name="location_id"/>
                                 <field name="in_date"/>
+                                <field name="expiry_date" optional="show"
+                                       decoration-danger="expiry_date and expiry_date &lt;= (context_today() + relativedelta(days=30)).strftime('%Y-%m-%d')"
+                                       decoration-warning="expiry_date and expiry_date &lt;= (context_today() + relativedelta(days=90)).strftime('%Y-%m-%d')"/>
                                 <field name="available"/>
                                 <field name="take"/>
                             </list>
@@ -66,6 +69,45 @@
                                 <field name="photo" widget="image"
                                        nolabel="1"
                                        options="{'size': [400, 300]}"/>
+                            </div>
+                        </div>
+
+                        <div class="row mt-3 border-top pt-3">
+                            <div class="col-12">
+                                <h6 class="text-uppercase text-muted"
+                                    style="font-size:11px;">
+                                    Audit trail
+                                </h6>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="taken_by"/>
+                                <field name="taken_by"
+                                       placeholder="Name of the person taking these items"/>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="ordered_by"/>
+                                <field name="ordered_by"
+                                       placeholder="Name of the person who authorised this"/>
+                            </div>
+                            <div class="col-12 col-md-4">
+                                <label for="storekeeper_id"/>
+                                <field name="storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="Select on-duty Store Keeper"/>
+                            </div>
+                            <!--
+                                Mandatory usage note — what is the stock
+                                going to be used for? Validates accountability
+                                + helps reconcile against monthly cow-care
+                                plans. Required at the model layer so
+                                clicking Validate without a note throws
+                                a UserError.
+                            -->
+                            <div class="col-12 mt-2">
+                                <label for="usage_note" class="fw-bold"/>
+                                <field name="usage_note"
+                                       nolabel="1"
+                                       placeholder="Why is this stock being taken? (e.g. 'morning feed for shed B', 'replacing broken pump', 'monthly vaccination round')"/>
                             </div>
                         </div>
                     </sheet>

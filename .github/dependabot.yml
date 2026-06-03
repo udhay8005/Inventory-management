@@ -1,6 +1,6 @@
 # Dependabot keeps the project safe from known CVEs without manual work.
-# Three ecosystems are watched: pip (Python), docker (base images),
-# and github-actions (workflow versions themselves).
+# Two ecosystems are watched: pip (Python deps for Odoo + AI worker) and
+# github-actions (workflow versions themselves).
 
 version: 2
 updates:
@@ -21,14 +21,6 @@ updates:
     labels: ["dependencies", "python", "ai-worker"]
     commit-message:
       prefix: "deps(ai_worker)"
-
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    labels: ["dependencies", "docker"]
-    commit-message:
-      prefix: "deps(docker)"
 
   - package-ecosystem: "github-actions"
     directory: "/"

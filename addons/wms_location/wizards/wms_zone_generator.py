@@ -13,6 +13,10 @@ class WmsZoneGenerator(models.TransientModel):
     `wms_location_type='zone'`. Racks/floors generated underneath behave
     identically to those generated directly under WH/Stock — same scan,
     FIFO, reports.
+
+    For racks we delegate to wms.rack.generator's quick-grid mode: every
+    rack created here uses the same shelf_count × column_count. Use the
+    visual Rack Builder for one-off racks with custom layouts.
     """
 
     _name = "wms.zone.generator"
@@ -27,7 +31,7 @@ class WmsZoneGenerator(models.TransientModel):
         "stock.location",
         string="Parent location",
         required=True,
-        help="Where the new zone will live. Usually WH/Stock.",
+        help="Where the new zone will live. Usually the main warehouse stock location.",
         default=lambda s: s._default_parent(),
         domain=[("usage", "=", "view")],
     )
@@ -38,15 +42,31 @@ class WmsZoneGenerator(models.TransientModel):
 
     rack_count = fields.Integer(
         default=0,
-        help="How many racks to generate inside this zone. "
-        "Each rack = 6 levels × N dividers × 3 slots.",
+        help="How many racks to generate inside this zone.",
     )
     rack_start_number = fields.Integer(
         default=1,
-        help="Starting rack number. If you already have R-01..R-32 elsewhere, " "use 33 here.",
+        help="Starting rack number. If you already have R01..R32 elsewhere, use 33 here.",
     )
-    rack_prefix = fields.Char(default="R", help="Rack code prefix, e.g. R → R-33.")
-    dividers_per_level = fields.Integer(default=4)
+    rack_prefix = fields.Char(
+        default="R",
+        help="Rack code prefix. R → R01, R02, …",
+    )
+    rack_shelf_count = fields.Integer(
+        default=6,
+        string="Shelves per rack",
+        help="Number of horizontal shelves in each generated rack.",
+    )
+    rack_column_count = fields.Integer(
+        default=3,
+        string="Columns per rack",
+        help="Number of vertical compartments per shelf in each generated rack.",
+    )
+    rack_slot_count = fields.Integer(
+        default=1,
+        string="Slots per compartment",
+        help="Sub-divisions inside each compartment.",
+    )
     rack_capacity_per_slot = fields.Float(default=0.0)
 
     floor_count = fields.Integer(
@@ -90,10 +110,12 @@ class WmsZoneGenerator(models.TransientModel):
                 }
             )
 
-        # 2. Racks under the zone — delegate to the existing wizard.
+        # 2. Racks under the zone — delegate to the rack generator wizard
+        #    in quick-grid mode (every rack same shelves×columns).
         created_racks = 0
+        prefix = (self.rack_prefix or "R").strip().upper()
         for n in range(self.rack_start_number, self.rack_start_number + max(0, self.rack_count)):
-            code = f"{(self.rack_prefix or 'R').strip().upper()}-{n:02d}"
+            code = f"{prefix}{n:02d}"
             if Loc.search([("wms_rack_code", "=", code)], limit=1):
                 continue
             gen = self.env["wms.rack.generator"].create(
@@ -101,7 +123,9 @@ class WmsZoneGenerator(models.TransientModel):
                     "warehouse_id": self.warehouse_id.id,
                     "parent_location_id": zone.id,
                     "rack_code": code,
-                    "dividers_per_level": self.dividers_per_level or 4,
+                    "shelf_count": self.rack_shelf_count or 6,
+                    "column_count": self.rack_column_count or 3,
+                    "default_slot_count": self.rack_slot_count or 1,
                     "capacity_per_slot": self.rack_capacity_per_slot,
                 }
             )

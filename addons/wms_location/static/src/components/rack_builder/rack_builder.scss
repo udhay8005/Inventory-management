@@ -1,0 +1,176 @@
+.o_wms_rack_builder {
+    --rb-bg: #1c2530;
+    --rb-cell: #2a3a4a;
+    --rb-cell-hover: #3a4c5e;
+    --rb-cell-span: #2e4a3a;
+    --rb-cell-span-hover: #3c5c48;
+    --rb-cell-selected-border: #f0a020;
+    --rb-text: #e6edf3;
+    --rb-text-dim: #b0b8c0;
+
+    &__controls {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+
+        label {
+            margin-bottom: 0;
+            white-space: nowrap;
+        }
+    }
+
+    &__layout {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+    }
+
+    &__grid {
+        flex: 1 1 auto;
+        min-width: 300px;
+        display: grid;
+        gap: 0;  /* per-cell borders provide the spacing */
+        background: var(--rb-bg);
+        padding: 6px;
+        border-radius: 4px;
+    }
+
+    /*
+     * Per-cell rendering. Each cell is a 1x1 grid item with a 2px
+     * border on all four sides. When two adjacent cells belong to
+     * the same compartment, the shared edge is suppressed via the
+     * --no-top/--no-bottom/--no-left/--no-right modifier classes
+     * applied by the OWL template. The visual effect is a single
+     * outlined polyomino, no matter the shape.
+     *
+     * `gap` is set to 0 on the grid (overriding the default 4px)
+     * because gaps between same-compartment cells would defeat the
+     * border-hiding trick. Different compartments get visual
+     * separation purely from the per-side borders.
+     */
+    &__cell {
+        background: var(--rb-cell);
+        color: var(--rb-text);
+        padding: 6px 8px;
+        cursor: pointer;
+        border: 2px solid #1c2530;  /* matches grid bg = looks like a gap */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        transition: background 0.1s, border-color 0.1s;
+
+        &:hover {
+            background: var(--rb-cell-hover);
+        }
+
+        &--multi {
+            background: var(--rb-cell-span);
+
+            &:hover {
+                background: var(--rb-cell-span-hover);
+            }
+        }
+
+        /* Highlighted selection wraps every cell of the compartment. */
+        &--selected {
+            border-color: var(--rb-cell-selected-border) !important;
+        }
+
+        /* When the adjacent cell is in the same compartment, drop the
+           shared border so the two cells visually merge. */
+        &--no-top    { border-top-color:    transparent; }
+        &--no-bottom { border-bottom-color: transparent; }
+        &--no-left   { border-left-color:   transparent; }
+        &--no-right  { border-right-color:  transparent; }
+
+        /* Add-cell mode: highlight every OTHER compartment's cells so
+           the user can see what they can click to grow the selection.
+           Hover shows a green tint to suggest "click to add". */
+        &--addable {
+            cursor: copy;
+            outline: 1px dashed #28a745;
+            outline-offset: -3px;
+
+            &:hover {
+                background: #1f4530;
+            }
+        }
+    }
+
+    &__cell-label {
+        font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+        font-size: 11px;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    &__cell-slots {
+        font-size: 10px;
+        color: var(--rb-text-dim);
+        margin-top: 2px;
+    }
+
+    &__panel {
+        flex: 0 0 260px;
+        padding: 12px;
+        background: #f6f7f8;
+        border: 1px solid #e2e4e6;
+        border-radius: 4px;
+    }
+
+    &__panel-title {
+        font-size: 13px;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e2e4e6;
+    }
+
+    &__panel-section {
+        margin-bottom: 12px;
+    }
+
+    &__panel-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #6a737d;
+        margin-bottom: 6px;
+    }
+
+    /* D-pad: 3x3 grid with the 4 merge arrows on cardinals and Split in
+       the middle. Empty corner cells keep the cross shape clean. */
+    &__dpad {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(3, auto);
+        gap: 4px;
+        max-width: 200px;
+
+        button {
+            min-width: 0;
+            padding: 4px 6px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+    }
+    &__dpad-up      { grid-row: 1; grid-column: 2; }
+    &__dpad-left    { grid-row: 2; grid-column: 1; }
+    &__dpad-center  { grid-row: 2; grid-column: 2; font-size: 12px !important; }
+    &__dpad-right   { grid-row: 2; grid-column: 3; }
+    &__dpad-down    { grid-row: 3; grid-column: 2; }
+
+    &__slot-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    &__slot-count {
+        font-size: 16px;
+        font-weight: 600;
+        min-width: 24px;
+        text-align: center;
+    }
+}

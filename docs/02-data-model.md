@@ -7,33 +7,50 @@ Odoo's quant/move machinery working unchanged.
 
 ```
 stock.warehouse
-    └─ stock.location (view)               WH/Stock
-        └─ rack    (view)                  WH/Stock/R-01
-            └─ level   (view)              WH/Stock/R-01/L-1     ← exactly 6 per rack
-                └─ divider (view)          WH/Stock/R-01/L-1/D-1 ← variable count per level
-                    └─ slot (internal)     WH/Stock/R-01/L-1/D-1/S-1 ← exactly 3 per divider
+    └─ stock.location (view)        WH/Stock
+        └─ rack    (view)           a shelf × column grid (default 6 × 3)
+            └─ compartment (view)   a 2D rectangle on that grid
+                └─ slot (internal)  holds stock; 1+ slots per compartment
 ```
 
-A typical 4-divider-per-level rack therefore has **6 × 4 × 3 = 72 slots**.
+The hierarchy is **3 levels deep**: Rack → Compartment → Slot. *Shelf* and
+*Column* are **grid coordinates**, not separate `stock.location` rows. Each
+rack carries `wms_shelf_count` × `wms_column_count`; each compartment occupies a
+rectangle (`shelf_top..shelf_bottom` × `column_left..column_right`) on that
+grid, so a compartment can be 1×1, tall (`SH01-03 C01`), wide (`SH01 C01-03`),
+or a block (`SH01-03 C01-03`). A compartment holds `wms_slot_count` slots
+(default 1 = the compartment itself is the storable unit).
+
+Two non-rack location types complete the model:
+
+- `zone` (view) — a building / floor / area that groups racks.
+- `floor` (internal) — open / pallet / yard storage where quants land directly,
+  with no compartment/slot underneath.
 
 ### Fields added to `stock.location` (in `wms_location`)
 
 | Field | Type | Notes |
 |---|---|---|
-| `wms_location_type` | Selection | `warehouse_view` / `rack` / `level` / `divider` / `slot` |
-| `wms_rack_code` | Char | e.g. `R-01` (only on rack) |
-| `wms_level_number` | Integer | 1..6 (only on level) |
-| `wms_divider_number` | Integer | sequence within parent level (only on divider) |
-| `wms_slot_number` | Integer | 1..3 (only on slot) |
-| `wms_capacity_units` | Float | Soft cap shown in UI; not enforced like a hard lock |
+| `wms_location_type` | Selection | `warehouse_view` / `zone` / `rack` / `compartment` / `slot` / `floor` |
+| `wms_rack_code` | Char | e.g. `R01`, `PHARM01` (on rack) |
+| `wms_shelf_count` | Integer | Grid rows in this rack (default **6**) |
+| `wms_column_count` | Integer | Grid columns in this rack (default **3**) |
+| `wms_shelf_top` / `wms_shelf_bottom` | Integer | Top/bottom shelf rows a compartment occupies |
+| `wms_column_left` / `wms_column_right` | Integer | Left/right columns a compartment occupies |
+| `wms_slot_count` | Integer | Slots inside a compartment (default **1**) |
+| `wms_slot_number` | Integer | Position of a slot inside its compartment |
+| `wms_capacity_units` | Float | **Soft** capacity hint shown in UI; not hard-enforced |
 | `wms_is_damage` | Boolean | Internal location holding damaged stock |
 | `wms_is_repair` | Boolean | Internal location holding in-repair stock |
 
-### Constraints (Python `@api.constrains`)
+### Constraints (declarative `models.Constraint` + `@api.constrains`)
 
-- A level's parent must be a rack; max **6** levels per rack.
-- A divider's parent must be a level; **no upper bound** (configurable per rack).
-- A slot's parent must be a divider; max **3** slots per divider.
+- `wms_shelf_count` ≥ 1 and `wms_column_count` ≥ 1 (a rack has at least 1×1).
+- `wms_shelf_bottom` ≥ `wms_shelf_top`; `wms_column_right` ≥ `wms_column_left`
+  (a compartment rectangle is well-formed).
+- `wms_slot_count` ≥ 1.
+- A compartment's parent must be a **rack**; a slot's parent must be a
+  **compartment**; a compartment's rectangle must fit inside the rack's grid.
 
 ## Quantities
 

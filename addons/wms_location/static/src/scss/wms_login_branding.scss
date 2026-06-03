@@ -1,0 +1,285 @@
+// Login screen brand — applied only on /web/login.
+//
+// Mirrors the dakshinvrindavan.org hero: warm saffron call-to-action,
+// charcoal text, Lora serif. The whole login experience lives in
+// ONE card — Odoo emits a single ``.card.o_database_list`` wrapper
+// on /web/login regardless of which screen (user-picker, email-
+// password form, signup, reset-password) is being shown, so we
+// target it once.
+
+$wms-saffron:        #EAAF00;
+$wms-saffron-dark:   #C99700;
+$wms-charcoal:       #232220;
+$wms-page-bg:        #FAF7F0;
+
+// Google Fonts are injected via ``views/branding_head.xml`` (XML
+// template), NOT via @import — Odoo's SCSS bundler splits @import
+// rules across the bundle and breaks the rest of the CSS file.
+
+// ----- Page shell -----------------------------------------------------------
+body.bg-100,
+body[class*="login"] {
+    background-color: $wms-page-bg !important;
+    font-family: "Open Sans", sans-serif !important;
+    color: $wms-charcoal !important;
+    min-height: 100vh;
+}
+
+// The .container.py-5 that Odoo wraps the card in — vertical-center it
+// so the card sits in the middle of the viewport rather than near the
+// top edge.
+body.bg-100 > #wrapwrap > main > .container {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 100vh;
+    padding: 2rem 1rem !important;
+    max-width: 100% !important;
+}
+
+// ----- The single login card -----------------------------------------------
+// Odoo renders one ``.card.border-0.bg-100.o_database_list`` for the
+// whole login flow. Re-skin it as a clean white card with a saffron
+// top stripe. The inner h1/h2 + inputs + buttons all inherit from
+// this one parent.
+.o_database_list,
+main > .container > .card {
+    width: 100% !important;
+    max-width: 440px !important;
+    margin: 0 auto !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid rgba($wms-charcoal, 0.06) !important;
+    border-top: 5px solid $wms-saffron !important;
+    border-radius: 10px !important;
+    box-shadow: 0 14px 40px rgba(35, 34, 32, 0.10) !important;
+    padding: 1.75rem 2rem 2rem !important;
+
+    // Company logo (uploaded by Admin) — sits at the top of the card,
+    // not in its own floating block. Target only the actual logo
+    // src so we don't accidentally resize avatar tiles or fa-icons.
+    img[src*="company_logo"],
+    img[src*="/web/binary/company_logo"] {
+        display: block !important;
+        margin: 0 auto 1rem !important;
+        max-width: 180px !important;
+        max-height: 70px !important;
+        height: auto !important;
+        object-fit: contain !important;
+    }
+
+    // A faint saffron-tinted divider between logo and the rest of the
+    // card — visually separates them without making them look like
+    // two cards. Only render the divider when the logo is present.
+    img[src*="company_logo"] + * {
+        border-top: 1px solid rgba($wms-saffron, 0.25);
+        padding-top: 1rem;
+    }
+
+    // ----- Headings ---------------------------------------------------------
+    h1, h2, h3,
+    .o_login_label,
+    legend {
+        font-family: "Lora", serif !important;
+        font-weight: 700 !important;
+        color: $wms-charcoal !important;
+        text-align: center !important;
+        margin: 0 0 1.25rem !important;
+        font-size: 1.3rem !important;
+    }
+
+    // Field labels (Email, Password, etc.)
+    //
+    // Odoo emits the Email label as
+    //   <label class="d-flex justify-content-between">
+    //       Email <button class="o_user_switch_btn">Choose a user</button>
+    //   </label>
+    // and the Password label the same way with "Reset Password" on the
+    // right. Use flex/space-between so the label stays on the left and
+    // the action link floats to the right edge — overriding with
+    // ``display: block`` here would push "Choose a user" awkwardly
+    // back next to the "Email" text on the LEFT.
+    label,
+    .form-label {
+        font-weight: 600 !important;
+        color: $wms-charcoal !important;
+        font-size: 0.85rem !important;
+        letter-spacing: 0.3px !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        margin-bottom: 0.35rem !important;
+        text-align: left !important;
+    }
+
+    // The right-side action button inside a label ("Choose a user",
+    // "Reset Password") — saffron-dark text, no underline by default,
+    // small font so it doesn't overpower the label.
+    label .btn-link,
+    label .o_user_switch_btn,
+    .form-label .btn-link,
+    .form-label .o_user_switch_btn,
+    .form-label a {
+        color: $wms-saffron-dark !important;
+        font-weight: 600 !important;
+        font-size: 0.78rem !important;
+        text-decoration: none !important;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+        white-space: nowrap !important;
+
+        &:hover {
+            color: $wms-charcoal !important;
+            text-decoration: underline !important;
+        }
+    }
+
+    // ----- Inputs -----------------------------------------------------------
+    .form-control,
+    input[type="text"],
+    input[type="email"],
+    input[type="password"] {
+        width: 100% !important;
+        min-height: 44px !important;
+        font-size: 0.95rem !important;
+        border-radius: 6px !important;
+        border: 1px solid rgba($wms-charcoal, 0.20) !important;
+        padding: 0.6rem 0.85rem !important;
+        background-color: #FFFFFF !important;
+    }
+    .form-control:focus,
+    input:focus {
+        border-color: $wms-saffron !important;
+        box-shadow: 0 0 0 0.2rem rgba($wms-saffron, 0.25) !important;
+        outline: none !important;
+    }
+
+    // ----- Primary submit ("Log in") ---------------------------------------
+    button[type="submit"],
+    .btn.btn-primary,
+    .btn-primary {
+        width: 100% !important;
+        background-color: $wms-saffron !important;
+        border-color: $wms-saffron !important;
+        color: $wms-charcoal !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        letter-spacing: 0.5px !important;
+        padding: 0.75rem 1.5rem !important;
+        border-radius: 6px !important;
+        margin-top: 0.5rem !important;
+        transition: background-color 0.15s ease !important;
+
+        &:hover,
+        &:focus,
+        &:active {
+            background-color: $wms-saffron-dark !important;
+            border-color: $wms-saffron-dark !important;
+            color: #FFFFFF !important;
+        }
+    }
+
+    // ----- "Use a Passkey" outline button ----------------------------------
+    .btn-secondary,
+    .btn-outline-primary,
+    .btn-outline-secondary {
+        width: 100% !important;
+        border: 1px solid $wms-saffron !important;
+        background-color: #FFFFFF !important;
+        color: $wms-charcoal !important;
+        font-weight: 600 !important;
+        padding: 0.6rem 1rem !important;
+        border-radius: 6px !important;
+
+        &:hover {
+            background-color: rgba($wms-saffron, 0.12) !important;
+            color: $wms-charcoal !important;
+        }
+    }
+
+    // ----- User-switch tile ("Store Keeper") -------------------------------
+    // The user-picker that shows existing accounts as a tile. Odoo's
+    // default tile is big (avatar fills the card), shrink to a sane
+    // size.
+    .o_user_switch_card {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.75rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0.65rem 0.85rem !important;
+        background-color: #FFFFFF !important;
+        border: 1px solid rgba($wms-charcoal, 0.15) !important;
+        border-radius: 6px !important;
+        text-align: left !important;
+        color: $wms-charcoal !important;
+        font-weight: 600 !important;
+        min-height: 60px !important;
+
+        // The avatar inside the tile — small square, not a wall.
+        img,
+        .o_avatar,
+        > div:first-child {
+            width: 44px !important;
+            height: 44px !important;
+            max-width: 44px !important;
+            max-height: 44px !important;
+            border-radius: 6px !important;
+            font-size: 1.1rem !important;
+            flex: 0 0 44px !important;
+        }
+
+        &:hover {
+            background-color: rgba($wms-saffron, 0.08) !important;
+            border-color: $wms-saffron !important;
+        }
+    }
+
+    // ----- Links (Reset Password, Don't have an account?, Use another user)
+    a,
+    a:not([class]) {
+        color: $wms-saffron-dark !important;
+        font-weight: 600 !important;
+        text-decoration: none !important;
+        font-size: 0.85rem !important;
+
+        &:hover {
+            color: $wms-charcoal !important;
+            text-decoration: underline !important;
+        }
+    }
+
+    // "- or -" divider
+    .text-center,
+    .text-muted {
+        color: rgba($wms-charcoal, 0.55) !important;
+        margin: 0.6rem 0 !important;
+        font-size: 0.8rem !important;
+    }
+
+    // ----- Error / warning band --------------------------------------------
+    .alert,
+    .alert-danger {
+        background-color: rgba($wms-saffron, 0.12) !important;
+        border: 1px solid rgba($wms-saffron, 0.55) !important;
+        color: $wms-charcoal !important;
+        border-radius: 6px !important;
+        padding: 0.65rem 0.85rem !important;
+        font-size: 0.85rem !important;
+        margin-bottom: 1rem !important;
+    }
+}
+
+// "Skip to content" — keep accessible but ensure it doesn't clash
+.o_skip_to_content,
+.o_skip_link {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    background: $wms-charcoal !important;
+    color: #FFFFFF !important;
+    padding: 0.5rem 1rem !important;
+    z-index: 1050 !important;
+    border-radius: 0 0 6px 0 !important;
+    &:focus { outline: 3px solid $wms-saffron !important; }
+}

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Paper format for the trust's thermal hardware:
+
+              * Label stock:  True-Ally 100 x 25 mm (4 x 1 inch) DIE-CUT
+                              direct-thermal roll (1000 stickers / roll) with a
+                              gap between each sticker. The page is sized to
+                              exactly ONE label; the printer's gap sensor
+                              advances across the gap to the next.
+              * Printer:      TSC TE244, 203 DPI, USB. Set the media type to
+                              GAP / die-cut and run auto-calibration so it
+                              "follows the gap" on every print
+                              (see docs/LABEL-PRINTING.md).
+              * Margins zero: lets the Admin position barcode / logo / text
+                              right to the printable edge via
+                              Configuration -> Label Settings.
+
+            Orientation stays Portrait - wkhtmltopdf swaps width/height on
+            Landscape, which would squash the label.
+        -->
+        <record id="paperformat_wms_thermal_4x1" model="report.paperformat">
+            <field name="name">WMS Thermal Label 100×25 mm (4×1 in)</field>
+            <field name="format">custom</field>
+            <field name="page_width">100</field>
+            <field name="page_height">25</field>
+            <field name="orientation">Portrait</field>
+            <field name="margin_top">0</field>
+            <field name="margin_bottom">0</field>
+            <field name="margin_left">0</field>
+            <field name="margin_right">0</field>
+            <field name="header_line">False</field>
+            <field name="header_spacing">0</field>
+            <field name="dpi">203</field>
+        </record>
+
+        <!--
+            Thermal product label - one sticker per product on the 100 x 25 mm
+            (4 x 1 inch) die-cut roll. Layout is driven by the Admin's
+            wms.label.config (Configuration -> Label Settings) so the barcode /
+            logo / text can be placed anywhere on the sticker.
+        -->
+        <record id="action_report_wms_product_label_thermal" model="ir.actions.report">
+            <field name="name">WMS Product Label (100×25mm)</field>
+            <field name="model">product.product</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">wms_barcode.report_product_label_thermal</field>
+            <field name="report_file">wms_barcode.report_product_label_thermal</field>
+            <field name="print_report_name">'Thermal-product-labels-%d' % len(docs)</field>
+            <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
+            <field name="binding_model_id" ref="product.model_product_product"/>
+            <field name="binding_type">report</field>
+        </record>
+
+        <record id="action_report_wms_location_label_thermal" model="ir.actions.report">
+            <field name="name">WMS Location Label (100×25mm)</field>
+            <field name="model">stock.location</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">wms_barcode.report_location_label_thermal</field>
+            <field name="report_file">wms_barcode.report_location_label_thermal</field>
+            <field name="print_report_name">'Thermal-location-labels-%d' % len(docs)</field>
+            <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
+            <field name="binding_model_id" ref="stock.model_stock_location"/>
+            <field name="binding_type">report</field>
+        </record>
+
+    </data>
+</odoo>

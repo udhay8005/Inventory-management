@@ -1,6 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_wms_forecast_user,wms.forecast user,model_wms_forecast,wms_location.group_wms_user,1,0,0,0
 access_wms_forecast_buyer,wms.forecast buyer,model_wms_forecast,group_buyer,1,1,0,0
-access_wms_forecast_mgr,wms.forecast mgr,model_wms_forecast,wms_location.group_wms_manager,1,1,1,1
+access_wms_forecast_mgr,wms.forecast mgr,model_wms_forecast,wms_location.group_wms_manager,1,1,1,0
 access_wms_forecast_hist_user,wms.forecast.history user,model_wms_forecast_history,wms_location.group_wms_user,1,0,0,0
-access_wms_forecast_hist_mgr,wms.forecast.history mgr,model_wms_forecast_history,wms_location.group_wms_manager,1,1,1,1
+access_wms_forecast_hist_mgr,wms.forecast.history mgr,model_wms_forecast_history,wms_location.group_wms_manager,1,1,1,0

@@ -1,4 +1,5 @@
-from odoo import api, fields, models
+from markupsafe import Markup
+from odoo import fields, models
 from odoo.exceptions import UserError
 
 
@@ -21,78 +22,58 @@ class WmsScanReceipt(models.TransientModel):
         default=lambda s: s.env["stock.warehouse"].search([], limit=1),
     )
     last_scan = fields.Char(
-        string="Scan here", help="Cursor stays here; HID barcode scanners emit ENTER."
+        string="Scan here",
+        help="Keep the cursor here and scan away — each barcode is processed automatically.",
     )
     feedback = fields.Char(readonly=True)
     line_ids = fields.One2many("wms.scan.receipt.line", "wizard_id")
+    picking_id = fields.Many2one(
+        "stock.picking",
+        readonly=True,
+        copy=False,
+        help="The receipt this scan created. Set once validated so a "
+        "double-click or a refreshed re-submit cannot receive the same "
+        "delivery twice — the second attempt just re-opens the receipt "
+        "that was already made.",
+    )
 
-    # ---- Quality check + approval gate ----------------------------------
+    # ---- Return-entry mode ----------------------------------------------
+    is_return = fields.Boolean(
+        string="Return entry",
+        default=lambda s: bool(s.env.context.get("default_is_return")),
+        help="Tick this when receiving stock that's coming back into the "
+        "warehouse — e.g. a tool returned from production, a spare "
+        "borrowed and brought back. Products whose WMS Kind is NOT "
+        "returnable (Fluids, Consumables) will be refused at validate.",
+    )
+
+    # ---- Quality check ---------------------------------------------------
+    # This trust runs internal stock — products aren't sold, no invoices
+    # are issued, no money changes hands. So there's no price-based
+    # approval gate. The QC checkbox stays: the Receiver still confirms
+    # the physical count and condition before the receipt is filed, which
+    # is the whole point of responsible tracking.
     qc_passed = fields.Boolean(
         string="Quality check passed",
-        help="Receiver confirms physical count + condition match what was ordered.",
+        help="Receiver confirms physical count and condition match what was expected.",
     )
     qc_notes = fields.Text(string="QC notes")
-    total_value = fields.Monetary(
-        compute="_compute_total_value",
-        currency_field="currency_id",
-        help="Sum of qty × list_price across all lines. Used to decide "
-        "whether Manager approval is required.",
-    )
-    currency_id = fields.Many2one(
-        "res.currency",
-        default=lambda s: s.env.company.currency_id,
-    )
-    approval_threshold = fields.Monetary(
-        compute="_compute_total_value",
-        currency_field="currency_id",
-        help="Approval required when total_value exceeds this amount. "
-        "Configure via ir.config_parameter `wms_barcode.receipt_approval_threshold`.",
-    )
-    approval_required = fields.Boolean(
-        compute="_compute_total_value",
-        help="True if total_value > approval_threshold.",
-    )
-    approved_by_id = fields.Many2one(
-        "res.users",
-        string="Approved by",
-        readonly=True,
-        help="Set when a WMS Manager approves a high-value receipt.",
-    )
-    is_manager = fields.Boolean(
-        compute="_compute_is_manager",
-        help="True if the current user is in the WMS Manager group.",
-    )
 
-    @api.depends("line_ids.product_id", "line_ids.quantity")
-    def _compute_total_value(self):
-        ICP = self.env["ir.config_parameter"].sudo()
-        threshold = float(
-            ICP.get_param(
-                "wms_barcode.receipt_approval_threshold",
-                "10000",
-            )
-        )
-        for wiz in self:
-            total = sum(
-                (line.product_id.list_price or 0.0) * line.quantity for line in wiz.line_ids
-            )
-            wiz.total_value = total
-            wiz.approval_threshold = threshold
-            wiz.approval_required = total > threshold
-
-    @api.depends_context("uid")
-    def _compute_is_manager(self):
-        is_mgr = self.env.user.has_group("wms_location.group_wms_manager")
-        for wiz in self:
-            wiz.is_manager = is_mgr
-
-    def action_approve(self):
-        """Manager-only: stamp approval. Validate becomes unblocked."""
-        self.ensure_one()
-        if not self.env.user.has_group("wms_location.group_wms_manager"):
-            raise UserError("Only WMS Managers can approve high-value receipts.")
-        self.approved_by_id = self.env.user.id
-        return self._reopen()
+    # ---- Audit trail (matches Scan Issue / damage / repair) -------------
+    storekeeper_id = fields.Many2one(
+        "wms.storekeeper",
+        string="Store Keeper on duty",
+        required=True,
+        domain=[("active", "=", True)],
+        help="The on-duty Store Keeper who took the delivery. Picked from "
+        "the roster the Admin maintains under Configuration → Store Keepers.",
+    )
+    delivered_by = fields.Char(
+        string="Delivered by",
+        help="Name of the person / vendor who handed the goods over "
+        "(driver, vendor representative, internal courier). Optional but "
+        "helpful for the audit trail.",
+    )
 
     def on_barcode_scanned(self, barcode):
         """Called automatically by the JS barcode listener when a scan
@@ -118,7 +99,10 @@ class WmsScanReceipt(models.TransientModel):
                     "lot_id": info["lot"].id if kind == "lot" else False,
                 }
             )
-            self.feedback = "Added %s × %s" % (info.get("units", 1.0), info["product"].display_name)
+            self.feedback = "Added %s × %s" % (
+                info.get("units", 1.0),
+                info["product"].display_name,
+            )
         elif kind == "location":
             # Apply this slot to the most recent line that has no destination yet.
             target = self.line_ids.filtered(lambda ln: not ln.location_dest_id)[-1:]
@@ -135,22 +119,54 @@ class WmsScanReceipt(models.TransientModel):
 
     def action_validate(self):
         self.ensure_one()
+        # Idempotency: a double-click / refresh re-submit must not receive
+        # the delivery twice (which would add the stock twice). Once a
+        # receipt exists, re-open it instead of making another.
+        if self.picking_id:
+            return self._open_picking()
         if not self.line_ids:
             raise UserError("No lines to receive.")
+
+        # Return-entry gate — reject products whose kind isn't returnable.
+        if self.is_return:
+            non_returnable = self.line_ids.filtered(
+                lambda ln: ln.product_id and not ln.product_id.wms_is_returnable
+            )
+            if non_returnable:
+                # Translate the Selection key to its human label via
+                # fields_get() — `_fields[...].selection` can be a callable
+                # in some Odoo flavours, so going through fields_get is
+                # the safe path.
+                kind_labels = dict(
+                    self.env["product.product"]
+                    .fields_get(["wms_product_kind"])
+                    .get("wms_product_kind", {})
+                    .get("selection", [])
+                )
+                rows = []
+                for ln in non_returnable:
+                    kind_key = ln.product_id.wms_product_kind
+                    rows.append(
+                        "  • %s (kind: %s)"
+                        % (
+                            ln.product_id.display_name,
+                            kind_labels.get(kind_key, "unclassified"),
+                        )
+                    )
+                raise UserError(
+                    "These products cannot be received as a return — they "
+                    "are flagged not-returnable on the product form "
+                    "(fluids, consumables, single-use items):\n%s\n\n"
+                    "Ask the Admin to either change the product's WMS Kind / "
+                    "Returnable flag, or scrap these items via the Damages "
+                    "workflow instead." % "\n".join(rows)
+                )
 
         # QC gate — receiver must tick the box.
         if not self.qc_passed:
             raise UserError(
                 "Mark 'Quality check passed' first. This confirms you've "
                 "physically counted and inspected the delivery."
-            )
-
-        # Approval gate for high-value receipts.
-        if self.approval_required and not self.approved_by_id:
-            raise UserError(
-                "Total value %s exceeds the approval threshold of %s. "
-                "A WMS Manager must click 'Approve' before this receipt "
-                "can be validated." % (self.total_value, self.approval_threshold)
             )
 
         # Auto-assign slot if operator didn't.
@@ -163,7 +179,9 @@ class WmsScanReceipt(models.TransientModel):
         picking_type = self.warehouse_id.in_type_id
         if not picking_type:
             raise UserError(
-                "Warehouse %s has no Receipts picking type." % self.warehouse_id.display_name
+                "Warehouse %s isn't configured to receive incoming stock. "
+                "Ask an Administrator to enable Receipts in the Inventory settings."
+                % self.warehouse_id.display_name
             )
         if not picking_type.active:
             picking_type.sudo().active = True
@@ -173,7 +191,11 @@ class WmsScanReceipt(models.TransientModel):
                 "picking_type_id": picking_type.id,
                 "location_id": picking_type.default_location_src_id.id,
                 "location_dest_id": self.warehouse_id.lot_stock_id.id,
-                "origin": "Barcode scan",
+                "origin": "Barcode scan" + (" (return)" if self.is_return else ""),
+                # Audit-trail fields — same shape as Scan Issue so reports
+                # can read both incoming and outgoing flows the same way.
+                "wms_taken_by": (self.delivered_by or "").strip(),
+                "wms_storekeeper_id": self.storekeeper_id.id,
             }
         )
         for line in self.line_ids:
@@ -200,10 +222,37 @@ class WmsScanReceipt(models.TransientModel):
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
 
+        # Audit-trail message — matches the Scan Issue chatter pattern.
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        audit_body = Markup(
+            "<p><b>%(kind)s.</b> "
+            "Delivered by <b>%(delivered)s</b>; "
+            "Store Keeper on duty: <b>%(keeper)s</b>; "
+            "logged in as: <b>%(login)s</b>.</p>"
+        ) % {
+            "kind": "Return received" if self.is_return else "Receipt received",
+            "delivered": picking.wms_taken_by or "(unspecified)",
+            "keeper": self.storekeeper_id.name or "(unknown)",
+            "login": self.env.user.display_name or "(system)",
+        }
+        picking.message_post(
+            body=audit_body,
+            subject="Receipt audit",
+            message_type="notification",
+        )
+        # Record the picking so a re-submit is a no-op (idempotency guard).
+        self.picking_id = picking.id
+
+        return self._open_picking()
+
+    def _open_picking(self):
+        """Open the receipt this scan created (also the no-op target a
+        double-submit lands on)."""
+        self.ensure_one()
         return {
             "type": "ir.actions.act_window",
             "res_model": "stock.picking",
-            "res_id": picking.id,
+            "res_id": self.picking_id.id,
             "view_mode": "form",
         }
 
@@ -298,9 +347,9 @@ class WmsScanReceipt(models.TransientModel):
             return any_floor.id
 
         raise UserError(
-            "No slots or floor zones configured in warehouse %s. "
-            "Use 'Generate Rack' or 'Generate Floor Zones' under "
-            "WMS / Configuration first." % self.warehouse_id.display_name
+            "No slots or floor zones are set up in warehouse %s yet. "
+            "Use Create Rack or Generate Floor Zones in the WMS Configuration "
+            "menu first." % self.warehouse_id.display_name
         )
 
     def _reopen(self):

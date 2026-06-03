@@ -12,11 +12,11 @@ a barcode (or a printed test label), a wireless or USB scanner.
 
 - [ ] Trainee has a user account in Odoo (Settings → Users → Create).
 - [ ] User added to the correct group:
-  - Receivers, Issuers → **WMS / User**
+  - Receivers, Issuers → **WMS / Store Keeper**
   - Inventory In-charge → **WMS / Manager**
   - Mechanics → **WMS / Repair Tech**
   - Procurement → **WMS / Buyer**
-- [ ] Trainee can log in to `http://<host-IP>:8169` and sees the **WMS** app
+- [ ] Trainee can log in to `http://<host-IP>:8069` and sees the **WMS** app
   in the home menu.
 
 ---
@@ -180,7 +180,7 @@ Show: WMS → Reports → **Cycle Count Due**.
 
 Walk them through:
 
-- [ ] You can log in to `http://<host-IP>:8169` from your phone on the WiFi.
+- [ ] You can log in to `http://<host-IP>:8069` from your phone on the WiFi.
 - [ ] You know where Scan Receipt and Scan Issue live in the menu.
 - [ ] You've done one Receipt + one Issue + one Damage end-to-end.
 - [ ] You know the **3 rules of scanning**:

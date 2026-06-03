@@ -1,0 +1,56 @@
+{
+  "include": [
+    "addons",
+    "ai_worker",
+    "scripts"
+  ],
+
+  "exclude": [
+    "**/__pycache__",
+    "**/.git",
+    "**/node_modules",
+    "**/.*",
+    ".odoo",
+    ".venv",
+    ".runtime",
+    "backups",
+    "docs"
+  ],
+
+  "extraPaths": [
+    ".odoo",
+    ".odoo/addons",
+    "addons"
+  ],
+
+  "venvPath": ".",
+  "venv": ".venv",
+
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Windows",
+
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+
+  // Odoo maps the `odoo.addons.<addon>` namespace across every addons-path
+  // directory at RUNTIME (odoo.addons.__path__ is extended on boot). Pyright
+  // can't replicate that, so `import odoo.addons.wms_location...` and
+  // `odoo.addons.web...` are unresolvable by static analysis even though they
+  // run fine. These are always false positives here, so silence them.
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none",
+  "reportAssignmentType": "none",
+  "reportReturnType": "none",
+  "reportCallIssue": "none",
+  "reportOperatorIssue": "none",
+  "reportOptionalContextManager": "none",
+  "reportUnusedExpression": "none",
+  "reportGeneralTypeIssues": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownParameterType": "none"
+}

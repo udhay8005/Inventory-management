@@ -56,7 +56,7 @@ Wait for the CI badge on GitHub to turn green (≈ 6–8 minutes).
 ## 2 — Promoting `test` to `main`
 
 Once CI is green on `test` and you've manually verified the change in a
-sandbox or local docker stack, open the PR:
+local native install (via `scripts\start-native.ps1`), open the PR:
 
 ```bash
 gh pr create --base main --head test \
@@ -165,7 +165,7 @@ push directly).
 | **lint** | Run `make format` locally, commit, push again |
 | **security** | Read the bandit / pip-audit report in artifacts |
 | **odoo_tests** | Download `odoo-test-log` artifact, grep for `ERROR.*wms_` |
-| **compose_smoke** | `docker compose logs odoo` in the artifact, check for missing env vars |
+| **native_smoke** | Step summary shows the Odoo startup log — look for missing env vars, port conflicts, or view-parse errors |
 | **ci_status** | This is a roll-up — fix the underlying failed job |
 
 Every artifact is kept for 14–30 days. If a flake8 line number is

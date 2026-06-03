@@ -7,32 +7,67 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
+                        <!--
+                            State-transition buttons require write access to
+                            wms.repair.order, which Store Keepers don't have
+                            (they can only create + read). Restrict to Tech
+                            + Manager so the UI doesn't dangle buttons that
+                            blow up with AccessError when clicked.
+                        -->
                         <button name="action_start_repair" type="object"
                                 string="Start Repair" class="btn-primary"
-                                invisible="state != 'draft'"/>
+                                invisible="state != 'draft'"
+                                groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
                         <button name="action_finish_repair" type="object"
                                 string="Mark Done" class="btn-primary"
-                                invisible="state != 'in_repair'"/>
+                                invisible="state != 'in_repair'"
+                                groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
                         <button name="action_scrap" type="object"
                                 string="Scrap"
-                                invisible="state != 'in_repair'"/>
-                        <field name="state" widget="statusbar"/>
+                                invisible="state != 'in_repair'"
+                                groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
+                        <button name="action_cancel" type="object"
+                                string="Cancel"
+                                invisible="state != 'draft'"
+                                groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="draft,in_repair,done"/>
                     </header>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not wms_keeper_edit_warning">
+                        <field name="wms_keeper_edit_warning" invisible="1"/>
+                        <i class="fa fa-clock-o me-1"/>
+                        <field name="wms_keeper_edit_summary" readonly="1" nolabel="1"/>
+                    </div>
                     <sheet>
                         <h1><field name="name" readonly="1"/></h1>
                         <group>
-                            <field name="product_id"/>
-                            <field name="quantity"/>
-                            <field name="original_slot_id"/>
-                            <field name="return_slot_id"
-                                   placeholder="Defaults to original slot"/>
-                            <field name="warehouse_id" readonly="1"/>
-                            <field name="technician_id"/>
-                            <field name="damage_id"/>
-                            <field name="start_picking_id" readonly="1"/>
-                            <field name="finish_picking_id" readonly="1"/>
+                            <group string="What &amp; where">
+                                <field name="product_id"/>
+                                <field name="quantity"/>
+                                <field name="original_slot_id"/>
+                                <field name="return_slot_id"
+                                       placeholder="Defaults to original slot"/>
+                                <field name="warehouse_id" readonly="1"/>
+                                <field name="technician_id"/>
+                                <field name="damage_id"
+                                       invisible="not damage_id"/>
+                                <field name="start_picking_id" readonly="1"
+                                       invisible="not start_picking_id"/>
+                                <field name="finish_picking_id" readonly="1"
+                                       invisible="not finish_picking_id"/>
+                            </group>
+                            <group string="Who reported it">
+                                <field name="wms_reported_by"
+                                       placeholder="Worker who flagged the item"/>
+                                <field name="wms_authorized_by"
+                                       placeholder="Manager / cow-care lead"/>
+                                <field name="wms_storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="On-duty Store Keeper"/>
+                            </group>
                         </group>
-                        <field name="repair_notes"/>
+                        <field name="repair_notes" placeholder="What was wrong, what was done, parts used..."/>
                     </sheet>
                     <chatter/>
                 </form>
@@ -49,6 +84,9 @@
                     <field name="quantity"/>
                     <field name="state"/>
                     <field name="technician_id"/>
+                    <field name="wms_storekeeper_id" optional="show"/>
+                    <field name="wms_reported_by" optional="hide"/>
+                    <field name="wms_authorized_by" optional="hide"/>
                     <field name="create_date"/>
                 </list>
             </field>

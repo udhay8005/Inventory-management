@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Inject the Trust's brand webfonts (Lora + Open Sans) into <head>
+        on every backend AND login page.
+
+        Why not @import url(...) in the SCSS file:
+            Odoo's SCSS bundler concatenates every .scss listed in the
+            module manifest into one big web.assets_backend.min.css.
+            CSS rules require @import statements to come at the very
+            TOP of the resulting file — but the bundler doesn't hoist
+            them, it just dumps each file's contents inline. So an
+            @import url(...) in our SCSS lands in the middle of the
+            bundle, browsers reject it as "out of place" and silently
+            skip everything after it, breaking the rest of the
+            stylesheet.
+
+        Loading via <link rel="stylesheet"> in <head> sidesteps the
+        whole bundle problem — the fonts come down from
+        fonts.googleapis.com as a separate, independent request that
+        completes before paint.
+
+        web.layout is the master template for the backend /odoo and
+        for /web/login, so a single inherit covers both surfaces.
+    -->
+    <template id="layout_brand_webfonts"
+              inherit_id="web.layout"
+              priority="2"
+              name="WMS brand webfonts (Lora + Open Sans)">
+        <xpath expr="//head" position="inside">
+            <link rel="preconnect" href="https://fonts.googleapis.com"/>
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+            <link rel="stylesheet"
+                  href="https://fonts.googleapis.com/css2?family=Lora:wght@500;700&amp;family=Open+Sans:wght@400;600;700&amp;display=swap"/>
+        </xpath>
+    </template>
+</odoo>

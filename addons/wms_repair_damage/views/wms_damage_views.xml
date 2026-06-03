@@ -9,20 +9,108 @@
                     <header>
                         <button name="action_confirm" type="object" string="Confirm"
                                 class="btn-primary" invisible="state != 'draft'"/>
+                        <button name="action_create_repair_order" type="object"
+                                string="Create Repair Order"
+                                class="btn-warning"
+                                invisible="state != 'confirmed' or repair_order_id or recommended_action not in ('repair_returnable', 'repair_returnable_only', 'repair_with_spare')"/>
                         <button name="action_cancel" type="object" string="Cancel"
                                 invisible="state == 'cancelled'"/>
                         <field name="state" widget="statusbar"/>
                     </header>
+                    <!--
+                        Recent-keeper-edit warning. Surfaces when a
+                        Store Keeper (non-manager) saved this damage
+                        within the last 30 minutes, so the Admin
+                        notices before they overwrite the keeper's
+                        changes.
+                    -->
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not wms_keeper_edit_warning">
+                        <field name="wms_keeper_edit_warning" invisible="1"/>
+                        <i class="fa fa-clock-o me-1"/>
+                        <field name="wms_keeper_edit_summary" readonly="1" nolabel="1"/>
+                    </div>
                     <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_create_repair_order" type="object"
+                                    class="oe_stat_button" icon="fa-wrench"
+                                    invisible="not repair_order_id">
+                                <div class="o_field_widget o_stat_info">
+                                    <span class="o_stat_text">Repair</span>
+                                    <span class="o_stat_text">Order</span>
+                                </div>
+                            </button>
+                        </div>
                         <h1><field name="name" readonly="1"/></h1>
                         <group>
-                            <field name="product_id"/>
-                            <field name="quantity"/>
-                            <field name="source_slot_id"/>
-                            <field name="warehouse_id" readonly="1"/>
-                            <field name="reason"/>
-                            <field name="picking_id" readonly="1"/>
+                            <group string="What &amp; where">
+                                <field name="product_id"/>
+                                <field name="quantity"/>
+                                <field name="source_slot_id"/>
+                                <field name="warehouse_id" readonly="1"/>
+                                <field name="reason"/>
+                                <field name="picking_id" readonly="1"
+                                       invisible="not picking_id"/>
+                                <field name="repair_order_id" readonly="1"
+                                       invisible="not repair_order_id"/>
+                            </group>
+                            <group string="Who reported it">
+                                <field name="wms_reported_by"
+                                       placeholder="Worker who found / caused it"/>
+                                <field name="wms_authorized_by"
+                                       placeholder="Manager / cow-care lead"/>
+                                <field name="wms_storekeeper_id"
+                                       options="{'no_create': True, 'no_open': True}"
+                                       placeholder="On-duty Store Keeper"/>
+                            </group>
                         </group>
+
+                        <!--
+                            Smart recommendation block — auto-derived from
+                            the product's WMS Kind plus how many other
+                            units are still on hand. Empty when no product
+                            is picked yet.
+                        -->
+                        <div class="alert alert-danger" role="alert"
+                             invisible="recommended_action != 'urgent_buy' or not product_id">
+                            <strong>⚠ URGENT BUY.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <div class="alert alert-warning" role="alert"
+                             invisible="recommended_action != 'repair_returnable_only' or not product_id">
+                            <strong>Only one — repair needed.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <div class="alert alert-info" role="alert"
+                             invisible="recommended_action != 'repair_returnable' or not product_id">
+                            <strong>Open a Repair Order.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <div class="alert alert-info" role="alert"
+                             invisible="recommended_action != 'repair_with_spare' or not product_id">
+                            <strong>Assess: repair or scrap?</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <div class="alert alert-secondary" role="alert"
+                             invisible="recommended_action != 'note_only' or not product_id">
+                            <strong>Just a note.</strong>
+                            <field name="recommendation_message" readonly="1" nolabel="1"
+                                   class="mt-1"/>
+                        </div>
+                        <group string="Spare-stock check" invisible="not product_id">
+                            <field name="remaining_on_hand" readonly="1"/>
+                            <field name="recommended_action" widget="badge"
+                                   readonly="1"
+                                   decoration-danger="recommended_action == 'urgent_buy'"
+                                   decoration-warning="recommended_action == 'repair_returnable_only'"
+                                   decoration-info="recommended_action in ('repair_returnable', 'repair_with_spare')"
+                                   decoration-muted="recommended_action == 'note_only'"/>
+                        </group>
+
                         <field name="note" placeholder="Describe what happened..."/>
                     </sheet>
                     <chatter/>
@@ -34,11 +122,19 @@
             <field name="name">wms.damage.list</field>
             <field name="model">wms.damage</field>
             <field name="arch" type="xml">
-                <list>
+                <list decoration-danger="recommended_action == 'urgent_buy'"
+                      decoration-warning="recommended_action == 'repair_returnable_only'">
                     <field name="name"/>
                     <field name="product_id"/>
                     <field name="quantity"/>
                     <field name="source_slot_id"/>
+                    <field name="remaining_on_hand" optional="show"/>
+                    <field name="recommended_action" widget="badge"
+                           decoration-danger="recommended_action == 'urgent_buy'"
+                           decoration-warning="recommended_action == 'repair_returnable_only'"
+                           decoration-info="recommended_action == 'repair_returnable'"
+                           decoration-muted="recommended_action == 'note_only'"
+                           optional="show"/>
                     <field name="state"/>
                     <field name="create_date"/>
                 </list>

@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Inject a WMS classification block onto the product form.
+            Visible to everyone (Store Keepers need to see at a glance
+            whether something is a tool or a fluid), but Odoo's product
+            ACL already restricts WRITE on product.product to
+            stock.group_stock_manager, so Store Keepers can't change
+            these values even if the form lets them click.
+        -->
+        <record id="view_product_template_form_wms_inherit" model="ir.ui.view">
+            <field name="name">product.template.form.wms.inherit</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <!--
+                    Smart button: "Where is it?" — opens the per-slot
+                    breakdown for this product in one click, from anywhere
+                    in the system that shows the product form.
+                -->
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button name="action_view_wms_locations"
+                            type="object"
+                            class="oe_stat_button"
+                            icon="fa-map-marker">
+                        <div class="o_field_widget o_stat_info">
+                            <span class="o_stat_value">
+                                <field name="wms_location_count"/>
+                            </span>
+                            <span class="o_stat_text">slot(s)</span>
+                            <span class="o_stat_text text-muted">
+                                <field name="wms_total_on_hand" widget="float"
+                                       options="{'human_readable': True}"/>
+                                on hand
+                            </span>
+                        </div>
+                    </button>
+                </xpath>
+                <xpath expr="//notebook" position="inside">
+                    <page string="WMS Classification" name="wms_classification">
+                        <group>
+                            <field name="wms_product_kind"
+                                   options="{'no_create': True, 'no_create_edit': True}"/>
+                            <field name="wms_is_returnable" widget="boolean_toggle"/>
+                        </group>
+                        <div class="alert alert-info">
+                            <b>WMS Kind</b> drives the default returnability and is shown in
+                            audit reports. The Store Keeper sees these fields read-only.
+                            <ul class="mb-0 mt-2">
+                                <li><b>Tool / Spare / Raw Material / Packaging / WIP / Finished Good</b>
+                                    → default returnable.</li>
+                                <li><b>Fluid (petrol, oil, …) / Consumable (single-use)</b>
+                                    → default NOT returnable. The Scan Return wizard will refuse
+                                    these products.</li>
+                            </ul>
+                            Tick Returnable manually if you want to override the kind-derived
+                            default (e.g. a partially-used sealed paint can the supplier accepts back).
+                        </div>
+
+                        <!--
+                            Kind-specific attribute groups. Each shows only when
+                            wms_product_kind matches. `invisible` is a Python
+                            expression evaluated client-side, so when the Admin
+                            picks "Medicine" from the dropdown the Medicine group
+                            appears immediately - no save needed.
+
+                            Fields kept off the form when the kind doesn't match
+                            stay on the model (they're just blank); switching
+                            kind later will surface them populated if the data
+                            was ever entered.
+                        -->
+                        <group string="Fluid details"
+                               invisible="wms_product_kind != 'fluid'">
+                            <field name="wms_volume_litres"/>
+                            <field name="wms_container_size"/>
+                            <field name="wms_expiry_date"/>
+                        </group>
+
+                        <group string="Medicine details"
+                               invisible="wms_product_kind != 'medicine'">
+                            <field name="wms_expiry_date" required="wms_product_kind == 'medicine'"/>
+                            <field name="wms_batch_number"/>
+                            <field name="wms_dosage"/>
+                        </group>
+
+                        <group string="Feed details"
+                               invisible="wms_product_kind != 'feed'">
+                            <field name="wms_expiry_date" required="wms_product_kind == 'feed'"/>
+                            <field name="wms_batch_number"/>
+                            <field name="wms_weight_kg"/>
+                        </group>
+
+                        <group string="Textile details"
+                               invisible="wms_product_kind != 'textile'">
+                            <field name="wms_size"/>
+                            <field name="wms_colour"/>
+                            <field name="wms_material"/>
+                        </group>
+
+                        <group string="Construction details"
+                               invisible="wms_product_kind != 'construction'">
+                            <field name="wms_grade"/>
+                            <field name="wms_material"/>
+                            <field name="wms_dimensions"/>
+                        </group>
+
+                        <group string="Plumbing details"
+                               invisible="wms_product_kind != 'plumbing'">
+                            <field name="wms_material"/>
+                            <field name="wms_diameter_mm"/>
+                            <field name="wms_length_m"/>
+                        </group>
+
+                        <group string="Electrical details"
+                               invisible="wms_product_kind != 'electrical'">
+                            <field name="wms_voltage_v"/>
+                            <field name="wms_wattage_w"/>
+                        </group>
+
+                        <group string="Pooja details"
+                               invisible="wms_product_kind != 'pooja'">
+                            <field name="wms_expiry_date"
+                                   help="Use for ghee, oil, garlands - things that go off."/>
+                            <field name="wms_batch_number"/>
+                        </group>
+
+                        <group string="Asset details"
+                               invisible="wms_product_kind not in ('tool', 'spare')">
+                            <field name="wms_serial_number"/>
+                        </group>
+
+                        <!--
+                            Overuse / abuse-prevention limits — always
+                            visible on every WMS product so the Admin
+                            can lock down anything sensitive (medicine,
+                            feed, fluid, expensive tools) without
+                            hunting through kind-conditional groups.
+                            0 = no cap (default), so legacy products
+                            stay unaffected.
+                        -->
+                        <group string="Usage limits (0 = no cap)">
+                            <field name="wms_max_per_issue"/>
+                            <field name="wms_daily_cap"/>
+                        </group>
+                        <div class="alert alert-info" role="alert"
+                             invisible="not wms_product_kind">
+                            <b>How the caps work.</b> Scan Issue blocks any
+                            single ticket asking for more than <i>Max per issue</i>,
+                            and refuses any ticket that would push the
+                            rolling 24-hour total past <i>Daily cap</i>
+                            (summed across all keepers and all pickings).
+                            Leave at 0 for no enforcement. A typical cow-shed
+                            setup: medicine dose = 1 per issue + 5 per day,
+                            feed = 50 kg per day, hammer = 1 per issue.
+                        </div>
+                    </page>
+                </xpath>
+            </field>
+        </record>
+
+        <!--
+            Sales side is dead weight for this Trust — the warehouse buys
+            and uses inventory, it never sells. Hide every sales-flavoured
+            field that ships in the upstream product form so the form is
+            calmer and there is no chance of accidentally putting a tin
+            of ghee onto an outbound quotation.
+
+            What gets hidden:
+              * `sale_ok` checkbox at the top of the form (the "Sales"
+                tickbox next to Purchase).
+              * `list_price` (Sales Price) — the trust doesn't quote.
+              * `taxes_id` (Sales Taxes) and its "Incl. Taxes" hint.
+              * `standard_price` (Cost) stays visible — Purchase still
+                wants it for vendor-bill matching and the buying-
+                recommendations report.
+
+            Purchase-side fields (`purchase_ok`, `purchase_taxes`,
+            vendor pricelists) all stay because the trust DOES still
+            need to receive RFQs and post vendor bills.
+        -->
+        <record id="view_product_template_form_hide_sales" model="ir.ui.view">
+            <field name="name">product.template.form.hide.sales</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+                <field name="sale_ok" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+                <field name="list_price" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+                <field name="taxes_id" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+                <field name="tax_string" position="attributes">
+                    <attribute name="invisible">True</attribute>
+                </field>
+            </field>
+        </record>
+
+        <!--
+            Show the kind on the product list view so the Admin can spot
+            unclassified products at a glance and the Store Keeper can
+            filter the catalogue by kind.
+        -->
+        <record id="view_product_template_list_wms_inherit" model="ir.ui.view">
+            <field name="name">product.template.list.wms.inherit</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_tree_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='default_code']" position="after">
+                    <field name="wms_product_kind" optional="show"/>
+                    <field name="wms_is_returnable" optional="hide" widget="boolean_toggle"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_product_template_search_wms_inherit" model="ir.ui.view">
+            <field name="name">product.template.search.wms.inherit</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_search_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//search" position="inside">
+                    <separator/>
+                    <filter name="wms_returnable"
+                            string="Returnable"
+                            domain="[('wms_is_returnable', '=', True)]"/>
+                    <filter name="wms_not_returnable"
+                            string="Not returnable"
+                            domain="[('wms_is_returnable', '=', False)]"/>
+                    <filter name="wms_unclassified"
+                            string="Unclassified (no WMS Kind)"
+                            domain="[('wms_product_kind', '=', False)]"/>
+                    <separator/>
+                    <filter name="group_wms_kind"
+                            string="WMS Kind"
+                            context="{'group_by': 'wms_product_kind'}"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

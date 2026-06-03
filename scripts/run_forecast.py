@@ -1,6 +1,0 @@
-env["wms.forecast.engine"].run_all_forecasts()
-env.cr.commit()
-total = env["wms.forecast"].search_count([])
-seeded = env["wms.forecast"].search_count([("product_id.barcode", "like", "8901111%")])
-print("Total forecast rows:", total)
-print("Forecast rows for seeded products:", seeded)

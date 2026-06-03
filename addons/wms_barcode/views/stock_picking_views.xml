@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Surface the audit-trail fields on the standard transfer form
+            so the Admin can see at a glance who took the stock, who
+            authorised it, and which keeper was on duty.
+        -->
+        <record id="view_stock_picking_form_wms_inherit" model="ir.ui.view">
+            <field name="name">stock.picking.form.wms.inherit</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_form"/>
+            <field name="arch" type="xml">
+                <!--
+                    Recent-keeper-edit warning banner. Inserted right
+                    before the sheet so it sits above all fields and
+                    is the first thing the Admin reads when they open
+                    a picking the keeper just touched.
+                -->
+                <xpath expr="//sheet" position="before">
+                    <div class="alert alert-warning" role="alert"
+                         invisible="not wms_keeper_edit_warning">
+                        <field name="wms_keeper_edit_warning" invisible="1"/>
+                        <i class="fa fa-clock-o me-1"/>
+                        <field name="wms_keeper_edit_summary"
+                               readonly="1" nolabel="1"/>
+                    </div>
+                </xpath>
+                <xpath expr="//sheet/group" position="after">
+                    <group string="Audit trail"
+                           invisible="not wms_taken_by and not wms_ordered_by and not wms_storekeeper_id">
+                        <field name="wms_taken_by"/>
+                        <field name="wms_ordered_by"/>
+                        <field name="wms_storekeeper_id"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <!--
+            Optional columns on the transfer list so an Admin can group /
+            search by who took what. Hidden by default; users tick them
+            in the column picker if needed.
+        -->
+        <record id="view_stock_picking_tree_wms_inherit" model="ir.ui.view">
+            <field name="name">stock.picking.tree.wms.inherit</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.vpicktree"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='partner_id']" position="after">
+                    <field name="wms_taken_by" optional="hide"/>
+                    <field name="wms_ordered_by" optional="hide"/>
+                    <field name="wms_storekeeper_id" optional="hide"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="view_stock_picking_search_wms_inherit" model="ir.ui.view">
+            <field name="name">stock.picking.search.wms.inherit</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+            <field name="arch" type="xml">
+                <xpath expr="//search" position="inside">
+                    <field name="wms_taken_by"/>
+                    <field name="wms_ordered_by"/>
+                    <field name="wms_storekeeper_id"/>
+                    <separator/>
+                    <filter name="group_storekeeper"
+                            string="Store Keeper on duty"
+                            context="{'group_by': 'wms_storekeeper_id'}"/>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

@@ -59,5 +59,68 @@
                   parent="menu_wms_reports_root"
                   action="action_wms_reorder_summary"
                   sequence="60"/>
+
+        <menuitem id="menu_wms_tool_fleet_summary"
+                  name="Tool / Spare fleet"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_tool_fleet_summary"
+                  sequence="65"/>
+
+        <!--
+            Store Keeper Activity is an Admin-only audit screen. The
+            ACL row in ir.model.access.csv grants read to
+            group_wms_manager only, so this menu doesn't show up at all
+            for Store Keepers (the only other group in the WMS module).
+        -->
+        <menuitem id="menu_wms_storekeeper_activity"
+                  name="Store Keeper Activity"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_storekeeper_activity"
+                  groups="wms_location.group_wms_manager"
+                  sequence="70"/>
+
+        <!--
+            Period-specific shortcuts. Each is the same underlying
+            activity report but pre-filtered + pre-grouped so the
+            Admin lands directly on the right view.
+        -->
+        <menuitem id="menu_wms_storekeeper_activity_weekly"
+                  name="-- Weekly summary"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_storekeeper_activity_weekly"
+                  groups="wms_location.group_wms_manager"
+                  sequence="71"/>
+
+        <menuitem id="menu_wms_storekeeper_activity_monthly"
+                  name="-- Monthly summary"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_storekeeper_activity_monthly"
+                  groups="wms_location.group_wms_manager"
+                  sequence="72"/>
+
+        <menuitem id="menu_wms_storekeeper_activity_yearly"
+                  name="-- Yearly summary"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_storekeeper_activity_yearly"
+                  groups="wms_location.group_wms_manager"
+                  sequence="73"/>
+
+        <menuitem id="menu_wms_expiry_alert"
+                  name="Expiry alerts"
+                  parent="menu_wms_reports_root"
+                  action="action_wms_expiry_alert"
+                  sequence="32"/>
+
+        <!--
+            Inventory audits live under Operations (not Reports)
+            because Store Keepers DO them. Reports submenu only
+            shows read-only outputs.
+        -->
+        <menuitem id="menu_wms_audit"
+                  name="Inventory audits"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_audit"
+                  groups="wms_location.group_wms_can_submit_audit"
+                  sequence="27"/>
     </data>
 </odoo>

@@ -12,6 +12,7 @@ SQL-view dashboard. Optional: posts a Discuss message to WMS Managers.
 
 import logging
 
+from markupsafe import Markup
 from odoo import api, fields, models, tools
 
 _logger = logging.getLogger(__name__)
@@ -24,15 +25,13 @@ class StockLocationCount(models.Model):
         compute="_compute_wms_count_age",
         store=True,
         index=True,
-        help="Most recent of: the slot's quants' last in_date OR last "
-        "inventory adjustment line landing here. Used to flag stale "
-        "slots needing a physical recount.",
+        help="Most recent date this slot was physically counted or had stock movement. Used to flag slots that are overdue for a recount.",
     )
     wms_days_since_count = fields.Integer(
         compute="_compute_wms_count_age",
         store=True,
-        help="Days since the slot was last touched by a movement or "
-        "inventory adjustment. 0 means counted today.",
+        help="Days since this slot was last counted or had stock movement. "
+        "0 means it was touched today.",
     )
 
     @api.depends("quant_ids.in_date", "quant_ids.last_count_date")
@@ -87,12 +86,10 @@ class WmsCycleCountDue(models.Model):
                      COALESCE(SUM(q.quantity), 0) AS on_hand,
                      COUNT(DISTINCT q.product_id) AS distinct_products
                 FROM stock_location s
-                LEFT JOIN stock_location d
-                  ON d.id = s.location_id AND d.wms_location_type = 'divider'
-                LEFT JOIN stock_location l
-                  ON l.id = d.location_id AND l.wms_location_type = 'level'
+                LEFT JOIN stock_location c
+                  ON c.id = s.location_id AND c.wms_location_type = 'compartment'
                 LEFT JOIN stock_location r
-                  ON r.id = l.location_id AND r.wms_location_type = 'rack'
+                  ON r.id = c.location_id AND r.wms_location_type = 'rack'
                 LEFT JOIN stock_quant q
                   ON q.location_id = s.id AND q.quantity > 0
                WHERE s.wms_location_type IN ('slot', 'floor')
@@ -130,11 +127,12 @@ class WmsCycleCountReminderCron(models.AbstractModel):
         )
         if not managers:
             return
-        recipients = managers.users
+        recipients = managers.all_user_ids
         if not recipients:
             return
 
-        body = (
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        body = Markup(
             "<p><b>%d slot(s)</b> haven't been counted in over 30 days. "
             "Open <i>WMS → Reports → Cycle Count Due</i> to walk through "
             "and reconcile them.</p>"

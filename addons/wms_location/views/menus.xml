@@ -36,17 +36,11 @@
                   action="action_wms_racks"
                   sequence="10"/>
 
-        <menuitem id="menu_wms_levels"
-                  name="Levels"
+        <menuitem id="menu_wms_compartments"
+                  name="Compartments"
                   parent="menu_wms_config"
-                  action="action_wms_levels"
+                  action="action_wms_compartments"
                   sequence="11"/>
-
-        <menuitem id="menu_wms_dividers"
-                  name="Dividers"
-                  parent="menu_wms_config"
-                  action="action_wms_dividers"
-                  sequence="12"/>
 
         <menuitem id="menu_wms_slots"
                   name="Slots"
@@ -67,7 +61,7 @@
                   sequence="50"/>
 
         <menuitem id="menu_wms_rack_generator"
-                  name="Generate Rack"
+                  name="Create Rack"
                   parent="menu_wms_config"
                   action="action_wms_rack_generator"
                   sequence="20"/>
