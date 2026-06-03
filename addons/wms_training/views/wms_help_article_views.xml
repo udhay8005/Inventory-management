@@ -24,6 +24,7 @@
                         <label for="name" class="oe_edit_only"/>
                         <h1><field name="name" placeholder="Article title"/></h1>
                     </div>
+                    <field name="has_video" invisible="1"/>
                     <group>
                         <field name="category"/>
                         <field name="audience"/>
@@ -32,7 +33,19 @@
                         <field name="sequence" groups="wms_location.group_wms_manager"/>
                         <field name="keywords" groups="wms_location.group_wms_manager"/>
                     </group>
+                    <!-- Video player: shown to EVERYONE when the article has one. -->
+                    <field name="video_player_html" widget="html" nolabel="1"
+                           readonly="1" invisible="not has_video"/>
                     <field name="body"/>
+                    <!-- Video setup: only managers upload / link a clip. -->
+                    <group string="Training video (managers only)"
+                           groups="wms_location.group_wms_manager">
+                        <field name="video_filename" invisible="1"/>
+                        <field name="video_file" widget="binary" filename="video_filename"
+                               string="Upload a clip"/>
+                        <field name="video_url" placeholder="https://youtu.be/... or https://vimeo.com/..."/>
+                        <field name="video_caption"/>
+                    </group>
                 </sheet>
             </form>
         </field>
@@ -57,6 +70,8 @@
                 <separator/>
                 <filter name="for_keeper" string="For Store Keepers" domain="[('audience','in',['all','keeper'])]"/>
                 <filter name="for_admin" string="For Admins" domain="[('audience','in',['all','admin'])]"/>
+                <separator/>
+                <filter name="has_video" string="▶ Has video" domain="[('has_video','=',True)]"/>
                 <separator/>
                 <filter name="group_category" string="Category" context="{'group_by':'category'}"/>
                 <filter name="group_audience" string="Audience" context="{'group_by':'audience'}"/>
