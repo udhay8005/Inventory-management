@@ -55,6 +55,15 @@ class WmsScanIssue(models.TransientModel):
 
     plan_line_ids = fields.One2many("wms.scan.issue.plan", "wizard_id")
     short_qty = fields.Float(readonly=True, help="Shortfall — what we couldn't allocate.")
+    picking_id = fields.Many2one(
+        "stock.picking",
+        readonly=True,
+        copy=False,
+        help="The delivery this issue created. Set once validated so a "
+        "double-click or a page refresh re-submitting the form cannot "
+        "issue the same stock twice — the second attempt just re-opens "
+        "the delivery that was already made.",
+    )
 
     # ---- Audit trail -----------------------------------------------------
     # Captured at validate-time and copied onto the resulting picking, so
@@ -179,13 +188,12 @@ class WmsScanIssue(models.TransientModel):
             # 1. Per-issue cap
             if cap_issue > 0 and requested_qty > cap_issue:
                 raise UserError(
-                    "Per-issue cap exceeded for %s.\n\n"
-                    "Requested: %g\n"
-                    "Maximum per issue: %g\n\n"
-                    "Reduce the quantity or split into multiple tickets. "
-                    "If the cap is wrong, ask the Admin to adjust the "
-                    "'Max per issue' field on the product (WMS "
-                    "Classification tab)." % (product.display_name, requested_qty, cap_issue)
+                    "You asked for more %s than is allowed in a single "
+                    "issue. You requested %g, but the most you can give "
+                    "out in one go is %g. Either ask for less, split this "
+                    "into two separate issues, or check with a Manager to "
+                    "see if the limit can be changed on the product."
+                    % (product.display_name, requested_qty, cap_issue)
                 )
 
             # 2. Daily cap (24h rolling)
@@ -222,14 +230,12 @@ class WmsScanIssue(models.TransientModel):
                 projected = used_24h + requested_qty
                 if projected > cap_daily:
                     raise UserError(
-                        "Daily cap exceeded for %s.\n\n"
-                        "Already issued in last 24h: %g\n"
-                        "Trying to issue now: %g\n"
-                        "Total would be: %g\n"
-                        "Daily cap: %g\n\n"
-                        "Wait for the rolling window to clear or ask "
-                        "the Admin to raise the 'Daily cap (24h "
-                        "rolling)' on this product."
+                        "You've reached the daily limit for %s. You've "
+                        "already given out %g in the last 24 hours. If "
+                        "you issue %g more now, the total will be %g — "
+                        "over the daily limit of %g. Wait a few hours and "
+                        "try again, or ask a Manager to increase the "
+                        "daily limit for this product."
                         % (
                             product.display_name,
                             used_24h,
@@ -242,10 +248,18 @@ class WmsScanIssue(models.TransientModel):
     def action_plan(self):
         self.ensure_one()
         if not self.last_scan:
-            raise UserError("Scan a product first.")
+            raise UserError(
+                "Scan a product barcode before planning the issue. "
+                "The system needs to know what you want to give out."
+            )
         info = self.env["wms.barcode.alias"].resolve(self.last_scan)
         if info.get("kind") not in ("product", "alias", "lot"):
-            raise UserError("Barcode does not resolve to a product.")
+            raise UserError(
+                "That barcode isn't linked to any product in the "
+                "warehouse. Make sure you scanned the right label, or "
+                "ask a Manager to check if the barcode is set up "
+                "correctly."
+            )
 
         product = info["product"]
         qty = self.requested_qty * info.get("units", 1.0)
@@ -330,27 +344,50 @@ class WmsScanIssue(models.TransientModel):
 
     def action_validate(self):
         self.ensure_one()
+        # ---- Idempotency: never issue twice ---------------------------------
+        # A double-click on Validate, or a page refresh that re-POSTs the
+        # form, would otherwise create a second picking and deduct the
+        # stock again. Once we've created a picking, this wizard is spent —
+        # just re-open the delivery that was already made.
+        if self.picking_id:
+            return self._open_picking()
         if not self.plan_line_ids:
             raise UserError(
-                "Nothing planned yet — scan a product first so the wizard "
-                "knows what you want to issue."
+                "You haven't chosen what to issue yet. Scan a product "
+                "and confirm the slots before validating the issue."
             )
         if self.short_qty:
             raise UserError(
-                "Stock out. The warehouse is %s short of what you asked for, "
-                "so this issue can't go ahead. Wait for the missing units to "
-                "come back through Scan Return, or reduce the requested "
-                "quantity and try again." % self.short_qty
+                "The warehouse doesn't have enough stock. You're short "
+                "by %s. Either wait for stock to come back through Scan "
+                "Return, or ask for less now and complete the rest "
+                "later." % self.short_qty
             )
         if self.photo_required and not self.photo:
             raise UserError(
-                "This item is measured (liters / kg / etc.). "
-                "Please attach a photo of what's being issued before validating."
+                "This product is measured by weight or volume. Take a "
+                "photo of what you're issuing and attach it before you "
+                "finish — the trust needs proof of measured items."
+            )
+        # ---- Concurrency: serialize issues of the same product --------------
+        # Take a short row lock on each product before the daily-cap read and
+        # the reservation. Two keepers issuing the same product now run one
+        # after the other instead of overlapping, so neither the rolling-24h
+        # cap check nor the oldest-stock pick can be raced. The lock is held
+        # only until this transaction commits (a second or two) and products
+        # are locked in id order so concurrent multi-product issues can't
+        # deadlock. Different products never contend.
+        product_ids = sorted(set(self.plan_line_ids.mapped("product_id").ids))
+        if product_ids:
+            self.env.cr.execute(
+                "SELECT id FROM product_product WHERE id IN %s ORDER BY id FOR UPDATE",
+                (tuple(product_ids),),
             )
         # ---- Overuse / abuse-prevention checks ------------------------------
         # Hard-block any single-issue qty over wms_max_per_issue and any
         # request that would push the rolling-24h total over wms_daily_cap.
         # 0 on either field = no cap. See product.template for the rationale.
+        # Now race-safe: it runs inside the per-product lock above.
         self._enforce_overuse_caps()
 
         # Pick a picking type via warehouse-level m2o so we don't get bitten
@@ -361,9 +398,9 @@ class WmsScanIssue(models.TransientModel):
             picking_type = self.warehouse_id.int_type_id
         if not picking_type:
             raise UserError(
-                "Warehouse %s isn't configured for this kind of stock issue. "
-                "Ask an Administrator to enable the relevant operation type "
-                "in the Inventory settings." % self.warehouse_id.display_name
+                "Warehouse %s isn't set up to issue stock this way. Ask "
+                "a Manager to check the warehouse settings in Odoo and "
+                "enable the right operation type." % self.warehouse_id.display_name
             )
         if not picking_type.active:
             picking_type.sudo().active = True
@@ -396,11 +433,28 @@ class WmsScanIssue(models.TransientModel):
             )
             move._action_confirm()
         picking.action_assign()
+        # ---- Concurrency safety: only issue what we could actually reserve --
+        # action_assign reserves against LIVE quants (Odoo row-locks them).
+        # If another keeper emptied a planned slot between planning and now,
+        # the move won't be fully assigned. Abort cleanly — raising here rolls
+        # back the whole transaction (no half-made picking, no negative stock)
+        # — instead of blindly forcing the line quantity and deducting stock
+        # that isn't on the shelf.
+        unassigned = picking.move_ids.filtered(lambda m: m.state != "assigned")
+        if unassigned:
+            raise UserError(
+                "Another keeper took some of this stock while you were "
+                "finishing up, so it can no longer be issued in full. "
+                "Nothing was issued. Please scan again to plan against "
+                "what's left on the shelf."
+            )
         for move in picking.move_ids:
             for ml in move.move_line_ids:
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
         picking.button_validate()
+        # Record the picking so a re-submit is a no-op (idempotency guard).
+        self.picking_id = picking.id
 
         # Audit-trail message. Goes into the picking's history so the
         # Admin can scroll back through it later. Includes the Odoo
@@ -457,10 +511,16 @@ class WmsScanIssue(models.TransientModel):
                 .ids,
             )
 
+        return self._open_picking()
+
+    def _open_picking(self):
+        """Open the delivery this issue created (also the no-op target a
+        double-submit lands on)."""
+        self.ensure_one()
         return {
             "type": "ir.actions.act_window",
             "res_model": "stock.picking",
-            "res_id": picking.id,
+            "res_id": self.picking_id.id,
             "view_mode": "form",
         }
 

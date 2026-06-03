@@ -43,6 +43,9 @@
               ~5 GB free disk for Odoo source + venv + Postgres data.
 #>
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSAvoidUsingPlainTextForPassword', 'DbPassword',
+    Justification = 'Optional install-time override. The DB password is written to .env as DB_PASSWORD=<plaintext> (Odoo reads it from there) and passed to psql/createdb, so its destination is plaintext; a SecureString param only delays plaintext-ization while breaking the -DbPassword CLI override. When omitted, a CSPRNG value is generated.')]
 param(
     [switch]$Reset,
     [switch]$SkipWinget,

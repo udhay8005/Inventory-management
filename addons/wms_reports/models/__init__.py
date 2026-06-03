@@ -1,5 +1,6 @@
 from . import (
     wms_audit,
+    wms_backup_audit,
     wms_cycle_count,
     wms_expiry_alert,
     wms_occupancy_report,

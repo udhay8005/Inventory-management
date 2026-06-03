@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Weekly restore drill - prove the latest GPG-encrypted backup is recoverable
     WITHOUT touching the production database.
@@ -60,7 +60,8 @@ param(
     [SecureString]$Passphrase,
     [string]$DbHost,
     [int]$DbPort,
-    [string]$DbUser
+    [string]$DbUser,
+    [string]$AuditDb = 'wms'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -121,6 +122,56 @@ function Write-DrillEvent {
     } catch {
         # Do not fail the drill because event-log writes failed.
         Write-Drill 'WARN' "Event Log write skipped: $($_.Exception.Message)"
+    }
+}
+
+# Optional healthchecks.io-style heartbeat for the drill, from .env.
+$DrillHeartbeatUrl = ''
+if (Test-Path $EnvPath) {
+    $hb = (Select-String -Path $EnvPath -Pattern '^HEALTHCHECK_DRILL_URL=(.+)$' | Select-Object -First 1)
+    if ($hb) { $DrillHeartbeatUrl = $hb.Matches.Groups[1].Value.Trim() }
+}
+
+function Send-Heartbeat {
+    # Non-blocking, 10s-timeout ping. /fail suffix signals failure.
+    # Silent on any error - observability must never break the drill.
+    param([string]$Url, [switch]$Fail)
+    if (-not $Url) { return }
+    $target = if ($Fail) { "$Url/fail" } else { $Url }
+    try {
+        Invoke-WebRequest -Uri $target -Method Get -TimeoutSec 10 -UseBasicParsing | Out-Null
+    } catch {
+        Write-Drill 'WARN' "Heartbeat ping failed (ignored): $($_.Exception.Message)"
+    }
+}
+
+function Write-DrillAudit {
+    # Append a restore_drill row to wms_backup_audit in the PRODUCTION DB
+    # (-AuditDb, default 'wms') - that is where Odoo reads it. Failure-safe:
+    # if wms_reports isn't installed or the DB is unreachable, log a note
+    # and continue. The drill's own pass/fail is unaffected.
+    param(
+        [bool]$Success, [string]$FileName, [double]$SizeMb = 0,
+        [int]$TocEntries = 0, [bool]$Verified = $false,
+        [double]$DurationSeconds = 0, [string]$Message = '',
+        [string]$AuditDb = 'wms'
+    )
+    if (-not $DbUser -or -not $DbHost -or -not $DbPort) { return }
+    try {
+        $sk = if ($Success)  { 'true' } else { 'false' }
+        $vf = if ($Verified) { 'true' } else { 'false' }
+        $fn  = ($FileName -replace "'", "''")
+        $msg = ($Message  -replace "'", "''")
+        $hn  = ($env:COMPUTERNAME -replace "'", "''")
+        $sql = "INSERT INTO wms_backup_audit (name, audit_type, success, event_time, duration_seconds, size_mb, toc_entries, verified, checksum, host, message, create_uid, create_date, write_uid, write_date) VALUES ('$fn', 'restore_drill', $sk, NOW(), $DurationSeconds, $SizeMb, $TocEntries, $vf, '', '$hn', '$msg', 1, NOW(), 1, NOW());"
+        $sql | & psql -U $DbUser -h $DbHost -p $DbPort -d $AuditDb -w -v ON_ERROR_STOP=1 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Drill 'INFO' "Recorded drill result in wms_backup_audit ($AuditDb)."
+        } else {
+            Write-Drill 'WARN' "Drill audit not recorded (is wms_reports installed in '$AuditDb'?)."
+        }
+    } catch {
+        Write-Drill 'WARN' "Drill audit write failed (ignored): $($_.Exception.Message)"
     }
 }
 
@@ -279,10 +330,12 @@ try {
     $tocFile = "$decrypted.toc"
     & pg_restore --list $decrypted > $tocFile
     if ($LASTEXITCODE -ne 0) {
+        $exitCode = $EXIT_TOC_FAILED
         throw "pg_restore --list failed (exit $LASTEXITCODE)."
     }
     $tocLines = (Get-Content -LiteralPath $tocFile | Measure-Object -Line).Lines
     if ($tocLines -lt 100) {
+        $exitCode = $EXIT_TOC_FAILED
         throw "TOC has only $tocLines lines - expected 1000+ for a real Odoo dump. Backup may be truncated."
     }
     Write-Drill 'OK' "TOC OK ($tocLines entries)."
@@ -330,10 +383,23 @@ try {
     $elapsed = (Get-Date) - $started
     Write-Drill 'OK' "Drill complete in $([math]::Round($elapsed.TotalSeconds,1))s."
     Write-DrillEvent -EventId 100 -EntryType Information -Message "Restore drill succeeded for $BackupPath in $([math]::Round($elapsed.TotalSeconds,1))s (DryRun=$DryRun)."
+    # Record + heartbeat the successful drill (failure-safe).
+    $drillSizeMb = [math]::Round($backupSize / 1MB, 2)
+    $mode = if ($DryRun) { "DryRun (TOC verify)" } else { "full restore" }
+    Write-DrillAudit -Success $true -FileName (Split-Path -Leaf $BackupPath) `
+        -SizeMb $drillSizeMb -TocEntries $tocLines -Verified $true `
+        -DurationSeconds $elapsed.TotalSeconds -Message "OK - $mode" -AuditDb $AuditDb
+    Send-Heartbeat -Url $DrillHeartbeatUrl
 }
 catch {
     Write-Drill 'ERROR' $_.Exception.Message
     Write-DrillEvent -EventId 300 -EntryType Error -Message "Restore drill FAILED: $($_.Exception.Message)"
+    # Record + heartbeat the failed drill (failure-safe).
+    $failName = if ($BackupPath) { Split-Path -Leaf $BackupPath } else { "drill-run" }
+    Write-DrillAudit -Success $false -FileName $failName `
+        -DurationSeconds ((Get-Date) - $started).TotalSeconds `
+        -Message "FAILED: $($_.Exception.Message)" -AuditDb $AuditDb
+    Send-Heartbeat -Url $DrillHeartbeatUrl -Fail
     if (-not $exitCode -or $exitCode -eq $EXIT_OK) {
         $exitCode = $EXIT_RESTORE_FAILED
     }

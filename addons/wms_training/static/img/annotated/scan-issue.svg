@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 620" font-family="Segoe UI, Arial, sans-serif" role="img" aria-label="Annotated screen-map of the Scan Issue (FIFO) wizard">
+  <!-- ============================================================= -->
+  <!-- Annotated screen-map: Scan Issue (FIFO) wizard                -->
+  <!-- Stylized vector recreation (NOT a screenshot) with numbered   -->
+  <!-- callouts. Numbers follow the order a user fills the form.     -->
+  <!-- ============================================================= -->
+
+  <!-- dialog window frame -->
+  <rect x="16" y="16" width="380" height="588" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <!-- title bar -->
+  <path d="M16 28 a12 12 0 0 1 12 -12 h356 a12 12 0 0 1 12 12 v22 h-380 z" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="36" y="40" font-size="15" font-weight="700" fill="#334155">Scan Issue (FIFO)</text>
+  <circle cx="372" cy="33" r="6" fill="#e2e8f0"/>
+  <path d="M369 30 l6 6 M375 30 l-6 6" stroke="#94a3b8" stroke-width="1.5"/>
+
+  <!-- info banner -->
+  <rect x="32" y="62" width="348" height="48" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="44" y="80" font-size="11" fill="#1e3a8a">Set qty, then scan. FIFO pulls the oldest</text>
+  <text x="44" y="94" font-size="11" fill="#1e3a8a">stock first; FEFO for items with an</text>
+  <text x="44" y="104" font-size="11" fill="#1e3a8a">expiry.</text>
+
+  <!-- field 1: Requested Qty + field 2: Last Scan (side by side row) -->
+  <rect x="32" y="122" width="106" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="140" font-size="13" font-weight="600" fill="#334155">Requested Qty</text>
+  <rect x="44" y="148" width="82" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="50" y="158" font-size="9" fill="#475569">1.00</text>
+
+  <rect x="146" y="122" width="234" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="158" y="140" font-size="13" font-weight="600" fill="#334155">Last Scan</text>
+  <rect x="158" y="148" width="210" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="164" y="158" font-size="9" fill="#94a3b8">Scan product / carton…</text>
+
+  <!-- field 3: plan table -->
+  <rect x="32" y="178" width="348" height="104" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <rect x="44" y="188" width="324" height="18" rx="3" fill="#eef2f7" stroke="#e2e8f0" stroke-width="1"/>
+  <text x="49" y="200" font-size="8.5" font-weight="600" fill="#475569">Product</text>
+  <text x="108" y="200" font-size="8.5" font-weight="600" fill="#475569">Slot</text>
+  <text x="156" y="200" font-size="8.5" font-weight="600" fill="#475569">In Date</text>
+  <text x="214" y="200" font-size="8.5" font-weight="600" fill="#475569">Expires</text>
+  <text x="276" y="200" font-size="8.5" font-weight="600" fill="#475569">Avail.</text>
+  <text x="330" y="200" font-size="8.5" font-weight="600" fill="#475569">Take</text>
+  <line x1="102" y1="188" x2="102" y2="274" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="150" y1="188" x2="150" y2="274" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="208" y1="188" x2="208" y2="274" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="268" y1="188" x2="268" y2="274" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="320" y1="188" x2="320" y2="274" stroke="#e2e8f0" stroke-width="1"/>
+  <!-- rows -->
+  <rect x="49" y="214" width="46" height="7" rx="2" fill="#e2e8f0"/>
+  <rect x="108" y="214" width="34" height="7" rx="2" fill="#e2e8f0"/>
+  <rect x="156" y="214" width="44" height="7" rx="2" fill="#e2e8f0"/>
+  <rect x="214" y="214" width="44" height="7" rx="2" fill="#fecaca"/>
+  <rect x="276" y="214" width="34" height="7" rx="2" fill="#e2e8f0"/>
+  <rect x="330" y="214" width="30" height="7" rx="2" fill="#e2e8f0"/>
+  <rect x="49" y="234" width="46" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="108" y="234" width="34" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="156" y="234" width="44" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="214" y="234" width="44" height="7" rx="2" fill="#fde68a"/>
+  <rect x="276" y="234" width="34" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="330" y="234" width="30" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="49" y="254" width="46" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="108" y="254" width="34" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="156" y="254" width="44" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="214" y="254" width="44" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="276" y="254" width="34" height="7" rx="2" fill="#eef2f7"/>
+  <rect x="330" y="254" width="30" height="7" rx="2" fill="#eef2f7"/>
+
+  <!-- field 4: Item photo -->
+  <rect x="32" y="292" width="348" height="62" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="310" font-size="13" font-weight="600" fill="#334155">Item photo <tspan fill="#dc2626" font-size="11">* required for measured items</tspan></text>
+  <rect x="44" y="318" width="60" height="28" rx="4" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <circle cx="74" cy="330" r="7" fill="none" stroke="#94a3b8" stroke-width="1.5"/>
+  <rect x="64" y="324" width="20" height="3" rx="1" fill="#94a3b8"/>
+  <text x="114" y="336" font-size="9" fill="#94a3b8">Tap to open camera…</text>
+
+  <!-- field 5: Audit trail -->
+  <rect x="32" y="364" width="348" height="92" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
+  <text x="44" y="381" font-size="13" font-weight="600" fill="#334155">Audit trail <tspan fill="#dc2626">*</tspan></text>
+  <!-- four sub-fields -->
+  <rect x="44" y="388" width="158" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="48" y="397" font-size="8.5" fill="#475569">Taken by</text>
+  <rect x="210" y="388" width="158" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="214" y="397" font-size="8.5" fill="#475569">Ordered by</text>
+  <rect x="44" y="406" width="158" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="48" y="415" font-size="8.5" fill="#475569">Store Keeper on duty</text>
+  <rect x="210" y="406" width="158" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="214" y="415" font-size="8.5" fill="#475569">Reason</text>
+  <rect x="44" y="424" width="324" height="24" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="48" y="438" font-size="8.5" fill="#94a3b8">Why is this stock being taken?</text>
+
+  <!-- footer buttons -->
+  <line x1="32" y1="466" x2="380" y2="466" stroke="#e2e8f0" stroke-width="1"/>
+  <rect x="32" y="478" width="90" height="30" rx="6" fill="#e2e8f0"/>
+  <text x="77" y="497" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">Plan FIFO</text>
+  <rect x="132" y="478" width="90" height="30" rx="6" fill="#f59e0b"/>
+  <text x="177" y="497" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">Validate</text>
+  <rect x="232" y="478" width="74" height="30" rx="6" fill="#e2e8f0"/>
+  <text x="269" y="497" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">Cancel</text>
+
+  <!-- in-frame note: Validate hides when short -->
+  <rect x="32" y="516" width="348" height="32" rx="7" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="44" y="530" font-size="10" fill="#991b1b">If short of stock, Validate hides — you</text>
+  <text x="44" y="542" font-size="10" fill="#991b1b">can't over-issue.</text>
+
+  <!-- ============================================================= -->
+  <!-- numbered callouts (right column)                              -->
+  <!-- ============================================================= -->
+
+  <!-- 1 -> Requested Qty -->
+  <line x1="85" y1="122" x2="430" y2="100" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="96" r="13" fill="#f59e0b"/>
+  <text x="420" y="101" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">1</text>
+  <text x="440" y="93" font-size="12" font-weight="600" fill="#7c2d12">Requested Qty</text>
+  <text x="440" y="107" font-size="12" fill="#7c2d12">Type how many you</text>
+  <text x="440" y="121" font-size="12" fill="#7c2d12">need FIRST.</text>
+
+  <!-- 2 -> Last Scan -->
+  <line x1="380" y1="148" x2="408" y2="148" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="148" r="13" fill="#f59e0b"/>
+  <text x="420" y="153" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">2</text>
+  <text x="440" y="145" font-size="12" font-weight="600" fill="#7c2d12">Last Scan</text>
+  <text x="440" y="159" font-size="12" fill="#7c2d12">Scan the product; the</text>
+  <text x="440" y="173" font-size="12" fill="#7c2d12">system plans the pick.</text>
+
+  <!-- 3 -> plan table -->
+  <line x1="380" y1="230" x2="408" y2="206" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="202" r="13" fill="#f59e0b"/>
+  <text x="420" y="207" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">3</text>
+  <text x="440" y="199" font-size="12" font-weight="600" fill="#7c2d12">Plan table</text>
+  <text x="440" y="213" font-size="12" fill="#7c2d12">Shows the exact slot(s)</text>
+  <text x="440" y="227" font-size="12" fill="#7c2d12">to take from, oldest first.</text>
+
+  <!-- 4 -> Item photo -->
+  <line x1="380" y1="320" x2="408" y2="296" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="292" r="13" fill="#f59e0b"/>
+  <text x="420" y="297" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">4</text>
+  <text x="440" y="289" font-size="12" font-weight="600" fill="#7c2d12">Item photo</text>
+  <text x="440" y="303" font-size="12" fill="#7c2d12">Photo proof for liquids /</text>
+  <text x="440" y="317" font-size="12" fill="#7c2d12">weighed goods.</text>
+
+  <!-- 5 -> Audit trail -->
+  <line x1="380" y1="400" x2="408" y2="384" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="380" r="13" fill="#f59e0b"/>
+  <text x="420" y="385" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">5</text>
+  <text x="440" y="377" font-size="12" font-weight="600" fill="#7c2d12">Audit trail</text>
+  <text x="440" y="391" font-size="12" fill="#7c2d12">All four required: who took</text>
+  <text x="440" y="405" font-size="12" fill="#7c2d12">it, who authorised, on-duty</text>
+  <text x="440" y="419" font-size="12" fill="#7c2d12">keeper, why.</text>
+
+  <!-- 6 -> Validate -->
+  <line x1="177" y1="478" x2="430" y2="472" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="420" cy="468" r="13" fill="#f59e0b"/>
+  <text x="420" y="473" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">6</text>
+  <text x="440" y="465" font-size="12" font-weight="600" fill="#7c2d12">Validate</text>
+  <text x="440" y="479" font-size="12" fill="#7c2d12">Issues the stock to Trust</text>
+  <text x="440" y="493" font-size="12" fill="#7c2d12">internal use.</text>
+</svg>
