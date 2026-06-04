@@ -618,6 +618,12 @@ class ProductProduct(models.Model):
 
     _inherit = "product.product"
 
+    _sku_unique = models.Constraint(
+        "UNIQUE(default_code)",
+        "This SKU / internal reference is already used by another product. "
+        "Each product must have a unique SKU.",
+    )
+
     wms_product_kind = fields.Selection(
         related="product_tmpl_id.wms_product_kind",
         store=True,

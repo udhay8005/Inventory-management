@@ -1,9 +1,9 @@
 {
     "name": "WMS — Training & Help Center",
-    "version": "19.0.1.5.0",
+    "version": "19.0.1.6.0",
     "summary": "Beginner-friendly in-app help: searchable Help Center, role training, "
     "terminology, workflow tutorials, training videos, and a Beginner Mode toggle.",
-    "depends": ["wms_location", "web"],
+    "depends": ["wms_location", "web", "wms_barcode", "wms_reports"],
     "author": "WMS",
     "license": "LGPL-3",
     "category": "Inventory/Warehouse",

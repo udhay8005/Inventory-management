@@ -251,23 +251,47 @@ class StockLocation(models.Model):
                         % (parent.wms_location_type if parent else "<none>")
                     )
 
+    @api.constrains("barcode")
+    def _check_barcode_globally_unique(self):
+        """Critical #4: a location barcode must be globally unique.
+
+        Core only guards UNIQUE(barcode, company_id); a NULL company_id (the
+        common single-company tree) defeats that, letting the generators mint
+        two slots with the same barcode so a scan resolves to an arbitrary
+        one. Enforce non-NULL barcode uniqueness across all locations.
+        """
+        coded = self.filtered("barcode")
+        if not coded:
+            return
+        barcodes = coded.mapped("barcode")
+        clash = self.search([("barcode", "in", barcodes), ("id", "not in", coded.ids)], limit=1)
+        if clash:
+            raise ValidationError(
+                _("Location barcode %s is already used by another location.") % clash.barcode
+            )
+        seen = set()
+        for loc in coded:
+            if loc.barcode in seen:
+                raise ValidationError(
+                    _("Location barcode %s is assigned to two locations at once.") % loc.barcode
+                )
+            seen.add(loc.barcode)
+
     # ---- FIFO / FEFO planner ----------------------------------------------
     @api.model
     def find_oldest_quants_for_product(self, product_id, qty_needed, parent_location_id=None):
         """Plan a deduction across slots, returning (plan, missing) where
         ``plan`` is an ordered list of (quant, take_qty) tuples.
 
-        Ordering rule:
-          * **FEFO** (First-Expiry-First-Out) when the scanned product
-            belongs to an expiry-sensitive kind (medicine / feed / fluid /
-            pooja) or has an explicit ``wms_expiry_date``. Quants are
-            picked by (``template.wms_expiry_date`` asc, ``in_date`` asc).
-            The lookup is also widened to every variant with the same
-            ``name`` + kind so a freshly received batch with a far-future
-            expiry never gets picked while an older batch is still on the
-            shelf — Trust pharmacy rule.
-          * **FIFO** (First-In-First-Out, the classic warehouse default)
-            for every other kind. Quants are picked by (``in_date`` asc).
+        Ordering (Critical #1/#5): pooling is strictly within the scanned
+        product's own template (all its variants); the planner never crosses
+        to a same-named SIBLING product (which previously could issue a
+        different SKU and unit of measure). One template means one UoM, so
+        cross-product / cross-UoM substitution is impossible. Different
+        physical batches are different products; the keeper scans the specific
+        batch to issue. Ordering is delegated to
+        ``stock.quant._wms_sorted_for_removal`` (oldest in_date first) — the
+        single authoritative removal order shared with ``_gather``.
 
         Location scoping:
           * Strict pass first: ``child_of parent_location_id`` (typically
@@ -280,32 +304,17 @@ class StockLocation(models.Model):
             location (e.g. "Dakshin Vrindavan") instead of the default
             ``WH/Stock`` tree.
         """
-        # Lazy import to avoid a circular import at module load.
-        from odoo.addons.wms_location.models.product_template import EXPIRY_SENSITIVE_KINDS
-
-        Product = self.env["product.product"]
-        scanned = Product.browse(product_id).exists()
+        scanned = self.env["product.product"].browse(product_id).exists()
         if not scanned:
             return [], qty_needed
-        kind = scanned.product_tmpl_id.wms_product_kind
-        has_expiry = bool(scanned.product_tmpl_id.wms_expiry_date)
-        use_fefo = (kind in EXPIRY_SENSITIVE_KINDS) or has_expiry
 
-        # When FEFO is in play, widen the search to every variant with
-        # the same name + kind so sibling batches participate. Same name
-        # is the cheapest reliable signal that two SKUs are the same
-        # *product* (e.g. two batches of "Calcium Bolus", one expiring
-        # Dec 2026 and the other June 2027).
-        if use_fefo and scanned.name:
-            siblings = Product.search(
-                [
-                    ("name", "=", scanned.name),
-                    ("product_tmpl_id.wms_product_kind", "=", kind),
-                ]
-            )
-            product_ids = (siblings | scanned).ids
-        else:
-            product_ids = [scanned.id]
+        # Critical #1: pool ONLY the scanned product's own template (all its
+        # variants). Never widen to same-named SIBLING products, which could
+        # silently issue a different SKU and even a different unit of measure.
+        # One template => one UoM, so cross-product / cross-UoM substitution
+        # is impossible. Different physical batches are different products;
+        # the keeper scans the specific batch they want to issue.
+        product_ids = scanned.product_tmpl_id.product_variant_ids.ids
 
         base_domain = [
             ("product_id", "in", product_ids),
@@ -315,10 +324,7 @@ class StockLocation(models.Model):
         strict = list(base_domain)
         if parent_location_id:
             strict.append(("location_id.id", "child_of", parent_location_id))
-        # We sort manually after fetch in FEFO mode because expiry lives
-        # on product.template, not on stock.quant — so SQL ORDER BY
-        # can't reach it without a join we don't need for FIFO.
-        quants = self.env["stock.quant"].search(strict, order="in_date asc, id asc")
+        quants = self.env["stock.quant"].search(strict)
         if not quants and parent_location_id:
             company_id = self.env.company.id
             fallback = list(base_domain) + [
@@ -326,24 +332,10 @@ class StockLocation(models.Model):
                 ("company_id", "=", company_id),
                 ("company_id", "=", False),
             ]
-            quants = self.env["stock.quant"].search(fallback, order="in_date asc, id asc")
+            quants = self.env["stock.quant"].search(fallback)
 
-        if use_fefo:
-            # Future-date sentinel so quants without an expiry sort
-            # LAST — they may be safe to ship, but anything with a
-            # known expiry should leave first.
-            far_future = "9999-12-31"
-            quants = quants.sorted(
-                key=lambda q: (
-                    (
-                        q.product_id.product_tmpl_id.wms_expiry_date.isoformat()
-                        if q.product_id.product_tmpl_id.wms_expiry_date
-                        else far_future
-                    ),
-                    q.in_date or far_future,
-                    q.id,
-                )
-            )
+        # Single authoritative removal ordering, shared with _gather (#5).
+        quants = quants._wms_sorted_for_removal()
 
         plan = []
         remaining = qty_needed

@@ -26,6 +26,10 @@ class WmsDamage(models.Model):
     )
     product_id = fields.Many2one("product.product", required=True, tracking=True)
     quantity = fields.Float(required=True, default=1.0, tracking=True)
+    _quantity_positive = models.Constraint(
+        "CHECK(quantity > 0)",
+        "Damage quantity must be greater than zero.",
+    )
     source_slot_id = fields.Many2one(
         "stock.location",
         # Stock can live in slots (inside racks) OR floor zones (open

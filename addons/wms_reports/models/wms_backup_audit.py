@@ -16,6 +16,8 @@ No secrets are ever stored here — only filenames, sizes, checksums,
 timings, and human-readable status messages.
 """
 import logging
+import os
+import shutil
 from datetime import timedelta
 
 from odoo import api, fields, models
@@ -25,6 +27,7 @@ _logger = logging.getLogger(__name__)
 # Thresholds (hours / days). Tunable in one place.
 BACKUP_STALE_HOURS = 24
 DRILL_STALE_DAYS = 7
+DISK_FREE_MIN_MB = 1024  # warn when the backup volume drops below 1 GB free
 
 
 class WmsBackupAudit(models.Model):
@@ -93,6 +96,18 @@ class WmsBackupAudit(models.Model):
         )
 
     @api.model
+    def _backup_dir(self):
+        """Absolute path of the backups directory the PowerShell scripts write
+        to. Override with the `wms_reports.backup_dir` system parameter; else
+        derive <project>/backups from this module's location."""
+        param = self.env["ir.config_parameter"].sudo().get_param("wms_reports.backup_dir")
+        if param:
+            return param
+        here = os.path.dirname(os.path.abspath(__file__))  # .../wms_reports/models
+        project = os.path.dirname(os.path.dirname(os.path.dirname(here)))
+        return os.path.join(project, "backups")
+
+    @api.model
     def _health_snapshot(self):
         """Return a non-sensitive operational health dict.
 
@@ -102,9 +117,11 @@ class WmsBackupAudit(models.Model):
             restore drill than DRILL_STALE_DAYS.
           * HEALTHY  — fresh backup and a recent drill.
 
-        Reaching this code at all means the DB is reachable, so
-        db_reachable is always True in the returned payload (the
-        controller treats an exception as CRITICAL separately).
+        Critical #8: this probes REALITY, not just the audit table - it runs a
+        live DB query, checks the most recent recorded backup still EXISTS on
+        disk, and checks free disk on the backup volume, so it can no longer
+        report HEALTHY while backups have silently rotted (file deleted, disk
+        full) nor stay blind to a half-broken DB cursor.
         """
         now = fields.Datetime.now()
         warnings = []
@@ -143,9 +160,37 @@ class WmsBackupAudit(models.Model):
                     "last restore drill is %.1fd old (> %dd)" % (drill_age_days, DRILL_STALE_DAYS)
                 )
 
+        # --- Critical #8: probe reality, not just the audit table ----------
+        db_reachable = True
+        try:
+            self.env.cr.execute("SELECT 1")
+            self.env.cr.fetchone()
+        except Exception:  # noqa: BLE001 - any failure means not reachable
+            db_reachable = False
+            escalate("CRITICAL")
+            warnings.append("database query probe failed")
+
+        backup_dir = self._backup_dir()
+        backup_file_present = None
+        if last_backup and last_backup.name and os.path.isdir(backup_dir):
+            backup_file_present = os.path.isfile(os.path.join(backup_dir, last_backup.name))
+            if not backup_file_present:
+                escalate("CRITICAL")
+                warnings.append("the most recent recorded backup is missing from disk")
+
+        if os.path.isdir(backup_dir):
+            try:
+                free_mb = shutil.disk_usage(backup_dir).free / (1024.0 * 1024.0)
+                if free_mb < DISK_FREE_MIN_MB:
+                    escalate("DEGRADED")
+                    warnings.append("low free disk on the backup volume")
+            except OSError:
+                pass
+
         return {
             "status": status,
-            "db_reachable": True,
+            "db_reachable": db_reachable,
+            "backup_file_present": backup_file_present,
             "last_backup_age_hours": (
                 round(backup_age_hours, 1) if backup_age_hours is not None else None
             ),

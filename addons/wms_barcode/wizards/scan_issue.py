@@ -282,8 +282,8 @@ class WmsScanIssue(models.TransientModel):
         # Clear previous plan
         self.plan_line_ids.unlink()
         for quant, take in plan:
-            # The planner may have picked a sibling batch (FEFO) — use
-            # the quant's own product, not the scanned one.
+            # Every planned quant belongs to the scanned product's template
+            # (no cross-product widening), so picked is the scanned product.
             picked = quant.product_id
             self.env["wms.scan.issue.plan"].create(
                 {

@@ -37,6 +37,10 @@ class WmsRepairOrder(models.Model):
     damage_id = fields.Many2one("wms.damage")
     product_id = fields.Many2one("product.product", required=True)
     quantity = fields.Float(required=True, default=1.0)
+    _quantity_positive = models.Constraint(
+        "CHECK(quantity > 0)",
+        "Repair quantity must be greater than zero.",
+    )
     original_slot_id = fields.Many2one(
         "stock.location",
         # Same widened domain as wms.damage.source_slot_id — stock can

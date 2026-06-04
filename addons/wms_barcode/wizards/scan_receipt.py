@@ -370,6 +370,10 @@ class WmsScanReceiptLine(models.TransientModel):
     wizard_id = fields.Many2one("wms.scan.receipt", ondelete="cascade", required=True)
     product_id = fields.Many2one("product.product", required=True)
     quantity = fields.Float(default=1.0, required=True)
+    _quantity_positive = models.Constraint(
+        "CHECK(quantity > 0)",
+        "Receipt quantity must be greater than zero.",
+    )
     lot_id = fields.Many2one("stock.lot")
     location_dest_id = fields.Many2one(
         "stock.location",
