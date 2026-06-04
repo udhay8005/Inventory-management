@@ -45,6 +45,17 @@ class StockPicking(models.Model):
         "this issue. Picked from the roster the Admin maintains under "
         "Configuration → Store Keepers.",
     )
+    wms_is_scan_issue = fields.Boolean(
+        string="Scan Issue picking",
+        default=False,
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Internal: set True by the Scan Issue wizard on the picking it "
+        "creates. The 24h daily-cap counter filters on this immutable flag "
+        "instead of matching the free-text origin string ('Barcode FIFO%'), "
+        "which any edit or collision could silently break.",
+    )
     wms_audit_legacy = fields.Boolean(
         default=False,
         copy=False,
