@@ -13,12 +13,16 @@ class TestLocationBarcodeUniqueness(TransactionCase):
         cls.parent = cls.env.ref("stock.stock_location_stock")
 
     def _loc(self, name, barcode):
+        # company_id=False (NULL) is the exact gap we close: core's
+        # UNIQUE(barcode, company_id) treats NULL companies as distinct and
+        # does NOT guard duplicates, so our @api.constrains must.
         return self.env["stock.location"].create(
             {
                 "name": name,
                 "usage": "internal",
                 "location_id": self.parent.id,
                 "barcode": barcode,
+                "company_id": False,
             }
         )
 
