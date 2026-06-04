@@ -326,6 +326,10 @@ class WmsRackGenerator(models.TransientModel):
                     "wms_column_left": left,
                     "wms_column_right": right,
                     "wms_slot_count": slot_count,
+                    # Persist the exact cell list for polyominoes so the map
+                    # renderer can draw the true shape; rectangles need only
+                    # the bounding box, so leave it empty for them.
+                    "wms_cells_json": json.dumps(cells) if is_polyomino else False,
                     "barcode": barcode,
                 }
             )

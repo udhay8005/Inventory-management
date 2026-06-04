@@ -4,4 +4,5 @@ from . import (
     test_health_endpoint,
     test_health_probe,
     test_quantity_integrity,
+    test_rack_grid,
 )

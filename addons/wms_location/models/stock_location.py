@@ -85,6 +85,15 @@ class StockLocation(models.Model):
         help="How many sub-divisions (slots) sit inside this compartment. "
         "1 means the compartment itself is the storable unit.",
     )
+    wms_cells_json = fields.Char(
+        string="Compartment cells (JSON)",
+        copy=False,
+        help="For non-rectangular (L / T / U polyomino) compartments: the exact "
+        "list of [shelf, column] cells the compartment covers, as JSON. Empty "
+        "for plain rectangular compartments (the shelf/column bounding box "
+        "describes those fully). The warehouse-map renderer uses this to draw "
+        "the true shape instead of the misleading bounding-box rectangle.",
+    )
 
     # ---- Slot-level identity ---------------------------------------------
     wms_slot_number = fields.Integer(
