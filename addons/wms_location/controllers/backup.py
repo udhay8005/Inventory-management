@@ -27,6 +27,7 @@ import subprocess
 import tempfile
 from datetime import datetime
 
+from markupsafe import escape
 from odoo import http
 from odoo.http import content_disposition, request
 
@@ -167,7 +168,7 @@ class WmsBackupController(http.Controller):
                 stderr = result.stderr.decode("utf-8", "replace")[:500]
                 return self._error_page(
                     "pg_dump failed",
-                    f"<pre>{stderr}</pre>",
+                    f"<pre>{escape(stderr)}</pre>",
                 )
 
             with tempfile.NamedTemporaryFile(suffix=".dump.gpg", delete=False) as enc_file:
@@ -197,7 +198,7 @@ class WmsBackupController(http.Controller):
                     stderr = gpg_result.stderr.decode("utf-8", "replace")[:500]
                     return self._error_page(
                         "GPG encryption failed",
-                        f"<pre>{stderr}</pre>",
+                        f"<pre>{escape(stderr)}</pre>",
                     )
 
                 with open(enc_path, "rb") as f:

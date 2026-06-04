@@ -16,6 +16,7 @@ Monday so the trust doesn't depend on someone remembering to open
 the report.
 """
 
+from markupsafe import Markup, escape
 from odoo import api, fields, models, tools
 
 
@@ -127,7 +128,7 @@ class WmsExpiryAlert(models.Model):
             color = "#cc0000" if row.status == "expired" else "#cc6600"
             rows.append(
                 "<tr>"
-                f"<td style='padding:4px 8px'><b>{row.product_id.display_name}</b></td>"
+                f"<td style='padding:4px 8px'><b>{escape(row.product_id.display_name)}</b></td>"
                 f"<td style='padding:4px 8px;text-align:right'>{row.on_hand:g}</td>"
                 f"<td style='padding:4px 8px'>{row.expiry_date}</td>"
                 f"<td style='padding:4px 8px;text-align:right;color:{color}'>"
@@ -135,7 +136,10 @@ class WmsExpiryAlert(models.Model):
                 "</tr>"
             )
         rows.append("</table>")
-        body = (
+        # Markup() so Odoo 19 renders the HTML instead of escaping the tags to
+        # visible text (every other message_post in the codebase does this).
+        # Product names are escape()d above so a stray '&' / '<' can't break it.
+        body = Markup(
             f"<p><b>{len(urgent)} product(s) expiring soon or already expired.</b></p>"
             + "".join(rows)
             + "<p><i>Full list: WMS &rsaquo; Reports &rsaquo; Expiry alerts.</i></p>"

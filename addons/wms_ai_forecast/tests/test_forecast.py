@@ -53,3 +53,11 @@ class TestForecastEngine(TransactionCase):
         self.env["wms.forecast.engine"]._prune_history()
         self.assertFalse(old.exists(), "history older than the window must be pruned")
         self.assertTrue(recent.exists(), "recent history must be kept")
+
+    def test_history_trained_at_indexed(self):
+        # trained_at is the _order key and the prune-filter column; it must be
+        # indexed so neither does a full sequential scan as history grows.
+        self.assertTrue(
+            self.env["wms.forecast.history"]._fields["trained_at"].index,
+            "wms.forecast.history.trained_at must be indexed",
+        )

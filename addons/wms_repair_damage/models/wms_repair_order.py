@@ -256,6 +256,12 @@ class WmsRepairOrder(models.Model):
                     "origin": rec.name,
                 }
             )
+            # Serialise against a concurrent Scan Issue / repair-finish on the
+            # same product so the write-off can't race the reservation.
+            self.env.cr.execute(
+                "SELECT id FROM product_product WHERE id = %s FOR UPDATE",
+                (rec.product_id.id,),
+            )
             scrap.action_validate()
             rec.state = "scrapped"
             rec._post_state_audit(
