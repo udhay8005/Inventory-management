@@ -11,7 +11,9 @@ class TestReceiptQuantity(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.product = cls.env["product.product"].create({"name": "Receipt Qty Product"})
-        cls.wizard = cls.env["wms.scan.receipt"].create({})
+        # The receipt wizard requires an on-duty storekeeper.
+        cls.keeper = cls.env["wms.storekeeper"].create({"name": "Qty Test Keeper"})
+        cls.wizard = cls.env["wms.scan.receipt"].create({"storekeeper_id": cls.keeper.id})
 
     def test_receipt_line_quantity_must_be_positive(self):
         line = self.env["wms.scan.receipt.line"].create(
