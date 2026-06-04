@@ -31,5 +31,6 @@ class StockQuant(models.Model):
             strict=strict,
             qty=qty,
         )
-        # Stable secondary sort by id avoids non-determinism when in_dates tie.
-        return quants.sorted(key=lambda q: (q.in_date or q.create_date, q.id))
+        # Delegate to the single authoritative WMS removal ordering (Critical
+        # #5) so this reservation path and the Scan Issue planner never diverge.
+        return quants._wms_sorted_for_removal()

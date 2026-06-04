@@ -52,3 +52,13 @@ class StockQuant(models.Model):
             q.wms_slot_id = slot
             q.wms_compartment_id = compartment
             q.wms_rack_id = rack
+
+    def _wms_sorted_for_removal(self):
+        """Single authoritative WMS removal ordering (Critical #5).
+
+        Shared by the Scan Issue planner (find_oldest_quants_for_product) and
+        the _gather reservation hook so every removal path agrees. Pooling is
+        always within one product/template (no cross-product substitution);
+        order oldest-first by in_date (FIFO), id as a stable tiebreaker.
+        """
+        return self.sorted(key=lambda q: (q.in_date or q.create_date, q.id))
