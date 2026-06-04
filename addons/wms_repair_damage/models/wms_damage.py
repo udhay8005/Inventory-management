@@ -228,14 +228,11 @@ class WmsDamage(models.Model):
             is_returnable = bool(rec.product_id.wms_is_returnable)
             product_name = rec.product_id.display_name
             qty = rec.quantity or 0.0
-            kind_label = dict(
-                rec.product_id._fields["wms_product_kind"].selection
-                if not callable(rec.product_id._fields["wms_product_kind"].selection)
-                else self.env["product.product"]
-                .fields_get(["wms_product_kind"])
-                .get("wms_product_kind", {})
-                .get("selection", [])
-            ).get(rec.product_id.wms_product_kind, "Unclassified")
+            # wms_product_kind has a static selection list, so read it directly
+            # (the old callable()/fields_get fallback branch was always dead).
+            kind_label = dict(rec.product_id._fields["wms_product_kind"].selection).get(
+                rec.product_id.wms_product_kind, "Unclassified"
+            )
 
             if remaining <= 0 and is_returnable:
                 rec.recommended_action = "repair_returnable_only"
