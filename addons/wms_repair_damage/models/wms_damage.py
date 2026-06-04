@@ -2,6 +2,8 @@ from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from .reservation import validate_reserved_or_abort
+
 
 class WmsDamage(models.Model):
     """Damage event. Confirming creates an internal stock.picking that moves
@@ -420,12 +422,7 @@ class WmsDamage(models.Model):
                     "location_dest_id": damage_loc.id,
                 }
             )
-            picking.action_confirm()
-            picking.action_assign()
-            for ml in picking.move_ids.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-            picking.button_validate()
+            validate_reserved_or_abort(picking, rec.product_id, "send to Damage")
             rec.write({"state": "confirmed", "picking_id": picking.id})
 
             # Mirror the audit-trail summary into the chatter so the

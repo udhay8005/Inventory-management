@@ -2,6 +2,8 @@ from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from .reservation import validate_reserved_or_abort
+
 
 class WmsRepairOrder(models.Model):
     """Repair workflow: damaged → in_repair → done / scrapped.
@@ -199,12 +201,7 @@ class WmsRepairOrder(models.Model):
                     "location_dest_id": repair_loc.id,
                 }
             )
-            picking.action_confirm()
-            picking.action_assign()
-            for ml in picking.move_ids.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-            picking.button_validate()
+            validate_reserved_or_abort(picking, rec.product_id, "send to Repair")
             rec.write({"state": "in_repair", "start_picking_id": picking.id})
             rec._post_state_audit(
                 "Repair started",
@@ -238,12 +235,7 @@ class WmsRepairOrder(models.Model):
                     "location_dest_id": dest.id,
                 }
             )
-            picking.action_confirm()
-            picking.action_assign()
-            for ml in picking.move_ids.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-            picking.button_validate()
+            validate_reserved_or_abort(picking, rec.product_id, "return from Repair")
             rec.write({"state": "done", "finish_picking_id": picking.id})
             rec._post_state_audit(
                 "Repair done",
