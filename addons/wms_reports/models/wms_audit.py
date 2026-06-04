@@ -276,12 +276,16 @@ class WmsAudit(models.Model):
                     quant.with_context(inventory_mode=True).write(
                         {"quantity": quant.quantity + delta}
                     )
-                elif line.counted_qty > 0:
+                elif delta > 0:
+                    # No live quant: create at the DELTA, not the raw count. If
+                    # an issue legitimately emptied the slot during the audit
+                    # window, re-creating it at counted_qty would undo that
+                    # issue; the delta (counted - expected) preserves it.
                     Quant.with_context(inventory_mode=True).create(
                         {
                             "product_id": line.product_id.id,
                             "location_id": line.location_id.id,
-                            "quantity": line.counted_qty,
+                            "quantity": delta,
                         }
                     )
 

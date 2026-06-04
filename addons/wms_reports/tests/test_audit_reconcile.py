@@ -33,3 +33,47 @@ class TestAuditAcceptReconcile(TransactionCase):
         # Reconcile: 12 (current) + (8 - 10) = 10. A blind overwrite would have
         # wiped the receipt and left 8.
         self.assertEqual(sum(quant.mapped("quantity")), 10.0)
+
+    def test_accept_creates_delta_for_genuinely_new_stock(self):
+        product = self.env["product.product"].create(
+            {"name": "Audit New Stock", "is_storable": True}
+        )
+        slot = self.env.ref("stock.stock_location_stock")
+        # No book, no live quant; the count found 5 physical units (delta = +5).
+        audit = self.env["wms.audit"].create({"state": "submitted"})
+        self.env["wms.audit.line"].create(
+            {
+                "audit_id": audit.id,
+                "location_id": slot.id,
+                "product_id": product.id,
+                "expected_qty": 0.0,
+                "counted_qty": 5.0,
+            }
+        )
+        audit.action_review_accept()
+        quant = self.env["stock.quant"].search(
+            [("product_id", "=", product.id), ("location_id", "=", slot.id)]
+        )
+        self.assertEqual(sum(quant.mapped("quantity")), 5.0)
+
+    def test_accept_does_not_recreate_emptied_slot(self):
+        product = self.env["product.product"].create({"name": "Audit Emptied", "is_storable": True})
+        slot = self.env.ref("stock.stock_location_stock")
+        # Book 10 at count, found 8 (delta -2), but an issue emptied the slot to
+        # 0 during the window (no live quant). Accept must NOT re-create it at the
+        # stale count of 8 (the old code did).
+        audit = self.env["wms.audit"].create({"state": "submitted"})
+        self.env["wms.audit.line"].create(
+            {
+                "audit_id": audit.id,
+                "location_id": slot.id,
+                "product_id": product.id,
+                "expected_qty": 10.0,
+                "counted_qty": 8.0,
+            }
+        )
+        audit.action_review_accept()
+        quant = self.env["stock.quant"].search(
+            [("product_id", "=", product.id), ("location_id", "=", slot.id)]
+        )
+        self.assertEqual(sum(quant.mapped("quantity")), 0.0)
