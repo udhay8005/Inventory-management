@@ -1,4 +1,5 @@
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 
 class WmsBarcodeAlias(models.Model):
@@ -26,6 +27,32 @@ class WmsBarcodeAlias(models.Model):
         "UNIQUE(barcode)",
         "Each carton barcode must be unique.",
     )
+
+    @api.constrains("barcode")
+    def _check_barcode_no_collision(self):
+        """Critical #4: a carton alias barcode must not collide with a product
+        barcode, a location barcode, or a lot/serial name.
+
+        resolve() searches product -> alias -> lot -> location, so an alias
+        that duplicates a product barcode is silently shadowed (its unit
+        multiplier dropped) and one duplicating a slot barcode mis-routes the
+        scan. Reject the collision up front.
+        """
+        coded = self.filtered("barcode")
+        if not coded:
+            return
+        barcodes = coded.mapped("barcode")
+        prod = self.env["product.product"].search([("barcode", "in", barcodes)], limit=1)
+        if prod:
+            raise ValidationError(
+                _("Barcode %s is already a product's unit barcode.") % prod.barcode
+            )
+        loc = self.env["stock.location"].search([("barcode", "in", barcodes)], limit=1)
+        if loc:
+            raise ValidationError(_("Barcode %s is already a location barcode.") % loc.barcode)
+        lot = self.env["stock.lot"].search([("name", "in", barcodes)], limit=1)
+        if lot:
+            raise ValidationError(_("Barcode %s is already a lot / serial number.") % lot.name)
 
     @api.model
     def resolve(self, barcode):

@@ -251,6 +251,32 @@ class StockLocation(models.Model):
                         % (parent.wms_location_type if parent else "<none>")
                     )
 
+    @api.constrains("barcode")
+    def _check_barcode_globally_unique(self):
+        """Critical #4: a location barcode must be globally unique.
+
+        Core only guards UNIQUE(barcode, company_id); a NULL company_id (the
+        common single-company tree) defeats that, letting the generators mint
+        two slots with the same barcode so a scan resolves to an arbitrary
+        one. Enforce non-NULL barcode uniqueness across all locations.
+        """
+        coded = self.filtered("barcode")
+        if not coded:
+            return
+        barcodes = coded.mapped("barcode")
+        clash = self.search([("barcode", "in", barcodes), ("id", "not in", coded.ids)], limit=1)
+        if clash:
+            raise ValidationError(
+                _("Location barcode %s is already used by another location.") % clash.barcode
+            )
+        seen = set()
+        for loc in coded:
+            if loc.barcode in seen:
+                raise ValidationError(
+                    _("Location barcode %s is assigned to two locations at once.") % loc.barcode
+                )
+            seen.add(loc.barcode)
+
     # ---- FIFO / FEFO planner ----------------------------------------------
     @api.model
     def find_oldest_quants_for_product(self, product_id, qty_needed, parent_location_id=None):
