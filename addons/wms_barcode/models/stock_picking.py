@@ -26,6 +26,7 @@ class StockPicking(models.Model):
     wms_taken_by = fields.Char(
         string="Handled by",
         index=True,
+        tracking=True,
         help="Name of the person who physically handled this stock at the "
         "warehouse door — the receiver on an incoming delivery, or the "
         "person who took the goods on an issue. Neutral so the same "
@@ -34,6 +35,7 @@ class StockPicking(models.Model):
     wms_ordered_by = fields.Char(
         string="Ordered by",
         index=True,
+        tracking=True,
         help="Name of the person who authorised this issue "
         "(the Manager / cow-care lead / project owner).",
     )
@@ -41,6 +43,7 @@ class StockPicking(models.Model):
         "wms.storekeeper",
         string="Store Keeper on duty",
         index=True,
+        tracking=True,
         help="The actual human Store Keeper running the desk at the time of "
         "this issue. Picked from the roster the Admin maintains under "
         "Configuration → Store Keepers.",
