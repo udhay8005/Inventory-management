@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Beginner Mode wiring: replace the single Scrap button with two variants
+        keyed off the current user's Beginner Mode flag. Beginners get a native
+        confirmation dialog before the irreversible write-off; experienced users
+        keep the one-click button.
+    -->
+    <record id="view_wms_repair_form_beginner_scrap" model="ir.ui.view">
+        <field name="name">wms.repair.order.form.beginner.scrap</field>
+        <field name="model">wms.repair.order</field>
+        <field name="inherit_id" ref="wms_repair_damage.view_wms_repair_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_scrap']" position="replace">
+                <field name="wms_user_beginner_mode" invisible="1"/>
+                <button name="action_scrap" type="object" string="Scrap"
+                        invisible="state != 'in_repair' or not wms_user_beginner_mode"
+                        confirm="Scrapping permanently writes this item off from Repair-Out and cannot be undone. Are you sure you want to scrap it?"
+                        groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
+                <button name="action_scrap" type="object" string="Scrap"
+                        invisible="state != 'in_repair' or wms_user_beginner_mode"
+                        groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
