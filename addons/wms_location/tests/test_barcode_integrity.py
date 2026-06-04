@@ -10,12 +10,15 @@ class TestLocationBarcodeUniqueness(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.parent = cls.env.ref("stock.stock_location_stock")
+        # The gap we close is NULL-company duplicates: core's
+        # UNIQUE(barcode, company_id) treats NULL companies as distinct, so it
+        # does not guard them. To create NULL-company internal locations we
+        # must parent under a NULL-company location (core _check_company
+        # forbids a NULL child under a company-owning parent). The Customers
+        # root is company-agnostic (company_id IS NULL).
+        cls.parent = cls.env.ref("stock.stock_location_customers")
 
     def _loc(self, name, barcode):
-        # company_id=False (NULL) is the exact gap we close: core's
-        # UNIQUE(barcode, company_id) treats NULL companies as distinct and
-        # does NOT guard duplicates, so our @api.constrains must.
         return self.env["stock.location"].create(
             {
                 "name": name,
