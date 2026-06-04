@@ -24,12 +24,9 @@ class WmsReorderSummary(models.Model):
                      COUNT(DISTINCT f.product_id) AS product_count,
                      SUM(f.reorder_qty)           AS total_qty
                 FROM wms_forecast f
+                JOIN product_product pp ON pp.id = f.product_id
                 LEFT JOIN product_supplierinfo ps
-                       ON ps.product_tmpl_id = (
-                          SELECT pt.id FROM product_product pp
-                            JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                           WHERE pp.id = f.product_id LIMIT 1
-                       )
+                       ON ps.product_tmpl_id = pp.product_tmpl_id
                WHERE f.reorder_qty > 0
             GROUP BY ps.partner_id
         """

@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from odoo import api, fields, models
 
@@ -26,12 +27,64 @@ class WmsForecastEngine(models.AbstractModel):
             ]
         )
         _logger.info("wms_ai_forecast: training %d products", len(products))
-        self.train_for_products(products)
+        signals = self._prefetch_signals(products)
+        self.train_for_products(products, signals=signals)
+        self._prune_history()
 
-    def train_for_products(self, products):
+    def _prefetch_signals(self, products):
+        """Batch the per-product on-hand / on-order / safety-stock lookups into
+        three grouped queries. Previously each was a separate search inside the
+        per-product loop (N+1: ~3 extra queries per product), which made the
+        nightly cron scale linearly with the catalogue."""
+        on_hand, on_order, orderpoints = {}, {}, {}
+        pids = products.ids
+        if not pids:
+            return {"on_hand": on_hand, "on_order": on_order, "orderpoints": orderpoints}
+        for product, qty in self.env["stock.quant"]._read_group(
+            [("product_id", "in", pids), ("location_id.usage", "=", "internal")],
+            groupby=["product_id"],
+            aggregates=["quantity:sum"],
+        ):
+            on_hand[product.id] = qty or 0.0
+        for product, ordered, received in self.env["purchase.order.line"]._read_group(
+            [("product_id", "in", pids), ("state", "in", ("purchase", "done"))],
+            groupby=["product_id"],
+            aggregates=["product_qty:sum", "qty_received:sum"],
+        ):
+            on_order[product.id] = (ordered or 0.0) - (received or 0.0)
+        for op in self.env["stock.warehouse.orderpoint"].search([("product_id", "in", pids)]):
+            orderpoints.setdefault(op.product_id.id, op.product_min_qty)
+        return {"on_hand": on_hand, "on_order": on_order, "orderpoints": orderpoints}
+
+    def _prune_history(self):
+        """Cap forecast-history growth. Each cron run writes one snapshot per
+        product; left unbounded the table grows forever. Keep only the most
+        recent `wms_ai_forecast.history_retention_days` (default 365) days."""
+        param = (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("wms_ai_forecast.history_retention_days", "365")
+        )
+        try:
+            days = int(param)
+        except (TypeError, ValueError):
+            days = 365
+        if days <= 0:
+            return
+        cutoff = fields.Datetime.now() - timedelta(days=days)
+        old = self.env["wms.forecast.history"].search([("trained_at", "<", cutoff)])
+        if old:
+            _logger.info(
+                "wms_ai_forecast: pruning %d forecast-history rows older than %d days",
+                len(old),
+                days,
+            )
+            old.unlink()
+
+    def train_for_products(self, products, signals=None):
         for product in products:
             try:
-                self._train_one(product)
+                self._train_one(product, signals=signals)
             except Exception as exc:  # noqa: BLE001
                 _logger.warning("forecast train failed for %s: %s", product.display_name, exc)
 
@@ -89,13 +142,13 @@ class WmsForecastEngine(models.AbstractModel):
         )
         return op.product_min_qty if op else 0.0
 
-    def _train_one(self, product):
+    def _train_one(self, product, signals=None):
         observations = self._gather_outflow(product)
 
-        # In Odoo 19 `product.type` is consu/service/combo; the AI's old
-        # consumable/reusable split keyed off type='consu'. We now key off
-        # whether the product has *any* movement history — zero-history
-        # products are flagged "monitor only" regardless of nominal type.
+        # In Odoo 19 `product.type` is consu/service/combo and EVERY storable
+        # product reports type=='consu', so the old `type == 'consu'` test was
+        # always true and meaningless. We now key the consumable flag off actual
+        # movement history — zero-history products are flagged "monitor only".
         note = ""
         if not observations:
             result = forecasting.ForecastResult(0, 0, 0, "Manual", 0, "dead")
@@ -103,10 +156,17 @@ class WmsForecastEngine(models.AbstractModel):
         else:
             result = forecasting.forecast(observations, horizon_days=30)
 
-        on_hand = self._on_hand(product)
-        on_order = self._on_order(product)
+        # Prefer the batched signals from run_all_forecasts; fall back to the
+        # per-product lookups when called directly (e.g. action_retrain).
+        if signals is not None:
+            on_hand = signals["on_hand"].get(product.id, 0.0)
+            on_order = signals["on_order"].get(product.id, 0.0)
+            safety = signals["orderpoints"].get(product.id, 0.0)
+        else:
+            on_hand = self._on_hand(product)
+            on_order = self._on_order(product)
+            safety = self._safety_stock(product)
         lead = self._lead_time(product)
-        safety = self._safety_stock(product)
         reorder_qty, reorder_date = forecasting.reorder_recommendation(
             on_hand=on_hand,
             on_order=on_order,
@@ -130,7 +190,7 @@ class WmsForecastEngine(models.AbstractModel):
             "reorder_qty": reorder_qty,
             "reorder_date": reorder_date.date() if reorder_date else False,
             "velocity_class": result.velocity_class,
-            "is_consumable": product.type == "consu",
+            "is_consumable": bool(observations),
             "last_trained": fields.Datetime.now(),
             "model_name": result.model_name,
             "rmse": result.rmse,

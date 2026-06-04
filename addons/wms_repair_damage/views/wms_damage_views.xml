@@ -111,7 +111,8 @@
                                    decoration-muted="recommended_action == 'note_only'"/>
                         </group>
 
-                        <field name="note" placeholder="Describe what happened..."/>
+                        <field name="note" placeholder="Describe what happened..."
+                               required="reason == 'other'"/>
                     </sheet>
                     <chatter/>
                 </form>

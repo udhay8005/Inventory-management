@@ -2,6 +2,8 @@ from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+from .reservation import validate_reserved_or_abort
+
 
 class WmsDamage(models.Model):
     """Damage event. Confirming creates an internal stock.picking that moves
@@ -226,14 +228,11 @@ class WmsDamage(models.Model):
             is_returnable = bool(rec.product_id.wms_is_returnable)
             product_name = rec.product_id.display_name
             qty = rec.quantity or 0.0
-            kind_label = dict(
-                rec.product_id._fields["wms_product_kind"].selection
-                if not callable(rec.product_id._fields["wms_product_kind"].selection)
-                else self.env["product.product"]
-                .fields_get(["wms_product_kind"])
-                .get("wms_product_kind", {})
-                .get("selection", [])
-            ).get(rec.product_id.wms_product_kind, "Unclassified")
+            # wms_product_kind has a static selection list, so read it directly
+            # (the old callable()/fields_get fallback branch was always dead).
+            kind_label = dict(rec.product_id._fields["wms_product_kind"].selection).get(
+                rec.product_id.wms_product_kind, "Unclassified"
+            )
 
             if remaining <= 0 and is_returnable:
                 rec.recommended_action = "repair_returnable_only"
@@ -420,12 +419,7 @@ class WmsDamage(models.Model):
                     "location_dest_id": damage_loc.id,
                 }
             )
-            picking.action_confirm()
-            picking.action_assign()
-            for ml in picking.move_ids.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-            picking.button_validate()
+            validate_reserved_or_abort(picking, rec.product_id, "send to Damage")
             rec.write({"state": "confirmed", "picking_id": picking.id})
 
             # Mirror the audit-trail summary into the chatter so the

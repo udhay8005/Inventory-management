@@ -1,6 +1,6 @@
 {
     "name": "WMS — Offline AI Forecasting",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.2.0",
     "summary": "Per-product demand forecasting (Holt-Winters / SES) + deterministic reorder math.",
     "depends": ["wms_location", "stock", "purchase"],
     "author": "WMS",

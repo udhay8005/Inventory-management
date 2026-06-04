@@ -89,9 +89,9 @@
                         <t t-foreach="cells" t-as="cell">
                             <div t-att-class="'wms-rack-grid__cell ' + cell['color']"
                                  t-att-style="'grid-row: %d / %d; grid-column: %d / %d;' % (cell['row_start'], cell['row_end'], cell['col_start'], cell['col_end'])"
-                                 t-att-title="cell['compartment'].complete_name + ' — ' + cell['on_hand_label'] + ' units'">
+                                 t-att-title="cell['title']">
                                 <div class="wms-rack-grid__cell-head">
-                                    <span t-esc="cell['compartment'].name"/>
+                                    <span t-esc="cell['head_name']"/>
                                     <span t-esc="cell['on_hand_label']"/>
                                 </div>
                                 <div t-if="cell['products']" class="wms-rack-grid__cell-products">

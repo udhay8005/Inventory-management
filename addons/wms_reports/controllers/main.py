@@ -10,6 +10,8 @@ CSS Grid with `grid-row` / `grid-column` spans so multi-shelf
 compartments render at their natural height.
 """
 
+import json
+
 from odoo import http
 from odoo.http import request
 
@@ -34,6 +36,10 @@ class WmsRackGridController(http.Controller):
 
     @http.route("/wms/rack/<int:rack_id>/grid", type="http", auth="user", website=False)
     def rack_grid(self, rack_id, **kw):
+        # Gate on WMS membership: the handler sudo()-reads all stock, so a
+        # non-WMS authenticated user must not be able to enumerate racks/stock.
+        if not request.env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
         rack = request.env["stock.location"].browse(rack_id).sudo().exists()
         if not rack or rack.wms_location_type != "rack":
             return request.not_found()
@@ -67,25 +73,61 @@ class WmsRackGridController(http.Controller):
             # Aggregate occupancy = filled slots / total slots.
             occupied = sum(1 for s in slots if s.wms_current_qty > 0)
             pct = (occupied / len(slots) * 100.0) if slots else 0.0
-            cells.append(
-                {
-                    "compartment": c,
-                    "slots": slots,
-                    "on_hand": on_hand,
-                    "on_hand_label": "%.0f" % on_hand,
-                    "occupancy_pct": pct,
-                    "pct_label": "%.0f%%" % pct,
-                    "products": c.wms_product_ids,
-                    "color": _slot_color(pct, on_hand),
-                    # CSS grid-row/grid-column use `start / end`. A 2D
-                    # span (top=1, bottom=3, left=1, right=2) becomes
-                    # grid-row: 1 / 4; grid-column: 1 / 3.
-                    "row_start": c.wms_shelf_top or 1,
-                    "row_end": (c.wms_shelf_bottom or c.wms_shelf_top or 1) + 1,
-                    "col_start": c.wms_column_left or 1,
-                    "col_end": (c.wms_column_right or c.wms_column_left or 1) + 1,
-                }
-            )
+            base = {
+                "compartment": c,
+                "slots": slots,
+                "on_hand": on_hand,
+                "on_hand_label": "%.0f" % on_hand,
+                "occupancy_pct": pct,
+                "pct_label": "%.0f%%" % pct,
+                "products": c.wms_product_ids,
+                "color": _slot_color(pct, on_hand),
+                "head_name": c.name,
+                "title": "%s — %.0f units" % (c.complete_name, on_hand),
+            }
+            # Non-rectangular compartments persist their exact cells; render
+            # each as a 1x1 square so the true L/T/U shape shows instead of the
+            # misleading bounding-box rectangle. The anchor (first cell) carries
+            # the label/products; the rest are blank fillers.
+            shape = []
+            if c.wms_cells_json:
+                try:
+                    shape = json.loads(c.wms_cells_json)
+                except (ValueError, TypeError):
+                    shape = []
+            if shape:
+                for i, rc in enumerate(shape):
+                    sh, col = int(rc[0]), int(rc[1])
+                    entry = dict(base)
+                    entry.update(
+                        {"row_start": sh, "row_end": sh + 1, "col_start": col, "col_end": col + 1}
+                    )
+                    if i != 0:
+                        entry.update(
+                            {
+                                "head_name": "",
+                                "title": "",
+                                "on_hand_label": "",
+                                "on_hand": 0.0,
+                                "pct_label": "",
+                                "products": [],
+                            }
+                        )
+                    cells.append(entry)
+            else:
+                entry = dict(base)
+                entry.update(
+                    {
+                        # CSS grid-row/grid-column use `start / end`. A 2D span
+                        # (top=1, bottom=3, left=1, right=2) becomes
+                        # grid-row: 1 / 4; grid-column: 1 / 3.
+                        "row_start": c.wms_shelf_top or 1,
+                        "row_end": (c.wms_shelf_bottom or c.wms_shelf_top or 1) + 1,
+                        "col_start": c.wms_column_left or 1,
+                        "col_end": (c.wms_column_right or c.wms_column_left or 1) + 1,
+                    }
+                )
+                cells.append(entry)
 
         return request.render(
             "wms_reports.rack_grid_page",
@@ -105,6 +147,8 @@ class WmsRackGridController(http.Controller):
         """Whole-warehouse overview: every zone with its racks + floor zones,
         colour-coded by % full. Single page, mobile-friendly.
         """
+        if not request.env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
         Location = request.env["stock.location"].sudo()
         zones = Location.search([("wms_location_type", "=", "zone")], order="complete_name")
 

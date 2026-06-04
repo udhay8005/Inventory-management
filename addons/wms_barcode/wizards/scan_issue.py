@@ -204,13 +204,9 @@ class WmsScanIssue(models.TransientModel):
                 # picking_id.date_done so quants that came back via
                 # Scan Return aren't double-counted (returns are
                 # internal transfers, not outbound).
-                # Filter by picking.origin starting with "Barcode FIFO"
-                # — that's the marker every Scan Issue stamps on its
-                # resulting picking. We can't filter by destination
-                # usage anymore because the "Trust internal use"
-                # location has usage=internal, so an inbound-vs-
-                # outbound filter would also catch the outbound moves
-                # that go there. Filtering by origin is precise: only
+                # Filter by the immutable wms_is_scan_issue flag the Scan
+                # Issue wizard stamps on its picking — robust against any
+                # edit or collision in the free-text origin string. Only
                 # previous Scan Issue pickings count toward the rolling
                 # 24h total; Scan Receipt moves and manual stock
                 # adjustments don't.
@@ -222,11 +218,14 @@ class WmsScanIssue(models.TransientModel):
                             ("product_id", "=", product.id),
                             ("state", "=", "done"),
                             ("create_date", ">=", cutoff),
-                            ("picking_id.origin", "=ilike", "Barcode FIFO%"),
+                            ("picking_id.wms_is_scan_issue", "=", True),
                         ]
                     )
                 )
-                used_24h = sum(lines.mapped("quantity"))
+                # UoM-aware: quantity_product_uom is each line's done qty
+                # already expressed in the product's reference UoM, so a cap in
+                # (say) kilograms isn't breached by lines recorded in grams.
+                used_24h = sum(lines.mapped("quantity_product_uom"))
                 projected = used_24h + requested_qty
                 if projected > cap_daily:
                     raise UserError(
@@ -412,6 +411,9 @@ class WmsScanIssue(models.TransientModel):
                 "location_id": self.warehouse_id.lot_stock_id.id,
                 "location_dest_id": self.destination_id.id,
                 "origin": "Barcode FIFO issue",
+                # Immutable marker the 24h daily-cap counter filters on
+                # (robust replacement for matching the origin string).
+                "wms_is_scan_issue": True,
                 # Audit-trail fields — who took it, who authorised it,
                 # which keeper was on duty.
                 "wms_taken_by": (self.taken_by or "").strip(),

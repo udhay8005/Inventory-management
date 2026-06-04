@@ -29,7 +29,10 @@ class StockLocationCount(models.Model):
     )
     wms_days_since_count = fields.Integer(
         compute="_compute_wms_count_age",
-        store=True,
+        # NOT stored: a stored value only refreshes when a quant changes, so an
+        # untouched slot would keep yesterday's count forever. Computed on read
+        # it always reflects today; the overdue SQL view computes its own delta
+        # inline from the stored wms_last_counted date.
         help="Days since this slot was last counted or had stock movement. "
         "0 means it was touched today.",
     )
@@ -82,7 +85,7 @@ class WmsCycleCountDue(models.Model):
                      s.id AS location_id,
                      r.id AS rack_id,
                      s.wms_last_counted AS last_counted,
-                     s.wms_days_since_count AS days_since_count,
+                     (CURRENT_DATE - s.wms_last_counted::date) AS days_since_count,
                      COALESCE(SUM(q.quantity), 0) AS on_hand,
                      COUNT(DISTINCT q.product_id) AS distinct_products
                 FROM stock_location s
@@ -93,7 +96,7 @@ class WmsCycleCountDue(models.Model):
                 LEFT JOIN stock_quant q
                   ON q.location_id = s.id AND q.quantity > 0
                WHERE s.wms_location_type IN ('slot', 'floor')
-                 AND COALESCE(s.wms_days_since_count, 999) > 30
+                 AND COALESCE(CURRENT_DATE - s.wms_last_counted::date, 999) > 30
             GROUP BY s.id, r.id
         """
         )

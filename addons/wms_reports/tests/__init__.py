@@ -1,1 +1,9 @@
-from . import test_backup_audit, test_health_probe, test_quantity_integrity
+from . import (
+    test_acl_capability,
+    test_audit_reconcile,
+    test_backup_audit,
+    test_health_endpoint,
+    test_health_probe,
+    test_quantity_integrity,
+    test_rack_grid,
+)

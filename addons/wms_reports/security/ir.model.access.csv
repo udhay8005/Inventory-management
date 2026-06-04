@@ -7,8 +7,8 @@ access_wms_cycle_count_due_user,wms.cycle.count.due user,model_wms_cycle_count_d
 access_wms_tool_fleet_summary_user,wms.tool.fleet.summary user,model_wms_tool_fleet_summary,wms_location.group_wms_user,1,0,0,0
 access_wms_storekeeper_activity_mgr,wms.storekeeper.activity mgr,model_wms_storekeeper_activity,wms_location.group_wms_manager,1,0,0,0
 access_wms_expiry_alert_user,wms.expiry.alert user,model_wms_expiry_alert,wms_location.group_wms_user,1,0,0,0
-access_wms_audit_user,wms.audit user,model_wms_audit,wms_location.group_wms_user,1,1,1,0
+access_wms_audit_user,wms.audit user,model_wms_audit,wms_location.group_wms_can_submit_audit,1,1,1,0
 access_wms_audit_mgr,wms.audit mgr,model_wms_audit,wms_location.group_wms_manager,1,1,1,0
-access_wms_audit_line_user,wms.audit.line user,model_wms_audit_line,wms_location.group_wms_user,1,1,1,0
+access_wms_audit_line_user,wms.audit.line user,model_wms_audit_line,wms_location.group_wms_can_submit_audit,1,1,1,0
 access_wms_audit_line_mgr,wms.audit.line mgr,model_wms_audit_line,wms_location.group_wms_manager,1,1,1,1
 access_wms_backup_audit_mgr,wms.backup.audit mgr,model_wms_backup_audit,wms_location.group_wms_manager,1,0,0,0

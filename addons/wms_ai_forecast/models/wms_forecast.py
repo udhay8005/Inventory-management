@@ -91,7 +91,7 @@ class WmsForecastHistory(models.Model):
     _order = "trained_at desc"
 
     product_id = fields.Many2one("product.product", required=True, index=True)
-    trained_at = fields.Datetime(default=fields.Datetime.now)
+    trained_at = fields.Datetime(default=fields.Datetime.now, index=True)
     model_name = fields.Char()
     predicted_qty = fields.Float()
     rmse = fields.Float()

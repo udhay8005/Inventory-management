@@ -117,6 +117,32 @@ class TestScanConcurrency(TransactionCase):
         self.assertTrue(wiz.picking_id)
         self.assertAlmostEqual(self._on_hand(), start - 2.0, places=3)
 
+    # ---- Daily cap counts via the immutable flag, not the origin string -
+    def test_scan_issue_picking_carries_immutable_flag(self):
+        wiz = self._new_issue(2.0)
+        wiz.action_validate()
+        self.assertTrue(
+            wiz.picking_id.wms_is_scan_issue,
+            "Scan Issue picking must carry the immutable daily-cap marker",
+        )
+
+    def test_daily_cap_ignores_unflagged_pickings(self):
+        """The cap counts only flagged Scan Issue pickings. A picking that
+        merely shares the 'Barcode FIFO' origin but lacks the flag (an edit, a
+        collision, a non-wizard transfer) must NOT count - the old origin-based
+        counter would have wrongly counted it."""
+        self.product.product_tmpl_id.wms_daily_cap = 5.0
+        wiz1 = self._new_issue(3.0)
+        wiz1.action_validate()  # 3 issued
+        # Strip the marker to simulate a same-origin picking with no flag.
+        wiz1.picking_id.wms_is_scan_issue = False
+        wiz2 = self._new_issue(3.0)
+        wiz2.action_validate()  # projected 0+3 < 5 -> allowed
+        self.assertTrue(
+            wiz2.picking_id,
+            "unflagged historical issues must not count toward the daily cap",
+        )
+
 
 @tagged("post_install", "-at_install", "wms", "wms_concurrency")
 class TestReceiptConcurrency(TransactionCase):
