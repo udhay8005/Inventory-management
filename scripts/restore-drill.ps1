@@ -72,6 +72,11 @@ $ConfPath    = Join-Path $ProjectRoot 'config\odoo.native.conf'
 $LogDir      = Join-Path $ProjectRoot '.runtime\logs'
 $DrillLog    = Join-Path $LogDir 'restore-drill.log'
 
+# Track whether WE set PGPASSWORD (from the conf) so the finally only wipes the
+# value we introduced - never a PGPASSWORD the caller already had in their
+# environment before invoking the drill.
+$script:WeSetPgPassword = $false
+
 # Exit codes (used both by Task Scheduler and by humans grepping logs).
 $EXIT_OK              = 0
 $EXIT_BACKUP_MISSING  = 1
@@ -216,7 +221,10 @@ if (Test-Path $ConfPath) {
     }
     if (-not $env:PGPASSWORD) {
         $m = Select-String -Path $ConfPath -Pattern '^db_password\s*=\s*(.+)$' | Select-Object -First 1
-        if ($m) { $env:PGPASSWORD = $m.Matches.Groups[1].Value.Trim() }
+        if ($m) {
+            $env:PGPASSWORD = $m.Matches.Groups[1].Value.Trim()
+            $script:WeSetPgPassword = $true
+        }
     }
 }
 if (-not $DbHost) { $DbHost = 'localhost' }
@@ -409,7 +417,11 @@ finally {
     if (Test-Path -LiteralPath $decrypted) {
         Remove-Item -LiteralPath $decrypted -Force -ErrorAction SilentlyContinue
     }
-    Remove-Item env:PGPASSWORD -ErrorAction SilentlyContinue
+    # Only wipe PGPASSWORD if WE set it from the conf; never clobber a value the
+    # caller had in their own environment before invoking the drill.
+    if ($script:WeSetPgPassword) {
+        Remove-Item env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
 }
 
 exit $exitCode
