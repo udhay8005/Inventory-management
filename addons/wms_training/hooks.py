@@ -16,6 +16,7 @@ is stripped before the correct block is appended. It only APPENDS — it never
 rewrites the admin-authored article text.
 """
 import logging
+import re
 
 from markupsafe import Markup
 
@@ -219,6 +220,32 @@ def apply_visual_enrichment(env):
     return enriched
 
 
+def apply_tour_action_links(env):
+    """Resolve /odoo/action-PENDING-<xmlid> placeholders in the guided-tour
+    articles to live /odoo/action-<id> links (Critical #6).
+
+    Numeric action ids are DB-specific and break on a fresh install; the tours
+    carry xmlid placeholders that this resolves at install/upgrade. Idempotent:
+    only rewrites bodies that still contain a placeholder.
+    """
+    token = re.compile(r"/odoo/action-PENDING-([\w.]+)")
+
+    def _resolve(match):
+        act = env.ref(match.group(1), raise_if_not_found=False)
+        return ("/odoo/action-%d" % act.id) if act else match.group(0)
+
+    arts = env["wms.help.article"].search([("body", "like", "/odoo/action-PENDING-")])
+    fixed = 0
+    for art in arts:
+        new_body = token.sub(_resolve, art.body or "")
+        if new_body != (art.body or ""):
+            art.body = new_body
+            fixed += 1
+    _logger.info("Critical #6: resolved guided-tour action links on %s article(s)", fixed)
+    return fixed
+
+
 def post_init_hook(env):
-    """Run the visual enrichment when the module is freshly installed."""
+    """Fresh install: apply visual enrichment + resolve guided-tour links."""
     apply_visual_enrichment(env)
+    apply_tour_action_links(env)

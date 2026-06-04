@@ -1,1 +1,1 @@
-from . import test_help_video
+from . import test_help_video, test_tour_links

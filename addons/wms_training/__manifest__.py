@@ -1,6 +1,6 @@
 {
     "name": "WMS — Training & Help Center",
-    "version": "19.0.1.5.0",
+    "version": "19.0.1.6.0",
     "summary": "Beginner-friendly in-app help: searchable Help Center, role training, "
     "terminology, workflow tutorials, training videos, and a Beginner Mode toggle.",
     "depends": ["wms_location", "web"],

@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- noupdate="0": these guided tours are content we expect to refine over
-         time, so they are re-applied (improved) on every module upgrade. -->
-    <data noupdate="0">
+    <!-- noupdate="1": tour bodies carry /odoo/action-PENDING-<xmlid> link
+         placeholders that hooks.apply_tour_action_links resolves to live
+         action ids at install (Critical #6). Load once so the resolved links
+         persist across upgrades; bump the version + re-run the resolver to
+         refine tour content later. -->
+    <data noupdate="1">
 
         <!-- ============================================================
              1. First-Login Tour (everyone)
@@ -25,13 +28,13 @@
                     <h3>The 4 stops</h3>
                     <ol>
                     <li><b>Open the Help Center</b> — this is your library. Any word you don't know, search it here.<br/>
-                        <a href="/odoo/action-476" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_training.action_wms_help_center" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Open Getting Started</b> — your friendly home page with the lessons picked just for your role.<br/>
-                        <a href="/odoo/action-477" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_training.action_wms_getting_started" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>See the warehouse map (Slots)</b> — every shelf and spot where stock can live. Have a scroll; you don't need to change anything.<br/>
-                        <a href="/odoo/action-426" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_location.action_wms_slots" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>See a live report: Slot Occupancy</b> — a real dashboard showing how full the warehouse is right now.<br/>
-                        <a href="/odoo/action-449" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_occupancy" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
                     <hr/>
                     <p><b>That's the lay of the land.</b> Now open your role tour below.</p>
@@ -62,18 +65,18 @@
                     <h3>The daily loop</h3>
                     <ol>
                     <li><b>Receive stock</b> — a delivery arrives. Scan each item, tick the quality check, pick your name, and validate.<br/>
-                        <a href="/odoo/action-440" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_barcode.action_wms_scan_receipt" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Putaway</b> — give the new stock its home. The system suggests a slot; here you can see all the Slots and how stock sits in them.<br/>
-                        <a href="/odoo/action-426" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_location.action_wms_slots" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Issue stock (FIFO)</b> — hand stock out. The wizard tells you the exact slot to take from, oldest first.<br/>
-                        <a href="/odoo/action-442" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_barcode.action_wms_scan_issue" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
                     <p style="text-align:center"><img src="/wms_training/static/img/diagrams/fifo-issue.svg" alt="FIFO issue: the oldest stock leaves first" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
                     <ol start="4">
                     <li><b>Returns</b> — a borrowed tool or unused spare comes back. Scan it back in so it's available again.<br/>
-                        <a href="/odoo/action-441" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_barcode.action_wms_scan_return" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Report damage</b> — found something broken, expired, or spoiled? Move it off the shelf so nobody issues it by mistake.<br/>
-                        <a href="/odoo/action-446" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_repair_damage.action_wms_damage" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
                     <p style="text-align:center"><img src="/wms_training/static/img/diagrams/damage-repair.svg" alt="Damage and repair flow" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
                     <hr/>
@@ -104,24 +107,24 @@
                     <p style="text-align:center"><img src="/wms_training/static/img/diagrams/warehouse-structure.svg" alt="Warehouse structure: Zone to Rack to Compartment to Slot" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
                     <ol>
                     <li><b>Create a Zone</b> — a Zone is a room or area (Pharmacy, Feed Store). Start here so your racks have a home.<br/>
-                        <a href="/odoo/action-432" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_location.action_wms_zone_generator" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Create a Rack</b> — a Rack is one shelving unit, laid out as a grid of shelves and columns. The generator builds it and its slots for you.<br/>
-                        <a href="/odoo/action-429" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_location.action_wms_rack_generator" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Onboard products</b> — tell the system what the trust buys and uses (feed, medicine, ghee, tools), each with a clear SKU.<br/>
-                        <a href="/odoo/action-465" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_barcode.action_wms_product_onboard" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
                     <h3>Part 2 — Run the warehouse</h3>
                     <p style="text-align:center"><img src="/wms_training/static/img/diagrams/roles-permissions.svg" alt="Roles and permissions: Manager, Store Keeper, and capability switches" style="width:100%;max-width:600px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
                     <ol start="4">
                     <li><b>Manage the storekeeper roster</b> — add one row per real person so wizards can record who was on duty.<br/>
-                        <a href="/odoo/action-439" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_barcode.action_wms_storekeeper" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Review reports</b> — Slot Occupancy shows you, at a glance, how full the warehouse is.<br/>
-                        <a href="/odoo/action-449" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_occupancy" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
                     <p style="text-align:center"><img src="/wms_training/static/img/diagrams/backup-restore-health.svg" alt="Backup, restore drill, and health check" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
                     <ol start="6">
                     <li><b>Check backups &amp; health</b> — the safety net. Confirm a recent backup ran and the weekly restore drill is passing.<br/>
-                        <a href="/odoo/action-474" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_backup_audit" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
                     <hr/>
                     <p><b>That's the whole job — build and run.</b> For the reasoning behind each part, read:</p>
@@ -151,15 +154,15 @@
                     <h3>The 5 reports worth knowing</h3>
                     <ol>
                     <li><b>Slot Occupancy</b> — how full the warehouse is, slot by slot. Your best first glance.<br/>
-                        <a href="/odoo/action-449" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_occupancy" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Movement history</b> — every receipt, issue, and return: what moved, when, and who handled it.<br/>
-                        <a href="/odoo/action-452" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_movement_history" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Oldest stock / FIFO</b> — what has been sitting longest, so nothing is forgotten at the back of a rack.<br/>
-                        <a href="/odoo/action-448" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_oldest_stock" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Expiry alerts</b> — medicine, feed, and fluids that are close to their expiry date.<br/>
-                        <a href="/odoo/action-466" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_expiry_alert" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     <li><b>Audit history</b> — the inventory audits (counts) and how they turned out.<br/>
-                        <a href="/odoo/action-467" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_audit" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
                     <hr/>
                     <p><b>That's everything you need to keep an eye on the store.</b> To get more from the reports, read:</p>
