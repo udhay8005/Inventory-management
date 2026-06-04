@@ -36,6 +36,10 @@ class WmsRackGridController(http.Controller):
 
     @http.route("/wms/rack/<int:rack_id>/grid", type="http", auth="user", website=False)
     def rack_grid(self, rack_id, **kw):
+        # Gate on WMS membership: the handler sudo()-reads all stock, so a
+        # non-WMS authenticated user must not be able to enumerate racks/stock.
+        if not request.env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
         rack = request.env["stock.location"].browse(rack_id).sudo().exists()
         if not rack or rack.wms_location_type != "rack":
             return request.not_found()
@@ -143,6 +147,8 @@ class WmsRackGridController(http.Controller):
         """Whole-warehouse overview: every zone with its racks + floor zones,
         colour-coded by % full. Single page, mobile-friendly.
         """
+        if not request.env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
         Location = request.env["stock.location"].sudo()
         zones = Location.search([("wms_location_type", "=", "zone")], order="complete_name")
 

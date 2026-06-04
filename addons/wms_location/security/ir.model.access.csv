@@ -1,5 +1,5 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_wms_rack_generator_user,wms.rack.generator user,model_wms_rack_generator,group_wms_manager,1,1,1,1
-access_wms_floor_zone_generator,wms.floor.zone.generator manager,model_wms_floor_zone_generator,group_wms_manager,1,1,1,1
-access_wms_zone_generator,wms.zone.generator manager,model_wms_zone_generator,group_wms_manager,1,1,1,1
-access_wms_move_to_zone,wms.move.to.zone manager,model_wms_move_to_zone,group_wms_manager,1,1,1,1
+access_wms_rack_generator_user,wms.rack.generator user,model_wms_rack_generator,wms_location.group_wms_manager,1,1,1,0
+access_wms_floor_zone_generator,wms.floor.zone.generator manager,model_wms_floor_zone_generator,wms_location.group_wms_manager,1,1,1,0
+access_wms_zone_generator,wms.zone.generator manager,model_wms_zone_generator,wms_location.group_wms_manager,1,1,1,0
+access_wms_move_to_zone,wms.move.to.zone manager,model_wms_move_to_zone,wms_location.group_wms_manager,1,1,1,0
