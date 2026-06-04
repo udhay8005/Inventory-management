@@ -336,6 +336,10 @@ class WmsAuditLine(models.Model):
         string="Counted",
         help="What the Store Keeper actually saw on the shelf.",
     )
+    _counted_qty_nonneg = models.Constraint(
+        "CHECK(counted_qty >= 0)",
+        "Counted quantity cannot be negative.",
+    )
     variance = fields.Float(
         compute="_compute_variance",
         store=True,
