@@ -248,31 +248,36 @@ class WmsAudit(models.Model):
             rec.reviewed_at = fields.Datetime.now()
             rec.reviewed_by = self.env.user
 
-            # Apply variances as stock inventory adjustments. Using
-            # the standard stock.quant write so the move history
-            # records who adjusted what.
-            for line in rec.line_ids:
-                if line.counted_qty == line.expected_qty:
-                    continue
-                quant = (
-                    self.env["stock.quant"]
-                    .sudo()
-                    .search(
-                        [
-                            ("product_id", "=", line.product_id.id),
-                            ("location_id", "=", line.location_id.id),
-                        ],
-                        limit=1,
-                    )
+            # Apply variances as stock inventory adjustments. HIGH fix: lock
+            # the audited products so a concurrent Scan Issue / Receipt cannot
+            # race this adjustment, and apply the audit's DELTA
+            # (counted - expected, measured at count time) to the CURRENT live
+            # quantity - NOT a blind overwrite to counted_qty. A blind
+            # overwrite would silently erase any issue/receipt that legitimately
+            # happened during the (possibly multi-day) audit window.
+            variance_lines = rec.line_ids.filtered(lambda ln: ln.counted_qty != ln.expected_qty)
+            prod_ids = sorted(set(variance_lines.mapped("product_id").ids))
+            if prod_ids:
+                self.env.cr.execute(
+                    "SELECT id FROM product_product WHERE id IN %s ORDER BY id FOR UPDATE",
+                    (tuple(prod_ids),),
                 )
+            Quant = self.env["stock.quant"].sudo()
+            for line in variance_lines:
+                quant = Quant.search(
+                    [
+                        ("product_id", "=", line.product_id.id),
+                        ("location_id", "=", line.location_id.id),
+                    ],
+                    limit=1,
+                )
+                delta = line.counted_qty - line.expected_qty
                 if quant:
                     quant.with_context(inventory_mode=True).write(
-                        {
-                            "quantity": line.counted_qty,
-                        }
+                        {"quantity": quant.quantity + delta}
                     )
                 elif line.counted_qty > 0:
-                    self.env["stock.quant"].sudo().with_context(inventory_mode=True).create(
+                    Quant.with_context(inventory_mode=True).create(
                         {
                             "product_id": line.product_id.id,
                             "location_id": line.location_id.id,
