@@ -1,14 +1,21 @@
 name: Release
 
-# Cuts a GitHub release whenever the version bumps on main.
-# Requires the lead commit to update one of the module manifests'
-# `version` keys; the workflow detects the change and tags accordingly.
+# Single source of truth = the pushed git tag.
+#
+# Pushing a production release tag (e.g. `v19.0.10.0.0`) publishes a GitHub
+# Release for THAT exact tag, with an auto-generated changelog of the commits
+# since the previous tag. Module-manifest `version` bumps NO LONGER create
+# releases — only deliberately-pushed release tags do. This keeps the GitHub
+# "Releases" page an accurate mirror of the production release line and stops
+# the highest module version (e.g. wms_location 19.0.3.6.0) from masquerading
+# as the latest release.
+#
+#   Cut a release:  git tag -a v19.0.11.0.0 -m "..." && git push origin v19.0.11.0.0
 
 on:
   push:
-    branches: [main]
-    paths:
-      - "addons/**/__manifest__.py"
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+.[0-9]+.[0-9]+"   # v19.0.<X>.<Y>.<Z> release tags only
 
 permissions:
   contents: write
@@ -21,54 +28,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect manifest version
-        id: ver
-        run: |
-          # Pick the highest version across all addons — simplest policy.
-          ver=$(grep -h -oE '"19\.0\.[0-9]+\.[0-9]+\.[0-9]+"' addons/*/__manifest__.py \
-                | tr -d '"' | sort -V | tail -1)
-          if [[ -z "$ver" ]]; then
-            echo "No 19.0.x version found in any manifest."
-            exit 0
-          fi
-          echo "version=v${ver}" >> $GITHUB_OUTPUT
-
-      - name: Skip if tag already exists
-        id: skip
-        run: |
-          if git rev-parse "${{ steps.ver.outputs.version }}" >/dev/null 2>&1; then
-            echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Tag ${{ steps.ver.outputs.version }} already exists."
-          else
-            echo "skip=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Generate changelog
-        if: steps.skip.outputs.skip == 'false'
+      - name: Build changelog from the previous tag
         id: changelog
         run: |
-          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [[ -z "$last_tag" ]]; then
-            range=""
-          else
-            range="${last_tag}..HEAD"
-          fi
-          changelog=$(git log $range --pretty=format:"- %s (%h)" --no-merges)
-          # GitHub Actions multi-line output
+          tag="${GITHUB_REF_NAME}"
+          prev=$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || echo "")
+          if [ -n "$prev" ]; then range="${prev}..${tag}"; else range="${tag}"; fi
           {
-            echo "body<<EOF"
-            echo "## Changes since ${last_tag:-initial}"
+            echo "body<<__RELEASE_EOF__"
+            echo "## Changes in ${tag}${prev:+ (since ${prev})}"
             echo ""
-            echo "$changelog"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
+            git log "$range" --no-merges --pretty=format:"- %s (%h)"
+            echo ""
+            echo ""
+            echo "_Full closure matrix: docs/REMEDIATION-CLOSURE.md_"
+            echo "__RELEASE_EOF__"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Create release
-        if: steps.skip.outputs.skip == 'false'
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.ver.outputs.version }}
-          name: WMS ${{ steps.ver.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          name: WMS ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.body }}
+          make_latest: "true"
           draft: false
           prerelease: false
