@@ -144,6 +144,15 @@ Inventory_mngt/
 
 ## Read the docs
 
+**Start here — onboarding & operations:**
+
+- 📘 [Installation & Setup Guide](docs/INSTALLATION-GUIDE.md) — deploy from scratch (15 phases, with checkpoints + troubleshooting)
+- ⚡ [Admin Quick Start](docs/ADMIN-QUICK-START.md) — the ~15-minute admin path
+- 🧰 [Store Keeper Quick Start](docs/STOREKEEPER-QUICK-START.md) — the ~10-minute operator path
+- ✅ [Production Readiness Guide](docs/PRODUCTION-READINESS.md) — go-live sign-off
+- 💾 [Backup & Recovery Guide](docs/18-restore-drill.md) — encrypted backups + weekly restore drill
+- 🎓 [Training Guide](docs/21-training-system.md) — the in-app Help & Training academy
+
 Architecture, design notes, and operational guides:
 
 - [`docs/01-architecture.md`](docs/01-architecture.md) — stack & layering
