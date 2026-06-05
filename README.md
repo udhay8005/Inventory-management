@@ -1,5 +1,9 @@
 # Inventory_mngt — Odoo CE 19 WMS
 
+[![CI](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml/badge.svg)](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml)
+[![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
+[![Latest release](https://img.shields.io/github/v/release/udhay8005/Inventory-management?sort=semver)](https://github.com/udhay8005/Inventory-management/releases/latest)
+
 Production-ready Warehouse Management System on Odoo 19 Community Edition,
 purpose-built for an internal-stock trust (no sales, no invoices, no money).
 Runs **natively on Windows** — no Docker required.
