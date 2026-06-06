@@ -55,6 +55,8 @@
                                 </h6>
                                 <field name="qc_passed"/>
                                 <field name="qc_notes" placeholder="Anything unusual? (optional)"/>
+                                <field name="photo" widget="image"
+                                       class="oe_avatar" options="{'size': [0, 180]}"/>
                             </div>
                             <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">

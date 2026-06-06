@@ -60,8 +60,22 @@ System Parameters** (Manager only).
 |---|---|---|
 | `wms_reports.undo_minutes` | `15` | How long after a Scan Issue the orange **Undo this transfer** button stays available. The undo posts a compensating internal transfer (it never deletes anything) and is blocked once the stock has moved on. Set to `0` to switch Undo off entirely. |
 | `wms_location.enforce_capacity` | `0` (off) | When `1`, a putaway that would push an internal location's on-hand over its **Capacity (units)** is refused with a clear error and rolled back — nothing is forced. With it off, capacity stays a soft hint shown only in the occupancy report. Set capacities per slot on the location form before turning this on. |
+| `wms_reports.alert_email` | `0` (off) | The daily **low-stock alert** always reaches managers in-app (Discuss Inbox / systray). Set this to `1` to ALSO email them (best-effort — needs an outgoing mail server; a missing one never breaks the alert). |
 
-Changing either takes effect immediately — no restart needed.
+Changing any of these takes effect immediately — no restart needed.
+
+### Automatic alerts (no setup needed)
+
+Three crons quietly watch the warehouse and notify WMS managers **in-app** only
+when something needs attention (all use `message_notify`, so they land in the
+manager's Discuss Inbox):
+
+- **Daily low-stock alert** — products at or below their reorder level.
+- **Daily backup-freshness check** — a stale backup or restore drill.
+- **Weekly expiry digest** — perishables expired or expiring within 30 days.
+
+Photos: Scan Receipt, Scan Issue, and Damage all accept an optional photo
+(the camera opens on a phone) that is attached to the record for the audit trail.
 
 ## Common operational issues
 

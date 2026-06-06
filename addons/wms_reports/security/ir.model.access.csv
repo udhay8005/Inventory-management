@@ -13,3 +13,5 @@ access_wms_audit_line_user,wms.audit.line user,model_wms_audit_line,wms_location
 access_wms_audit_line_mgr,wms.audit.line mgr,model_wms_audit_line,wms_location.group_wms_manager,1,1,1,1
 access_wms_backup_audit_mgr,wms.backup.audit mgr,model_wms_backup_audit,wms_location.group_wms_manager,1,0,0,0
 access_wms_self_diagnostics_mgr,wms.self.diagnostics mgr,model_wms_self_diagnostics,wms_location.group_wms_manager,1,1,1,1
+access_wms_stock_value_mgr,wms.stock.value.report mgr,model_wms_stock_value_report,wms_location.group_wms_manager,1,0,0,0
+access_wms_consumption_value_mgr,wms.consumption.value.report mgr,model_wms_consumption_value_report,wms_location.group_wms_manager,1,0,0,0

@@ -41,6 +41,22 @@ Store Keeper or read-only user who guesses the URL gets a 404. Counts are read w
 `search_count` wrapped in a guard, so a missing optional model can never break the
 page. Smoke-tested end-to-end by `tests/test_dashboard.py`.
 
+## Cost / value reports (`wms.*.value.report`)
+
+Two read-only SQL views that put a money figure on the warehouse, plus a
+product-centric timeline. Manager-only, under **Reports**.
+
+| Report | Question it answers | How |
+|---|---|---|
+| **Stock Value** | "How much capital is on the shelves right now?" | unit cost × on-hand, counting **storage** locations only (slots / floor / lot-stock children) — the *Trust internal use* sink is excluded so already-consumed goods don't inflate the figure. |
+| **Consumption Value** | "What did we consume, by value, this month?" | unit cost × issued qty, per month. Counts only done Scan Issues; an issue that was **Undone** nets to zero. |
+| **Product Lifecycle** | "What's the whole history of this item?" | reuses the Store-Keeper activity log grouped by product — received, issued, returned, damaged, repaired, newest first. |
+
+Unit cost comes from `product.standard_price`, a company-dependent JSONB field;
+the views read the right company's cost in SQL (`standard_price ->> company_id`)
+so value stays aggregatable in pivot and graph. All three views are
+`_auto = False` — no table to migrate, refreshed at module upgrade.
+
 ## Printable PDFs (`reports/*.xml`)
 
 - Slot occupancy by rack (one page per rack)

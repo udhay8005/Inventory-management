@@ -8,6 +8,8 @@ from . import (
     wms_product_stock_report,
     wms_reorder_summary,
     wms_self_diagnostics,
+    wms_stock_alert,
     wms_storekeeper_activity,
     wms_tool_fleet_summary,
+    wms_value_reports,
 )
