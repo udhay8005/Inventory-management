@@ -13,6 +13,19 @@
             <field name="inherit_id" ref="stock.view_picking_form"/>
             <field name="arch" type="xml">
                 <!--
+                    Undo button (Batch 4). Visible only while this WMS transfer
+                    can still be safely reversed; one click posts a compensating
+                    internal move that puts the stock back. A confirm dialog
+                    guards against an accidental press.
+                -->
+                <xpath expr="//header" position="inside">
+                    <field name="wms_undo_available" invisible="1"/>
+                    <button name="action_wms_undo" type="object"
+                            string="Undo this transfer" class="btn-warning"
+                            invisible="not wms_undo_available"
+                            confirm="Undo this transfer? A new compensating move will put the stock back where it came from. This cannot itself be undone."/>
+                </xpath>
+                <!--
                     Recent-keeper-edit warning banner. Inserted right
                     before the sheet so it sits above all fields and
                     is the first thing the Admin reads when they open
@@ -33,6 +46,8 @@
                         <field name="wms_taken_by"/>
                         <field name="wms_ordered_by"/>
                         <field name="wms_storekeeper_id"/>
+                        <field name="wms_reversed_by_id" readonly="1"
+                               invisible="not wms_reversed_by_id"/>
                     </group>
                 </xpath>
             </field>

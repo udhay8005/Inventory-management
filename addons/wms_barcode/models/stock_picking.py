@@ -1,5 +1,6 @@
+from markupsafe import Markup
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 
 class StockPicking(models.Model):
@@ -70,6 +71,166 @@ class StockPicking(models.Model):
         "while enforcing the invariant on every new row. Admin-readable "
         "filter target: search for wms_audit_legacy=True to review.",
     )
+
+    # ---- Undo window (Batch 4) -------------------------------------------
+    # A storekeeper who issues the wrong item / quantity can reverse it with
+    # ONE click for a short window, WITHOUT deleting anything: the undo posts
+    # a compensating internal transfer that puts the stock back. The window
+    # is the System Parameter `wms_reports.undo_minutes` (default 15; 0 = off).
+    wms_is_undo = fields.Boolean(
+        string="Undo transfer",
+        default=False,
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Internal: True on the compensating transfer created by the Undo "
+        "button. Such a transfer is itself never undoable.",
+    )
+    wms_reversed_by_id = fields.Many2one(
+        "stock.picking",
+        string="Undone by",
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Set on the original picking once it has been undone — points at "
+        "the compensating transfer. Its presence blocks a second undo.",
+    )
+    wms_undo_available = fields.Boolean(
+        string="Can undo",
+        compute="_compute_wms_undo_available",
+        help="True only while this WMS transfer can still be safely reversed: "
+        "it is done, both endpoints are internal, it has not already been "
+        "undone, and it is inside the undo window.",
+    )
+
+    @api.depends(
+        "state",
+        "date_done",
+        "wms_reversed_by_id",
+        "wms_is_undo",
+        "origin",
+        "move_line_ids.quantity",
+        "move_line_ids.location_id",
+        "move_line_ids.location_dest_id",
+    )
+    def _compute_wms_undo_available(self):
+        try:
+            minutes = int(
+                self.env["ir.config_parameter"].sudo().get_param("wms_reports.undo_minutes", "15")
+                or 15
+            )
+        except (TypeError, ValueError):
+            minutes = 15
+        now = fields.Datetime.now()
+        for p in self:
+            ok = False
+            if (
+                minutes > 0
+                and p.state == "done"
+                and p.date_done
+                and not p.wms_reversed_by_id
+                and not p.wms_is_undo
+                and (p.origin or "").startswith("Barcode")
+            ):
+                within = (now - p.date_done).total_seconds() <= minutes * 60
+                lines = p.move_line_ids.filtered(lambda ml: ml.quantity)
+                internal_only = bool(lines) and all(
+                    ml.location_id.usage == "internal" and ml.location_dest_id.usage == "internal"
+                    for ml in lines
+                )
+                ok = bool(within and internal_only)
+            p.wms_undo_available = ok
+
+    def action_wms_undo(self):
+        """Reverse this WMS transfer with a compensating internal move.
+
+        Nothing is deleted or edited: a brand-new transfer moves the stock
+        from where it ended up back to where it came from. Safety rails:
+          * a row lock on this picking serialises concurrent undo clicks,
+          * we re-check `wms_undo_available` after locking (window / state),
+          * the reverse must fully reserve or the whole thing aborts (the
+            stock may have moved on) — never forcing a phantom move,
+          * `wms_reversed_by_id` is set so a second undo is impossible.
+        """
+        self.ensure_one()
+        # Serialise concurrent undo attempts on this exact picking.
+        self.env.cr.execute("SELECT id FROM stock_picking WHERE id = %s FOR UPDATE", (self.id,))
+        if not self.wms_undo_available:
+            raise UserError(
+                _(
+                    "This transfer can no longer be undone. It may have already "
+                    "been undone, the stock may have moved on, or the undo time "
+                    "window has passed. Nothing was changed."
+                )
+            )
+        lines = self.move_line_ids.filtered(lambda ml: ml.quantity)
+        # Lock the products so a concurrent Scan Issue can't race the reversal.
+        product_ids = sorted(set(lines.mapped("product_id").ids))
+        if product_ids:
+            self.env.cr.execute(
+                "SELECT id FROM product_product WHERE id IN %s ORDER BY id FOR UPDATE",
+                (tuple(product_ids),),
+            )
+        warehouse = self.picking_type_id.warehouse_id
+        ptype = warehouse.int_type_id if warehouse else self.picking_type_id
+        reverse = self.env["stock.picking"].create(
+            {
+                "picking_type_id": ptype.id,
+                "location_id": self.location_dest_id.id,
+                "location_dest_id": self.location_id.id,
+                # NOT 'Barcode...' so the audit-triplet CHECK doesn't require a
+                # storekeeper; we copy the original's keeper anyway for the trail.
+                "origin": "Undo: %s" % (self.name or ""),
+                "wms_is_undo": True,
+                "wms_storekeeper_id": self.wms_storekeeper_id.id,
+            }
+        )
+        for ml in lines:
+            self.env["stock.move"].create(
+                {
+                    "description_picking": "Undo %s" % (ml.product_id.display_name),
+                    "product_id": ml.product_id.id,
+                    "product_uom_qty": ml.quantity,
+                    "product_uom": ml.product_uom_id.id,
+                    "picking_id": reverse.id,
+                    # Reverse direction: from where it ended up, back to source.
+                    "location_id": ml.location_dest_id.id,
+                    "location_dest_id": ml.location_id.id,
+                }
+            )
+        reverse.action_confirm()
+        reverse.action_assign()
+        if reverse.move_ids.filtered(lambda m: m.state != "assigned"):
+            raise UserError(
+                _(
+                    "Cannot undo: the stock is no longer where it was put, so it "
+                    "cannot be moved back (it may have been issued again). Nothing "
+                    "was changed."
+                )
+            )
+        for ml in reverse.move_ids.move_line_ids:
+            if not ml.quantity:
+                ml.quantity = ml.quantity_product_uom or ml.move_id.product_uom_qty
+        reverse.button_validate()
+        self.wms_reversed_by_id = reverse.id
+        self.message_post(
+            body=Markup("<p><b>Undone.</b> Reversed by transfer <b>%s</b>.</p>")
+            % (reverse.name or ""),
+            subject="Undo",
+            message_type="notification",
+        )
+        reverse.message_post(
+            body=Markup("<p><b>Undo</b> of transfer <b>%s</b> — stock moved back.</p>")
+            % (self.name or ""),
+            subject="Undo",
+            message_type="notification",
+        )
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "stock.picking",
+            "res_id": reverse.id,
+            "view_mode": "form",
+        }
 
     # Declarative DB constraint (Odoo 19 idiom — the old list-of-tuples
     # `_sql_constraints` is silently ignored on inherited models in 19).

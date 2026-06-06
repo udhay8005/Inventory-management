@@ -51,6 +51,18 @@ re-runs, so re-installing `wms_fifo` will never duplicate the index.
 - Enable the `ai_worker` profile so statsmodels doesn't live in Odoo's RAM.
 - Cap `limit_memory_hard` lower; Odoo recycles the worker.
 
+## Optional safety toggles (System Parameters)
+
+Both are off/conservative by default. Set them under **Settings → Technical →
+System Parameters** (Manager only).
+
+| Key | Default | Effect |
+|---|---|---|
+| `wms_reports.undo_minutes` | `15` | How long after a Scan Issue the orange **Undo this transfer** button stays available. The undo posts a compensating internal transfer (it never deletes anything) and is blocked once the stock has moved on. Set to `0` to switch Undo off entirely. |
+| `wms_location.enforce_capacity` | `0` (off) | When `1`, a putaway that would push an internal location's on-hand over its **Capacity (units)** is refused with a clear error and rolled back — nothing is forced. With it off, capacity stays a soft hint shown only in the occupancy report. Set capacities per slot on the location form before turning this on. |
+
+Changing either takes effect immediately — no restart needed.
+
 ## Common operational issues
 
 | Symptom | First check |

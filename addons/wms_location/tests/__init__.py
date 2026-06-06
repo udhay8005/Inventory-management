@@ -1,6 +1,7 @@
 from . import (
     test_barcode_format,
     test_barcode_integrity,
+    test_capacity,
     test_location,
     test_location_delete,
     test_polyomino,
