@@ -159,6 +159,8 @@ class WmsRackGridController(http.Controller):
                 return 0
 
         snap = env["wms.backup.audit"].sudo()._health_snapshot()
+        _bk = snap.get("last_backup_age_hours")
+        last_backup_label = ("%s h ago" % _bk) if _bk is not None else "never"
         total_products = sc("product.product", [("is_storable", "=", True), ("active", "=", True)])
         on_hand = sum(
             Quant.search([("location_id.usage", "=", "internal"), ("quantity", ">", 0)]).mapped(
@@ -205,6 +207,7 @@ class WmsRackGridController(http.Controller):
             "wms_reports.dashboard_page",
             {
                 "snap": snap,
+                "last_backup_label": last_backup_label,
                 "total_products": total_products,
                 "on_hand": "%.0f" % on_hand,
                 "loc_counts": loc_counts,

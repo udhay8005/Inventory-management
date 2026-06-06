@@ -63,7 +63,7 @@
                                 <div class="kv"><span>Database</span>
                                     <span t-esc="'reachable' if snap.get('db_reachable') else 'UNREACHABLE'"/></div>
                                 <div class="kv"><span>Last backup</span>
-                                    <span><t t-esc="snap.get('last_backup_age_hours')"/> h ago</span></div>
+                                    <span t-esc="last_backup_label"/></div>
                                 <t t-foreach="snap.get('warnings') or []" t-as="w">
                                     <div class="warnrow">&#9888; <span t-esc="w"/></div>
                                 </t>
