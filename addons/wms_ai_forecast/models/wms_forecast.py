@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class WmsForecast(models.Model):
@@ -31,6 +31,24 @@ class WmsForecast(models.Model):
     lead_time_days = fields.Integer(readonly=True)
     safety_stock = fields.Float(readonly=True)
     note = fields.Char(readonly=True)
+    unit_cost = fields.Float(
+        string="Unit cost", compute="_compute_stock_value", store=True, readonly=True
+    )
+    stock_value = fields.Float(
+        string="Stock value",
+        compute="_compute_stock_value",
+        store=True,
+        readonly=True,
+        help="On-hand x unit cost. On the Dead Stock view this is the capital "
+        "tied up in non-moving stock the trust could free by consuming it.",
+    )
+
+    @api.depends("on_hand", "product_id")
+    def _compute_stock_value(self):
+        for rec in self:
+            cost = rec.product_id.standard_price or 0.0
+            rec.unit_cost = cost
+            rec.stock_value = (rec.on_hand or 0.0) * cost
 
     _product_unique = models.Constraint(
         "UNIQUE(product_id)",

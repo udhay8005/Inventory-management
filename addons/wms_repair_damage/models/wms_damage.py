@@ -32,6 +32,20 @@ class WmsDamage(models.Model):
         "CHECK(quantity > 0)",
         "Damage quantity must be greater than zero.",
     )
+    damage_value = fields.Float(
+        string="Loss value",
+        compute="_compute_damage_value",
+        store=True,
+        help="Quantity x the product's unit cost at the time the damage was "
+        "recorded - what this loss is worth to the trust. Stored as a snapshot "
+        "so a later cost change doesn't rewrite historical losses.",
+    )
+
+    @api.depends("product_id", "quantity")
+    def _compute_damage_value(self):
+        for rec in self:
+            rec.damage_value = (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0)
+
     source_slot_id = fields.Many2one(
         "stock.location",
         # Stock can live in slots (inside racks) OR floor zones (open

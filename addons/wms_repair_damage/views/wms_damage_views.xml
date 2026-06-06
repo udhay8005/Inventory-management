@@ -130,6 +130,7 @@
                     <field name="name"/>
                     <field name="product_id"/>
                     <field name="quantity"/>
+                    <field name="damage_value" sum="Total loss value" optional="show"/>
                     <field name="source_slot_id"/>
                     <field name="remaining_on_hand" optional="show"/>
                     <field name="recommended_action" widget="badge"

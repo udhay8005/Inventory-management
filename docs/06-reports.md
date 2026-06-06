@@ -57,6 +57,17 @@ the views read the right company's cost in SQL (`standard_price ->> company_id`)
 so value stays aggregatable in pivot and graph. All three views are
 `_auto = False` — no table to migrate, refreshed at module upgrade.
 
+### Value on the risk reports
+
+The same unit cost now puts a money figure on the three "risk" lists, so a
+trustee sees rupees, not just counts:
+
+| Report | New column | Meaning |
+|---|---|---|
+| **Expiry alerts** (`wms.expiry.alert`) | **Value at risk** | on-hand × cost — what the trust loses if expired/expiring stock isn't used in time (column sums). |
+| **Damaged items** (`wms.damage`) | **Loss value** | quantity × cost, **snapshotted at the time of the damage** so a later cost change never rewrites history. |
+| **Dead stock** (`wms.forecast`) | **Capital tied up** | on-hand × cost for non-moving stock — money that could be freed by consuming it. |
+
 ## Printable PDFs (`reports/*.xml`)
 
 - Slot occupancy by rack (one page per rack)
