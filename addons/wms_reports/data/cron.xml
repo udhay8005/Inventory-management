@@ -42,6 +42,24 @@
             staleness_warning row + a Discuss notice to WMS Managers.
             Quiet when healthy; at most one warning row per ~day.
         -->
+        <!--
+            Daily 08:10 low-stock alert. Notifies every WMS Manager (Discuss
+            inbox; email too when wms_reports.alert_email = 1) of products at
+            or below their reorder level. Silent when nothing needs ordering.
+        -->
+        <record id="cron_wms_low_stock_alert" model="ir.cron">
+            <field name="name">WMS — Daily low-stock alert</field>
+            <field name="model_id" ref="model_wms_stock_alert"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_low_stock()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=10, second=0)"/>
+        </record>
+
         <record id="cron_wms_backup_freshness" model="ir.cron">
             <field name="name">WMS — Daily backup freshness check</field>
             <field name="model_id" ref="model_wms_backup_audit"/>

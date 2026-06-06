@@ -1,8 +1,12 @@
+import logging
+
 from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 from .reservation import validate_reserved_or_abort
+
+_logger = logging.getLogger(__name__)
 
 
 class WmsRepairOrder(models.Model):
@@ -241,6 +245,29 @@ class WmsRepairOrder(models.Model):
                 "Repair done",
                 "Item returned to slot %s and is available for issue again." % dest.display_name,
             )
+            rec._notify_managers_repair_done(dest)
+
+    def _notify_managers_repair_done(self, dest):
+        """Best-effort in-app notice (Batch 6): tell WMS managers a repair
+        finished so they know the item is back in stock. Never raises."""
+        self.ensure_one()
+        try:
+            managers = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
+            if not managers or not managers.all_user_ids:
+                return
+            body = Markup(
+                "<p>&#128295; <b>Repair finished: %s</b></p>"
+                "<p><b>%s</b> is back in slot %s and available to issue again.</p>"
+            ) % (self.name or "", self.product_id.display_name, dest.display_name)
+            # message_notify -> lands in each manager's Inbox + systray (a plain
+            # message_post on a partner only reaches followers).
+            self.env["mail.thread"].message_notify(
+                partner_ids=managers.all_user_ids.partner_id.ids,
+                body=body,
+                subject="WMS — Repair finished",
+            )
+        except Exception:  # noqa: BLE001 - a notice must never break the repair
+            _logger.exception("wms.repair.order: repair-done notify failed")
 
     def action_scrap(self):
         for rec in self:

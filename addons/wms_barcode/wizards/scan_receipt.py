@@ -59,6 +59,17 @@ class WmsScanReceipt(models.TransientModel):
     )
     qc_notes = fields.Text(string="QC notes")
 
+    # ---- Photo capture (parity with Scan Issue / Damage) ----------------
+    # Binary + widget="image" gives mobile browsers a camera input. Optional
+    # on receipts; attached to the resulting picking for the audit trail.
+    photo = fields.Binary(
+        string="Delivery photo",
+        attachment=True,
+        help="Optional: snap a photo of the goods received (carton, batch "
+        "label, condition). On a phone this opens the camera. Attached to "
+        "the receipt for the audit trail.",
+    )
+
     # ---- Audit trail (matches Scan Issue / damage / repair) -------------
     storekeeper_id = fields.Many2one(
         "wms.storekeeper",
@@ -240,6 +251,19 @@ class WmsScanReceipt(models.TransientModel):
             subject="Receipt audit",
             message_type="notification",
         )
+        # Attach the delivery photo (if any) for the audit trail.
+        if self.photo:
+            self.env["ir.attachment"].create(
+                {
+                    "name": "receipt-photo-%s.jpg" % picking.name,
+                    "datas": self.photo,
+                    "res_model": "stock.picking",
+                    "res_id": picking.id,
+                    "mimetype": "image/jpeg",
+                }
+            )
+            picking.message_post(body="Delivery photo attached at receipt.")
+
         # Record the picking so a re-submit is a no-op (idempotency guard).
         self.picking_id = picking.id
 
