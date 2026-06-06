@@ -41,6 +41,11 @@ class WmsBarcodeAlias(models.Model):
         coded = self.filtered("barcode")
         if not coded:
             return
+        # Format-validate each alias barcode (reuses the product EAN-13 check),
+        # so a carton EAN typed off a vendor box with a bad check digit is caught.
+        Template = self.env["product.template"]
+        for rec in coded:
+            Template._wms_validate_barcode(rec.barcode)
         barcodes = coded.mapped("barcode")
         prod = self.env["product.product"].search([("barcode", "in", barcodes)], limit=1)
         if prod:

@@ -44,6 +44,7 @@ class WmsBackupAudit(models.Model):
         [
             ("backup_db", "Database backup"),
             ("backup_filestore", "Filestore backup"),
+            ("backup_offsite", "Off-site copy"),
             ("restore_drill", "Restore drill"),
             ("staleness_warning", "Staleness warning"),
         ],

@@ -113,6 +113,8 @@
 
                         <field name="note" placeholder="Describe what happened..."
                                required="reason == 'other'"/>
+                        <field name="damage_photo" widget="image"
+                               class="oe_avatar" options="{'size': [0, 220]}"/>
                     </sheet>
                     <chatter/>
                 </form>
