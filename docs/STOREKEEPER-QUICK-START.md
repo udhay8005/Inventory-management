@@ -23,6 +23,12 @@ records **who did what**. Works on a PC, phone, or tablet on the same WiFi.
 
 You can't finish a damage/repair with these blank — that's by design.
 
+### Find where something is
+**WMS → Operations → Find / Where is it?** Type a product name, SKU, or scan its
+barcode — the page tells you **which slot(s)** it's in and **how much** is on
+hand. Or tap a chip (**low stock**, **expiring**, **dead stock**, **damaged**,
+**under repair**) for an instant list. Works great on a phone.
+
 ## 2. Scan Receipt (goods coming IN)
 **WMS → Scan Receipt**
 1. Pick your name + fill the audit fields.
