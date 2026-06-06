@@ -458,6 +458,35 @@ class ProductTemplate(models.Model):
         total = odd_sum + 3 * even_sum
         return str((10 - (total % 10)) % 10)
 
+    @api.model
+    def _wms_validate_barcode(self, code):
+        """Validate an operator-entered / imported barcode. Permissive for
+        alphanumeric SKU-as-barcode codes (e.g. TOOL-00001); for a full
+        13-digit numeric code it verifies the GS1 check digit via
+        _ean13_checksum. Empty = allowed (no barcode). Raises a friendly
+        ValidationError on control characters or a wrong EAN-13 check digit.
+        Fires on both manual create and CSV import (both go through the ORM).
+        """
+        if not code:
+            return
+        code = code.strip()
+        if not code:
+            return
+        if any(ord(c) < 32 for c in code):
+            raise ValidationError(
+                _("Barcode contains blank or control characters - re-scan or re-type it.")
+            )
+        if code.isdigit() and len(code) == 13:
+            want = self._ean13_checksum(code[:12])
+            if code[12] != want:
+                raise ValidationError(
+                    _(
+                        "Barcode %(code)s has check digit %(got)s but a valid EAN-13 "
+                        "needs %(want)s - re-scan or re-type it."
+                    )
+                    % {"code": code, "got": code[12], "want": want}
+                )
+
     def action_generate_missing_barcodes(self):
         """Bulk back-fill server action target.
 
@@ -623,6 +652,14 @@ class ProductProduct(models.Model):
         "This SKU / internal reference is already used by another product. "
         "Each product must have a unique SKU.",
     )
+
+    @api.constrains("barcode")
+    def _check_barcode_format(self):
+        """Reject malformed / bad-check-digit barcodes on create + import
+        (reuses product.template._wms_validate_barcode)."""
+        Template = self.env["product.template"]
+        for rec in self.filtered("barcode"):
+            Template._wms_validate_barcode(rec.barcode)
 
     wms_product_kind = fields.Selection(
         related="product_tmpl_id.wms_product_kind",

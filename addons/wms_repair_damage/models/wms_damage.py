@@ -121,6 +121,12 @@ class WmsDamage(models.Model):
         help="The on-duty Store Keeper who filed this damage record. "
         "Picked from the roster — same pattern as Scan Issue / Receipt.",
     )
+    damage_photo = fields.Binary(
+        string="Damage photo",
+        attachment=True,
+        help="Optional photo of the damage. On a phone/tablet the camera opens "
+        "automatically. Stored as proof for the audit trail.",
+    )
 
     @api.depends("source_slot_id")
     def _compute_warehouse(self):

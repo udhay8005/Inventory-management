@@ -329,6 +329,61 @@ $dumps | Select-Object -Skip $Retain | ForEach-Object {
     if (Test-Path $sibling) { Remove-Item $sibling -Force }
 }
 
+# --- 4. Off-site copy (optional; disabled until BACKUP_OFFSITE_DIR is set) ---
+# Local-only backups die with the disk (fire / theft / ransomware). This copies
+# the already-ENCRYPTED .gpg artifacts to an off-site target (USB drive, UNC
+# share \\nas\wms-backups, or a cloud-sync folder like OneDrive), VERIFIES the
+# copy by re-hashing against the local SHA-256, and applies the same retention.
+# Failure-safe: the local backup already succeeded, so an off-site hiccup warns
+# + logs a failed audit row but NEVER fails the backup.
+$OffsiteDir = ''
+$OffsiteHb  = ''
+if (Test-Path $EnvPath) {
+    $od = (Select-String -Path $EnvPath -Pattern '^BACKUP_OFFSITE_DIR=(.+)$' | Select-Object -First 1)
+    if ($od) { $OffsiteDir = $od.Matches.Groups[1].Value.Trim().Trim('"') }
+    $oh = (Select-String -Path $EnvPath -Pattern '^HEALTHCHECK_OFFSITE_URL=(.+)$' | Select-Object -First 1)
+    if ($oh) { $OffsiteHb = $oh.Matches.Groups[1].Value.Trim() }
+}
+if ($OffsiteDir) {
+    Write-Host "Off-site copy -> $OffsiteDir" -ForegroundColor Cyan
+    try {
+        if (-not (Test-Path $OffsiteDir)) { New-Item -ItemType Directory -Force -Path $OffsiteDir | Out-Null }
+        $copied = 0
+        foreach ($pair in @(
+                @{ Src = $DumpEncPath; Hash = $dbHash },
+                @{ Src = $ZipEncPath;  Hash = $fsHash })) {
+            if (-not $pair.Src -or -not (Test-Path $pair.Src)) { continue }
+            $dest = Join-Path $OffsiteDir (Split-Path -Leaf $pair.Src)
+            Copy-Item -LiteralPath $pair.Src -Destination $dest -Force
+            $destHash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash
+            if ($pair.Hash -and $destHash -ne $pair.Hash) {
+                throw "off-site hash mismatch for $(Split-Path -Leaf $dest) (corrupt copy)"
+            }
+            Write-Host "    copied + verified $(Split-Path -Leaf $dest)" -ForegroundColor Green
+            $copied++
+        }
+        Get-ChildItem $OffsiteDir -Filter "$DbName-*.dump.gpg" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip $Retain | ForEach-Object {
+                Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue
+                $sib = $_.FullName -replace '\.dump\.gpg$', '-filestore.zip.gpg'
+                if (Test-Path $sib) { Remove-Item $sib -Force -ErrorAction SilentlyContinue }
+            }
+        Send-Heartbeat -Url $OffsiteHb
+        Write-BackupAudit -AuditType 'backup_offsite' -Success $true `
+            -FileName (Split-Path -Leaf $DumpEncPath) -SizeMb $dbSizeMb -Verified $true `
+            -Checksum $dbHash -Message "Off-site copy verified ($copied file(s)) -> $OffsiteDir"
+        Write-Host "    Off-site copy complete + verified." -ForegroundColor Green
+    } catch {
+        Write-Host "    [warn] off-site copy failed (LOCAL backup is intact): $($_.Exception.Message)" -ForegroundColor Yellow
+        Send-Heartbeat -Url $OffsiteHb -Fail
+        Write-BackupAudit -AuditType 'backup_offsite' -Success $false `
+            -FileName (Split-Path -Leaf $DumpEncPath) `
+            -Message "Off-site copy FAILED: $($_.Exception.Message)"
+    }
+} else {
+    Write-Host "Off-site copy: disabled (set BACKUP_OFFSITE_DIR in .env to enable)" -ForegroundColor DarkGray
+}
+
 Write-Host ""
 Write-Host "Backup complete (encrypted). Artifacts in $BackupDir" -ForegroundColor Green
 Write-Host "WARNING: without BACKUP_PASSPHRASE these files cannot be restored." -ForegroundColor Yellow
