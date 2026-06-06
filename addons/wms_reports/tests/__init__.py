@@ -3,6 +3,7 @@ from . import (
     test_audit_reconcile,
     test_backup_audit,
     test_dashboard,
+    test_find,
     test_health_endpoint,
     test_health_probe,
     test_low_stock_alert,

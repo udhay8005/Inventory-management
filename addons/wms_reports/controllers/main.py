@@ -217,6 +217,117 @@ class WmsRackGridController(http.Controller):
             },
         )
 
+    @http.route("/wms/find", type="http", auth="user", website=False)
+    def find(self, q=None, **kw):
+        """Smart 'where is it / how much / what's low' page (Batch 7).
+
+        One box answers the warehouse's most common questions. A few keywords
+        ('low', 'expiring', 'dead', 'damaged', 'repair') route to a quick list;
+        anything else is treated as a product lookup (barcode / SKU / name) and
+        answered with WHERE the stock is and HOW MUCH. No NLP — plain keyword
+        routing over the existing models. Open to any WMS user."""
+        env = request.env
+        if not env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
+        q = (q or "").strip()
+        ql = q.lower()
+        ctx = {"q": q, "mode": "empty", "products": [], "items": [], "heading": ""}
+
+        def sc(model, domain):
+            try:
+                return env[model].sudo().search(domain)
+            except Exception:  # noqa: BLE001 - a missing model must not break the page
+                return env["res.partner"].sudo().browse()  # empty-ish recordset
+
+        if not q:
+            return request.render("wms_reports.find_page", ctx)
+
+        # ---- Keyword quick-answers --------------------------------------
+        if ql in ("low", "reorder", "low stock", "whats low", "what's low", "lowstock"):
+            ctx["mode"], ctx["heading"] = "list", "Products at or below reorder level"
+            ctx["items"] = [
+                {"name": f.product_id.display_name, "detail": "suggest ordering %g" % f.reorder_qty}
+                for f in sc("wms.forecast", [("reorder_qty", ">", 0)])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        if "expir" in ql:
+            ctx["mode"], ctx["heading"] = "list", "Expiring / expired products"
+            ctx["items"] = [
+                {"name": a.product_id.display_name, "detail": (a.status or "").title()}
+                for a in sc("wms.expiry.alert", [("status", "in", ("expired", "urgent"))])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        if "dead" in ql or "slow" in ql:
+            ctx["mode"], ctx["heading"] = "list", "Dead / slow stock"
+            ctx["items"] = [
+                {"name": f.product_id.display_name, "detail": "no recent movement"}
+                for f in sc("wms.forecast", [("velocity_class", "=", "dead")])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        if "damag" in ql:
+            ctx["mode"], ctx["heading"] = "list", "Damaged items"
+            ctx["items"] = [
+                {"name": d.product_id.display_name, "detail": "qty %g" % d.quantity}
+                for d in sc("wms.damage", [("state", "=", "confirmed")])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        if "repair" in ql:
+            ctx["mode"], ctx["heading"] = "list", "Items under repair"
+            ctx["items"] = [
+                {"name": r.product_id.display_name, "detail": "qty %g" % r.quantity}
+                for r in sc("wms.repair.order", [("state", "=", "in_repair")])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+
+        # ---- Product lookup: where is it + how much ---------------------
+        Product = env["product.product"].sudo()
+        products = Product.search(
+            [
+                "|",
+                "|",
+                "|",
+                ("barcode", "=", q),
+                ("default_code", "=", q),
+                ("default_code", "ilike", q),
+                ("name", "ilike", q),
+            ],
+            limit=20,
+        )
+        if not products:
+            alias = env["wms.barcode.alias"].sudo().search([("name", "=", q)], limit=1)
+            products = alias.product_id if alias else products
+        # Storage locations only (descendants of a warehouse lot-stock): a
+        # child_of filter naturally excludes the 'Trust internal use' sink.
+        lot_stocks = env["stock.warehouse"].sudo().search([]).mapped("lot_stock_id")
+        Quant = env["stock.quant"].sudo()
+        low_ids = set(sc("wms.forecast", [("reorder_qty", ">", 0)]).mapped("product_id").ids)
+        rows = []
+        for p in products:
+            quants = Quant.search(
+                [
+                    ("product_id", "=", p.id),
+                    ("location_id", "child_of", lot_stocks.ids),
+                    ("quantity", ">", 0),
+                ]
+            )
+            rows.append(
+                {
+                    "name": p.display_name,
+                    "sku": p.default_code or "",
+                    "barcode": p.barcode or "",
+                    "total": "%.0f" % sum(quants.mapped("quantity")),
+                    "uom": p.uom_id.name or "",
+                    "low": p.id in low_ids,
+                    "locations": [
+                        (loc.display_name, "%.0f" % qty)
+                        for loc, qty in ((g.location_id, g.quantity) for g in quants)
+                    ],
+                }
+            )
+        ctx["mode"] = "product" if rows else "noresult"
+        ctx["products"] = rows
+        return request.render("wms_reports.find_page", ctx)
+
     @http.route("/wms/warehouse/map", type="http", auth="user", website=False)
     def warehouse_map(self, **kw):
         """Whole-warehouse overview: every zone with its racks + floor zones,
