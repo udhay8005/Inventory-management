@@ -8,4 +8,5 @@ from . import (
     test_quantity_integrity,
     test_rack_grid,
     test_self_diagnostics,
+    test_value_reports,
 )
