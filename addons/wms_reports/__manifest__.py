@@ -1,6 +1,6 @@
 {
     "name": "WMS — Reports & Dashboards",
-    "version": "19.0.2.8.0",
+    "version": "19.0.2.9.0",
     "summary": "Live SQL-view dashboards + backup/DR observability (health endpoint, backup audit).",
     "depends": ["wms_location", "wms_ai_forecast", "wms_repair_damage", "stock"],
     "author": "WMS",
@@ -29,6 +29,8 @@
         # Loaded after menus.xml: its menuitem is parented to menu_wms_reports_root.
         "views/wms_backup_audit_views.xml",
         "views/wms_self_diagnostics_views.xml",
+        # Parented to menu_wms_reports_root -> load after menus.xml.
+        "views/dashboard_template.xml",
         "data/cron.xml",
     ],
     "installable": True,

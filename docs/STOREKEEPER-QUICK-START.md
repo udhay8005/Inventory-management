@@ -45,6 +45,14 @@ rack slot.
 > If you hit a **daily limit** or **stock-out** message, stop and tell a manager —
 > don't force it.
 
+### Made a mistake? Undo it
+If you just issued the wrong item or quantity, open that transfer
+(**WMS → Transfers**, or the one that opened after you validated) and tap the
+orange **Undo this transfer** button. The system puts the stock straight back —
+no manual return needed. The button only shows for a short window (15 minutes by
+default) and only while the stock is still where you put it. After that, use
+**Scan Return** instead.
+
 ## 5. Scan Return (goods coming BACK)
 **WMS → Scan Return** — for returnable items (tools, spares) coming back to the
 shelf. Pick your name, scan the item, scan the slot, **Validate**. (The product's

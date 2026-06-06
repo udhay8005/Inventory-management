@@ -5,4 +5,5 @@ from . import (
     test_barcode_integrity,
     test_concurrency,
     test_quantity_integrity,
+    test_undo,
 )

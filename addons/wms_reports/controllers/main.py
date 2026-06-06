@@ -12,7 +12,7 @@ compartments render at their natural height.
 
 import json
 
-from odoo import http
+from odoo import fields, http
 from odoo.http import request
 
 
@@ -139,6 +139,81 @@ class WmsRackGridController(http.Controller):
                 "rack_on_hand": rack_on_hand,
                 "total_slots": total_slots,
                 "rack_on_hand_label": "%.0f" % rack_on_hand,
+            },
+        )
+
+    @http.route("/wms/dashboard", type="http", auth="user", website=False)
+    def dashboard(self, **kw):
+        """One-screen admin overview: stock totals, attention badges, today's
+        activity, and system health. Manager-only. Reuses the existing report
+        models + wms.backup.audit._health_snapshot() - invents no new queries."""
+        env = request.env
+        if not env.user.has_group("wms_location.group_wms_manager"):
+            return request.not_found()
+        Quant = env["stock.quant"].sudo()
+
+        def sc(model, domain):
+            try:
+                return env[model].sudo().search_count(domain)
+            except Exception:  # noqa: BLE001 - a missing model must not break the page
+                return 0
+
+        snap = env["wms.backup.audit"].sudo()._health_snapshot()
+        _bk = snap.get("last_backup_age_hours")
+        last_backup_label = ("%s h ago" % _bk) if _bk is not None else "never"
+        total_products = sc("product.product", [("is_storable", "=", True), ("active", "=", True)])
+        on_hand = sum(
+            Quant.search([("location_id.usage", "=", "internal"), ("quantity", ">", 0)]).mapped(
+                "quantity"
+            )
+        )
+        loc_counts = {
+            t: sc("stock.location", [("wms_location_type", "=", t)])
+            for t in ("zone", "rack", "compartment", "slot", "floor")
+        }
+        attention = [
+            ("Low stock / reorder", sc("wms.forecast", [("reorder_qty", ">", 0)]), "#b45309"),
+            (
+                "Expiring / expired",
+                sc("wms.expiry.alert", [("status", "in", ("expired", "urgent"))]),
+                "#b91c1c",
+            ),
+            ("Dead stock", sc("wms.forecast", [("velocity_class", "=", "dead")]), "#6b7280"),
+            ("Damaged (in Damage loc)", sc("wms.damage", [("state", "=", "confirmed")]), "#b91c1c"),
+            ("Under repair", sc("wms.repair.order", [("state", "=", "in_repair")]), "#2563eb"),
+            ("Pending audits", sc("wms.audit", [("state", "=", "submitted")]), "#b45309"),
+            ("Slots due for count", sc("wms.cycle.count.due", []), "#2563eb"),
+        ]
+        today = fields.Date.context_today(env.user)
+        labels = [
+            ("receipt", "Receipts"),
+            ("issue", "Issues"),
+            ("return", "Returns"),
+            ("damage", "Damages"),
+            ("repair", "Repairs"),
+            ("internal", "Internal moves"),
+        ]
+        today_act = [
+            (
+                label,
+                sc(
+                    "wms.storekeeper.activity",
+                    [("activity_date", "=", today), ("activity_type", "=", key)],
+                ),
+            )
+            for key, label in labels
+        ]
+        return request.render(
+            "wms_reports.dashboard_page",
+            {
+                "snap": snap,
+                "last_backup_label": last_backup_label,
+                "total_products": total_products,
+                "on_hand": "%.0f" % on_hand,
+                "loc_counts": loc_counts,
+                "attention": attention,
+                "today_act": today_act,
+                "today": today,
             },
         )
 

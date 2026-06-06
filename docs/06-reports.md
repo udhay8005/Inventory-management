@@ -23,6 +23,24 @@ All dashboards are read-only SQL views (`_auto = False`) on top of `stock.quant`
 | 14 | Item Valuation | `stock.valuation.layer` (CE-compatible) | by category |
 | 15 | Purchase Recommendation Summary | `wms.forecast` aggregated by vendor | next-30d |
 
+## Executive Dashboard (`/wms/dashboard`)
+
+A single server-rendered overview screen for the Admin — **Reports → Dashboard**
+(manager-only). No JavaScript, no charts: it loads fast and re-reads the existing
+report models, inventing no new queries.
+
+| Card | Shows | Source (reused) |
+|---|---|---|
+| System health | HEALTHY / DEGRADED / CRITICAL, DB reachable, last-backup age, warnings | `wms.backup.audit._health_snapshot()` |
+| Stock totals | storable products, on-hand units, zone/rack/compartment/slot/floor counts | `product.product`, `stock.quant`, `stock.location` |
+| Needs attention | low-stock/reorder, expiring/expired, dead stock, damaged, under repair, pending audits, slots due for count | `wms.forecast`, `wms.expiry.alert`, `wms.damage`, `wms.repair.order`, `wms.audit`, `wms.cycle.count.due` |
+| Today's activity | receipts / issues / returns / damages / repairs / internal moves (today) | `wms.storekeeper.activity` |
+
+The route is gated on `wms_location.group_wms_manager` in the controller, so a
+Store Keeper or read-only user who guesses the URL gets a 404. Counts are read with
+`search_count` wrapped in a guard, so a missing optional model can never break the
+page. Smoke-tested end-to-end by `tests/test_dashboard.py`.
+
 ## Printable PDFs (`reports/*.xml`)
 
 - Slot occupancy by rack (one page per rack)

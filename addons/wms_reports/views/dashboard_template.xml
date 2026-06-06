@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+          Executive Dashboard: one server-rendered screen for the Admin.
+          No JavaScript, no charting library, no live polling - a plain HTML
+          page that loads fast and reads the existing report models. The route
+          (/wms/dashboard) is manager-gated in the controller. We use
+          web.html_container (same as the warehouse map) so Odoo supplies the
+          <!DOCTYPE html> + <html> wrapper; we provide <head> and <body>.
+        -->
+        <template id="dashboard_page" name="WMS Dashboard">
+            <t t-set="hstatus" t-value="snap.get('status')"/>
+            <t t-set="hcolor"
+               t-value="'#15803d' if hstatus == 'HEALTHY' else ('#b45309' if hstatus == 'DEGRADED' else '#b91c1c')"/>
+            <t t-call="web.html_container">
+                <head>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <title>WMS Dashboard</title>
+                    <style>
+                        * { box-sizing: border-box; }
+                        body { margin: 0; background: #f3f4f6; color: #111827;
+                               font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+                        .wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
+                        h1 { font-size: 22px; margin: 4px 0 2px; }
+                        .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+                        .grid { display: grid; gap: 14px;
+                                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+                        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+                                padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+                        .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+                                   color: #6b7280; margin: 0 0 10px; }
+                        .big { font-size: 30px; font-weight: 700; line-height: 1.1; }
+                        .muted { color: #6b7280; font-size: 13px; }
+                        .kv { display: flex; justify-content: space-between; padding: 4px 0;
+                              border-bottom: 1px solid #f1f1f4; font-size: 14px; }
+                        .kv:last-child { border-bottom: 0; }
+                        .badge { display: inline-block; min-width: 26px; text-align: center;
+                                 padding: 1px 8px; border-radius: 999px; color: #fff; font-weight: 700; }
+                        .pill { display: flex; align-items: center; justify-content: space-between;
+                                padding: 7px 0; border-bottom: 1px solid #f1f1f4; font-size: 14px; }
+                        .pill:last-child { border-bottom: 0; }
+                        .health { font-size: 26px; font-weight: 700; }
+                        .warnrow { font-size: 13px; color: #b45309; margin-top: 6px; }
+                        .nav a { display: inline-block; margin-right: 14px; color: #2563eb;
+                                 text-decoration: none; font-size: 14px; }
+                        .nav { margin-top: 22px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="wrap">
+                        <h1>Warehouse Dashboard</h1>
+                        <div class="sub">One-screen overview &#183; <span t-esc="today"/></div>
+
+                        <div class="grid">
+                            <!-- System health -->
+                            <div class="card">
+                                <h2>System health</h2>
+                                <div class="health" t-attf-style="color:#{hcolor}">
+                                    <span t-esc="hstatus or 'UNKNOWN'"/>
+                                </div>
+                                <div class="kv"><span>Database</span>
+                                    <span t-esc="'reachable' if snap.get('db_reachable') else 'UNREACHABLE'"/></div>
+                                <div class="kv"><span>Last backup</span>
+                                    <span t-esc="last_backup_label"/></div>
+                                <t t-foreach="snap.get('warnings') or []" t-as="w">
+                                    <div class="warnrow">&#9888; <span t-esc="w"/></div>
+                                </t>
+                            </div>
+
+                            <!-- Stock totals -->
+                            <div class="card">
+                                <h2>Stock totals</h2>
+                                <div class="big"><span t-esc="total_products"/></div>
+                                <div class="muted">storable products</div>
+                                <div class="kv" style="margin-top:8px"><span>On-hand units</span>
+                                    <span><b t-esc="on_hand"/></span></div>
+                                <div class="kv"><span>Zones</span><span t-esc="loc_counts.get('zone')"/></div>
+                                <div class="kv"><span>Racks</span><span t-esc="loc_counts.get('rack')"/></div>
+                                <div class="kv"><span>Compartments</span><span t-esc="loc_counts.get('compartment')"/></div>
+                                <div class="kv"><span>Slots</span><span t-esc="loc_counts.get('slot')"/></div>
+                                <div class="kv"><span>Floor zones</span><span t-esc="loc_counts.get('floor')"/></div>
+                            </div>
+
+                            <!-- Needs attention -->
+                            <div class="card">
+                                <h2>Needs attention</h2>
+                                <t t-foreach="attention" t-as="row">
+                                    <div class="pill">
+                                        <span t-esc="row[0]"/>
+                                        <span class="badge"
+                                              t-attf-style="background:#{row[2] if row[1] else '#9ca3af'}"
+                                              t-esc="row[1]"/>
+                                    </div>
+                                </t>
+                            </div>
+
+                            <!-- Today's activity -->
+                            <div class="card">
+                                <h2>Today's activity</h2>
+                                <t t-foreach="today_act" t-as="row">
+                                    <div class="pill">
+                                        <span t-esc="row[0]"/>
+                                        <span class="badge"
+                                              t-attf-style="background:#{'#2563eb' if row[1] else '#9ca3af'}"
+                                              t-esc="row[1]"/>
+                                    </div>
+                                </t>
+                            </div>
+                        </div>
+
+                        <div class="nav">
+                            <a href="/wms/warehouse/map">&#128506; Warehouse map</a>
+                            <a href="/odoo">&#8592; Back to Odoo</a>
+                        </div>
+                    </div>
+                </body>
+            </t>
+        </template>
+
+        <!-- Menu: open the dashboard URL (manager-only) -->
+        <record id="action_wms_dashboard" model="ir.actions.act_url">
+            <field name="name">Dashboard</field>
+            <field name="url">/wms/dashboard</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_wms_dashboard"
+                  name="Dashboard"
+                  parent="wms_reports.menu_wms_reports_root"
+                  action="action_wms_dashboard"
+                  groups="wms_location.group_wms_manager"
+                  sequence="1"/>
+    </data>
+</odoo>

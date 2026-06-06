@@ -1,4 +1,8 @@
 from odoo import api, fields, models
+from odoo.exceptions import ValidationError
+
+# Truthy spellings accepted for the opt-in capacity System Parameter.
+_ENFORCE_TRUE = ("1", "true", "True", "yes", "on")
 
 
 class StockQuant(models.Model):
@@ -52,6 +56,46 @@ class StockQuant(models.Model):
             q.wms_slot_id = slot
             q.wms_compartment_id = compartment
             q.wms_rack_id = rack
+
+    @api.constrains("quantity", "location_id", "product_id")
+    def _wms_check_location_capacity(self):
+        """Opt-in slot capacity guard (Batch 4).
+
+        Off by default (zero behaviour change). When an Admin sets the System
+        Parameter ``wms_location.enforce_capacity`` to ``1``, a write that
+        pushes an internal location's physical on-hand over its
+        ``wms_capacity_units`` is refused and rolled back — nothing is forced.
+
+        Cheap when disabled: one cached parameter read, then return. When on,
+        only the locations actually touched that carry a positive capacity are
+        summed, so the cost scales with the move, not the warehouse.
+        """
+        param = (
+            self.env["ir.config_parameter"].sudo().get_param("wms_location.enforce_capacity", "0")
+        )
+        if param not in _ENFORCE_TRUE:
+            return
+        Quant = self.env["stock.quant"].sudo()
+        capped = self.location_id.filtered(
+            lambda loc: loc.usage == "internal" and loc.wms_capacity_units > 0
+        )
+        for loc in capped:
+            on_hand = sum(
+                Quant.search([("location_id", "=", loc.id), ("quantity", ">", 0)]).mapped(
+                    "quantity"
+                )
+            )
+            if on_hand > loc.wms_capacity_units:
+                raise ValidationError(
+                    "Location %s is over capacity.\n"
+                    "It would hold %g units, but its capacity is %g.\n"
+                    "Put the extra stock in another slot, or raise this "
+                    "location's capacity.\n\n"
+                    "(Capacity enforcement is switched on. An Admin can turn it "
+                    "off under Settings -> Technical -> System Parameters by "
+                    "setting wms_location.enforce_capacity back to 0.)"
+                    % (loc.display_name, on_hand, loc.wms_capacity_units)
+                )
 
     def _wms_sorted_for_removal(self):
         """Single authoritative WMS removal ordering (Critical #5).
