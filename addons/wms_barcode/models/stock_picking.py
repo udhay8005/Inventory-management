@@ -2,6 +2,19 @@ from markupsafe import Markup
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+# Structured "what was this issued for" categories. The trust runs several
+# distinct cost centres off one store; a structured field (vs only the
+# free-text usage note) lets the Consumption Value report answer "how much
+# did Cows consume vs Pooja vs Maintenance" without parsing prose.
+WMS_ISSUED_FOR_SELECTION = [
+    ("cows", "Cows / Gaushala"),
+    ("pooja", "Pooja / Temple"),
+    ("maintenance", "Maintenance / Repairs"),
+    ("project", "Project / Construction"),
+    ("administration", "Administration / Office"),
+    ("other", "Other"),
+]
+
 
 class StockPicking(models.Model):
     """Audit trail fields populated by the Scan Issue wizard.
@@ -48,6 +61,15 @@ class StockPicking(models.Model):
         help="The actual human Store Keeper running the desk at the time of "
         "this issue. Picked from the roster the Admin maintains under "
         "Configuration → Store Keepers.",
+    )
+    wms_issued_for = fields.Selection(
+        WMS_ISSUED_FOR_SELECTION,
+        string="Issued for",
+        index=True,
+        tracking=True,
+        help="Which part of the trust consumed this stock. Set by the Scan "
+        "Issue wizard so the Consumption Value report can break spend down by "
+        "purpose (Cows, Pooja, Maintenance, ...).",
     )
     wms_is_scan_issue = fields.Boolean(
         string="Scan Issue picking",

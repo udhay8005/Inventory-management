@@ -49,7 +49,7 @@ product-centric timeline. Manager-only, under **Reports**.
 | Report | Question it answers | How |
 |---|---|---|
 | **Stock Value** | "How much capital is on the shelves right now?" | unit cost × on-hand, counting **storage** locations only (slots / floor / lot-stock children) — the *Trust internal use* sink is excluded so already-consumed goods don't inflate the figure. |
-| **Consumption Value** | "What did we consume, by value, this month?" | unit cost × issued qty, per month. Counts only done Scan Issues; an issue that was **Undone** nets to zero. |
+| **Consumption Value** | "What did we consume, by value, this month — and for what?" | unit cost × issued qty, per month, **broken down by purpose** (Cows / Pooja / Maintenance / …) via the Scan-Issue *Issued for* field. Counts only done Scan Issues; an issue that was **Undone** nets to zero. |
 | **Product Lifecycle** | "What's the whole history of this item?" | reuses the Store-Keeper activity log grouped by product — received, issued, returned, damaged, repaired, newest first. |
 
 Unit cost comes from `product.standard_price`, a company-dependent JSONB field;

@@ -6,6 +6,7 @@ from . import (
     test_find,
     test_health_endpoint,
     test_health_probe,
+    test_issued_for,
     test_low_stock_alert,
     test_quantity_integrity,
     test_rack_grid,

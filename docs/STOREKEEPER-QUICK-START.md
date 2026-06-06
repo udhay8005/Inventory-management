@@ -43,7 +43,10 @@ rack slot.
 
 ## 4. Scan Issue (goods going OUT)
 **WMS → Scan Issue**
-1. Pick your name + the audit fields + why (usage note).
+1. Pick your name + the audit fields + **Issued for** (Cows / Pooja /
+   Maintenance / …) + why (usage note). The *Issued for* choice is what lets
+   managers see "how much did Cows cost vs Pooja" in the Consumption Value
+   report — it defaults to *Other*, so pick the right one.
 2. **Scan the product** → quantity to give out.
 3. The system picks the **oldest stock first (FIFO)** / **earliest-expiry first
    (FEFO)** automatically and shows the plan.

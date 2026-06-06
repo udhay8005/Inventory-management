@@ -103,6 +103,10 @@
                                 clicking Validate without a note throws
                                 a UserError.
                             -->
+                            <div class="col-12 col-md-6 mt-2">
+                                <label for="issued_for" class="fw-bold"/>
+                                <field name="issued_for" nolabel="1"/>
+                            </div>
                             <div class="col-12 mt-2">
                                 <label for="usage_note" class="fw-bold"/>
                                 <field name="usage_note"

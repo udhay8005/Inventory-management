@@ -14,6 +14,7 @@ is computed in the database and stays aggregatable in pivot / graph views.
 """
 
 from odoo import api, fields, models, tools
+from odoo.addons.wms_barcode.models.stock_picking import WMS_ISSUED_FOR_SELECTION
 
 
 class WmsStockValueReport(models.Model):
@@ -82,6 +83,7 @@ class WmsConsumptionValueReport(models.Model):
     product_id = fields.Many2one("product.product", string="Product", readonly=True)
     categ_id = fields.Many2one("product.category", string="Category", readonly=True)
     company_id = fields.Many2one("res.company", string="Company", readonly=True)
+    issued_for = fields.Selection(WMS_ISSUED_FOR_SELECTION, string="Issued for", readonly=True)
     period = fields.Date(string="Month", readonly=True)
     qty_out = fields.Float(string="Issued qty", readonly=True)
     unit_cost = fields.Float(string="Unit cost", readonly=True)
@@ -100,6 +102,7 @@ class WmsConsumptionValueReport(models.Model):
                 sml.product_id AS product_id,
                 pt.categ_id    AS categ_id,
                 sml.company_id AS company_id,
+                sp.wms_issued_for AS issued_for,
                 date_trunc('month', sml.date)::date AS period,
                 SUM(sml.quantity) AS qty_out,
                 COALESCE((pp.standard_price ->> sml.company_id::text)::numeric, 0)
@@ -116,6 +119,6 @@ class WmsConsumptionValueReport(models.Model):
                   -- consumption: the stock came straight back, so exclude it.
                   AND sp.wms_reversed_by_id IS NULL
             GROUP BY date_trunc('month', sml.date), sml.product_id,
-                     pt.categ_id, sml.company_id, pp.standard_price
+                     pt.categ_id, sml.company_id, sp.wms_issued_for, pp.standard_price
             """
         )

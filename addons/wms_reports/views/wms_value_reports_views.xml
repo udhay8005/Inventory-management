@@ -87,6 +87,7 @@
                 <list create="0" edit="0" delete="0" default_order="period desc">
                     <field name="period"/>
                     <field name="product_id"/>
+                    <field name="issued_for" optional="show"/>
                     <field name="categ_id" optional="show"/>
                     <field name="qty_out" sum="Issued"/>
                     <field name="unit_cost"/>
@@ -101,8 +102,8 @@
             <field name="model">wms.consumption.value.report</field>
             <field name="arch" type="xml">
                 <pivot string="Consumption value">
-                    <field name="period" type="row" interval="month"/>
-                    <field name="categ_id" type="col"/>
+                    <field name="issued_for" type="row"/>
+                    <field name="period" type="col" interval="month"/>
                     <field name="consumption_value" type="measure"/>
                 </pivot>
             </field>
@@ -126,6 +127,9 @@
                 <search>
                     <field name="product_id"/>
                     <field name="categ_id"/>
+                    <field name="issued_for"/>
+                    <filter name="group_issued_for" string="Issued for"
+                            context="{'group_by': 'issued_for'}"/>
                     <filter name="group_month" string="Month"
                             context="{'group_by': 'period:month'}"/>
                     <filter name="group_categ" string="Category"
