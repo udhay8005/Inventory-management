@@ -501,6 +501,75 @@ if (Test-Path $initMarker) {
     Write-OK "Database '$DbName' initialised"
 }
 
+# === 7.4 Refuse to proceed if any placeholder credential is still in .env =
+# FPAT High: an install that leaves ODOO_USER=admin / DB_PASSWORD=odoo_local_dev_pw
+# / BACKUP_PASSPHRASE=changeme_backup_passphrase is begging to be hacked. Fail
+# the install with a clear instruction rather than silently going to prod.
+$envPath = Join-Path $RepoRoot ".env"
+if (Test-Path -LiteralPath $envPath) {
+    $denylist = @(
+        'admin',
+        'odoo_local_dev_pw',
+        'changeme_backup_passphrase',
+        'changeme_health_token',
+        'CHANGE_ME',
+        'placeholder',
+        'YOUR_PASSPHRASE_HERE'
+    )
+    $offenders = @()
+    Get-Content -LiteralPath $envPath | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith('#') -and $line.Contains('=')) {
+            $kv = $line.Split('=', 2)
+            $k = $kv[0].Trim()
+            $v = ($kv[1].Trim().Trim("'").Trim('"'))
+            foreach ($bad in $denylist) {
+                if ($v -eq $bad) { $offenders += "${k}=${bad}" }
+            }
+        }
+    }
+    if ($offenders.Count -gt 0) {
+        Write-Host "[FAIL] .env still has placeholder credentials:" -ForegroundColor Red
+        $offenders | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        Write-Host "Replace each with a real strong secret, then re-run." -ForegroundColor Yellow
+        throw "Install aborted: placeholder credentials in .env"
+    }
+}
+
+# === 7.5 Auto-generate /wms/health shared-secret token =====================
+# FPAT High: the /wms/health endpoint was unauthenticated by default and
+# leaked backup-age / drill-age / DR posture to anyone who could reach the
+# port. The controller already supports a shared-secret token gate via the
+# `wms_reports.health_token` System Parameter; this block sets one
+# automatically at install time (32 hex chars from .NET RNG), printed once
+# below for the monitor configuration. Re-running the installer skips this
+# step if a token already exists.
+Write-Host "    Setting up /wms/health shared-secret token..."
+$env:PGPASSWORD = $DbPassword
+$existing = & psql -h localhost -p $DbPort -U $DbUser -d $DbName -tAc `
+    "SELECT value FROM ir_config_parameter WHERE key='wms_reports.health_token'" 2>$null
+$existing = ($existing | Out-String).Trim()
+if ([string]::IsNullOrWhiteSpace($existing)) {
+    $bytes = New-Object byte[] 16
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    $token = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+    $sql = @"
+INSERT INTO ir_config_parameter (key, value, create_uid, create_date, write_uid, write_date)
+VALUES ('wms_reports.health_token', '$token', 1, NOW(), 1, NOW())
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, write_date=NOW()
+"@
+    & psql -h localhost -p $DbPort -U $DbUser -d $DbName -c $sql 2>$null | Out-Null
+    Write-OK "/wms/health protected by shared-secret token"
+    Write-Host "    Token (record this for your monitor):" -ForegroundColor Yellow
+    Write-Host "      $token" -ForegroundColor Cyan
+    Write-Host "    Monitors must pass it as either:"
+    Write-Host "      curl 'http://<host>:8069/wms/health?token=<token>'"
+    Write-Host "      curl -H 'X-Health-Token: <token>' 'http://<host>:8069/wms/health'"
+} else {
+    Write-Skip "/wms/health token already set (delete the System Parameter to regenerate)"
+}
+$env:PGPASSWORD = $null
+
 # === 8. Done ===============================================================
 Write-Host "`n=== Install complete ===" -ForegroundColor Green
 Write-Host "Database:       $DbName" -ForegroundColor Green

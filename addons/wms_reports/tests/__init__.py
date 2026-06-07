@@ -7,6 +7,7 @@ from . import (
     test_find,
     test_fpat_fx1,
     test_fpat_fx2,
+    test_fpat_fx3,
     test_health_endpoint,
     test_health_probe,
     test_issued_for,

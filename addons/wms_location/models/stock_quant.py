@@ -79,6 +79,17 @@ class StockQuant(models.Model):
         capped = self.location_id.filtered(
             lambda loc: loc.usage == "internal" and loc.wms_capacity_units > 0
         )
+        # FPAT High: serialise the on-hand recompute under concurrent writers
+        # to the same capped location. Without this lock two parallel quant
+        # writes can each see on_hand <= capacity, each pass the check, and
+        # together end up over capacity. Locking the touched location rows
+        # first forces the second writer to wait until the first commits, so
+        # its recompute sees the updated total.
+        if capped:
+            self.env.cr.execute(
+                "SELECT id FROM stock_location WHERE id = ANY(%s) FOR UPDATE",
+                (list(capped.ids),),
+            )
         for loc in capped:
             on_hand = sum(
                 Quant.search([("location_id", "=", loc.id), ("quantity", ">", 0)]).mapped(
