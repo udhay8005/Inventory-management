@@ -294,7 +294,11 @@ class WmsRackGridController(http.Controller):
             limit=20,
         )
         if not products:
-            alias = env["wms.barcode.alias"].sudo().search([("name", "=", q)], limit=1)
+            # FPAT: wms.barcode.alias's column is 'barcode' (the actual code),
+            # not 'name'. Using 'name' here raised ValueError on every lookup
+            # of an auto-generated EAN-13 - every alias resolution from /wms/find
+            # crashed silently into the noresult page.
+            alias = env["wms.barcode.alias"].sudo().search([("barcode", "=", q)], limit=1)
             products = alias.product_id if alias else products
         # Storage locations only (descendants of a warehouse lot-stock): a
         # child_of filter naturally excludes the 'Trust internal use' sink.

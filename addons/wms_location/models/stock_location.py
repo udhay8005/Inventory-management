@@ -325,10 +325,19 @@ class StockLocation(models.Model):
         # the keeper scans the specific batch they want to issue.
         product_ids = scanned.product_tmpl_id.product_variant_ids.ids
 
+        # FPAT Critical: the planner must NEVER pull from the Damage or
+        # Repair-Out locations. They are usage='internal' (they hold real
+        # stock) but the stock there is broken or in-flight and must not be
+        # re-issued back to cows. The previous domain only filtered on
+        # location.usage, so the fallback widened across damage + repair
+        # locations and could silently issue contaminated medicine. We
+        # exclude wms_is_damage / wms_is_repair on the joined location.
         base_domain = [
             ("product_id", "in", product_ids),
             ("quantity", ">", 0),
             ("location_id.usage", "=", "internal"),
+            ("location_id.wms_is_damage", "=", False),
+            ("location_id.wms_is_repair", "=", False),
         ]
         strict = list(base_domain)
         if parent_location_id:

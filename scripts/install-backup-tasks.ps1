@@ -57,8 +57,14 @@ foreach ($p in @($backupScript, $drillScript)) {
     if (-not (Test-Path $p)) { throw "Missing required script: $p" }
 }
 
-$principal = New-ScheduledTaskPrincipal -UserId ("{0}\{1}" -f $env:USERDOMAIN, $env:USERNAME) `
-    -LogonType Interactive -RunLevel Limited
+# FPAT Critical: run the backup + drill as SYSTEM so they fire even when no
+# user is logged on (locked console, after reboot, headless box). The previous
+# Interactive principal silently stopped the moment the console locked, which
+# meant DR could die for weeks with the health endpoint still saying HEALTHY.
+# SYSTEM has the rights pg_dump and the script tree need; the runtime path
+# already accepts non-interactive invocations.
+$principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" `
+    -LogonType ServiceAccount -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
     -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
 

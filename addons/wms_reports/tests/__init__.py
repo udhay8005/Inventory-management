@@ -5,6 +5,7 @@ from . import (
     test_backup_audit,
     test_dashboard,
     test_find,
+    test_fpat_fx1,
     test_health_endpoint,
     test_health_probe,
     test_issued_for,

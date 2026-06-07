@@ -84,8 +84,12 @@ class WmsProductOnboard(models.TransientModel):
                 if bc in barcodes_in_batch:
                     raise UserError(_("Barcode %r is repeated on more than one row.") % bc)
                 barcodes_in_batch.add(bc)
+                # FPAT: alias column is 'barcode', not 'name'. The original
+                # ('name','=',bc) raised ValueError on every pre-validate run
+                # that supplied a Barcode column, making the new D-batch
+                # 'optional Barcode' feature crash the whole import.
                 if Product.search_count([("barcode", "=", bc)]) or Alias.search_count(
-                    [("name", "=", bc)]
+                    [("barcode", "=", bc)]
                 ):
                     raise UserError(
                         _("Barcode %r is already used by an existing product / alias.") % bc
@@ -209,7 +213,10 @@ class WmsProductOnboard(models.TransientModel):
                 vals["categ_id"] = line.categ_id.id
             if line.uom_id:
                 vals["uom_id"] = line.uom_id.id
-                vals["uom_po_id"] = line.uom_id.id
+                # FPAT: product.template.uom_po_id was removed in Odoo 19 in
+                # favour of per-supplier UoM on product.supplierinfo. Writing
+                # it crashed every import that set the optional UoM column.
+                # The active uom_id is sufficient on its own.
             # Hand the kind-specific extras to the template if the
             # Admin filled them on the wizard line.
             if line.expiry_date:

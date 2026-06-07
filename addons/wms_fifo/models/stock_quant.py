@@ -31,6 +31,10 @@ class StockQuant(models.Model):
             strict=strict,
             qty=qty,
         )
-        # Delegate to the single authoritative WMS removal ordering (Critical
-        # #5) so this reservation path and the Scan Issue planner never diverge.
+        # Note: the Damage/Repair-Out exclusion lives in the higher-level
+        # planner (find_oldest_quants_for_product), NOT here. _gather is also
+        # called by the legitimate internal-move flows in wms_repair_damage
+        # (action_start_repair sources FROM the Damage location, action_finish
+        # sources FROM Repair-Out), and a blanket exclusion here would break
+        # those by leaving the moves unassigned.
         return quants._wms_sorted_for_removal()

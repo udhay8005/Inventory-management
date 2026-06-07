@@ -248,11 +248,15 @@ class WmsDamage(models.Model):
             is_returnable = bool(rec.product_id.wms_is_returnable)
             product_name = rec.product_id.display_name
             qty = rec.quantity or 0.0
-            # wms_product_kind has a static selection list, so read it directly
-            # (the old callable()/fields_get fallback branch was always dead).
-            kind_label = dict(rec.product_id._fields["wms_product_kind"].selection).get(
-                rec.product_id.wms_product_kind, "Unclassified"
-            )
+            # FPAT Critical: wms_product_kind on product.product is RELATED to the
+            # field on product.template. For a related Selection, Odoo 19 sets
+            # _fields[...].selection to a lambda that resolves the parent's list
+            # at evaluation time - calling dict() on the lambda raises TypeError
+            # ('function' is not iterable). Read the static list from the
+            # template instead, so this works for both stored and related kinds.
+            kind_label = dict(
+                rec.product_id.product_tmpl_id._fields["wms_product_kind"].selection
+            ).get(rec.product_id.wms_product_kind, "Unclassified")
 
             if remaining <= 0 and is_returnable:
                 rec.recommended_action = "repair_returnable_only"

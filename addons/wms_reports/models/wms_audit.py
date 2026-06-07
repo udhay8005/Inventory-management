@@ -239,10 +239,21 @@ class WmsAudit(models.Model):
         """Admin accepts the audit. Variances become stock adjustments
         so the books match the physical count."""
         for rec in self:
-            if rec.state != "submitted":
+            # FPAT Critical: serialise concurrent Accepts on the same audit so
+            # a double-click / parallel-RPC cannot apply the variance delta
+            # twice. Lock the audit row FIRST and re-check state from the DB
+            # (a fresh read inside the lock) - the previous in-Python check
+            # raced because two clients each saw state='submitted' and both
+            # proceeded to write deltas. Flush any pending in-ORM writes so
+            # the SELECT-FOR-UPDATE locks against current state, not stale.
+            rec.flush_recordset(["state"])
+            self.env.cr.execute("SELECT state FROM wms_audit WHERE id = %s FOR UPDATE", (rec.id,))
+            row = self.env.cr.fetchone()
+            db_state = row[0] if row else None
+            if db_state != "submitted":
                 raise UserError(
-                    _("Only a submitted audit can be reviewed. %s is in " "%s.")
-                    % (rec.name, rec.state)
+                    _("Only a submitted audit can be reviewed. %s is in %s.")
+                    % (rec.name, db_state or "?")
                 )
             rec.state = "reviewed"
             rec.reviewed_at = fields.Datetime.now()
