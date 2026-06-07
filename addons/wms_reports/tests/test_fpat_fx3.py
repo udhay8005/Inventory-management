@@ -84,4 +84,3 @@ class TestFpatFx3ScanIssueImmutable(TransactionCase):
         self.assertEqual(picking.state, "done")
         with self.assertRaises(ValidationError):
             picking.write({"wms_is_scan_issue": False})
-
