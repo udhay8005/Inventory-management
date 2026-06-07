@@ -34,17 +34,16 @@ class WmsDamage(models.Model):
     )
     damage_value = fields.Float(
         string="Loss value",
-        compute="_compute_damage_value",
-        store=True,
-        help="Quantity x the product's unit cost at the time the damage was "
-        "recorded - what this loss is worth to the trust. Stored as a snapshot "
-        "so a later cost change doesn't rewrite historical losses.",
+        readonly=True,
+        copy=False,
+        help="Quantity x the product's unit cost at the moment the damage "
+        "event was confirmed - what this loss was worth to the trust at the "
+        "time it happened. NOT recomputed when quantity or cost changes "
+        "later. FPAT High: the previous computed/depends pattern silently "
+        "re-rated past losses whenever quantity was edited (which itself "
+        "should not be allowed - see action_confirm and the readonly state "
+        "on the view).",
     )
-
-    @api.depends("product_id", "quantity")
-    def _compute_damage_value(self):
-        for rec in self:
-            rec.damage_value = (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0)
 
     source_slot_id = fields.Many2one(
         "stock.location",
@@ -444,7 +443,17 @@ class WmsDamage(models.Model):
                 }
             )
             validate_reserved_or_abort(picking, rec.product_id, "send to Damage")
-            rec.write({"state": "confirmed", "picking_id": picking.id})
+            # FPAT High: snapshot the loss value at confirm time, then never
+            # touch it. quantity_value-x-cost is what the loss WAS worth when
+            # the damage actually happened; a later cost change or quantity
+            # edit must not rewrite history.
+            rec.write(
+                {
+                    "state": "confirmed",
+                    "picking_id": picking.id,
+                    "damage_value": (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0),
+                }
+            )
 
             # Mirror the audit-trail summary into the chatter so the
             # damage history stands on its own without cross-referencing

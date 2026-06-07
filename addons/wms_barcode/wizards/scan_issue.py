@@ -466,6 +466,11 @@ class WmsScanIssue(models.TransientModel):
             for ml in move.move_line_ids:
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
+                # FPAT High: snapshot unit cost ONTO the move line so the
+                # Consumption Value report reads a frozen number. The previous
+                # view joined to live product.standard_price which retroactively
+                # rewrote past months when the cost changed.
+                ml.wms_unit_cost_at_done = ml.product_id.standard_price or 0.0
         picking.button_validate()
         # Record the picking so a re-submit is a no-op (idempotency guard).
         self.picking_id = picking.id

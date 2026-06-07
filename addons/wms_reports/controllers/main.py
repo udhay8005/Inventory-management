@@ -250,28 +250,33 @@ class WmsRackGridController(http.Controller):
                 for f in sc("wms.forecast", [("reorder_qty", ">", 0)])
             ]
             return request.render("wms_reports.find_page", ctx)
-        if "expir" in ql:
+        # FPAT High: route ONLY exact-match keywords - the chips at the top of
+        # the find page pass canonical 'expiring' / 'dead' / 'damaged' /
+        # 'repair'. The previous substring routing hijacked legitimate product
+        # searches whose name contained 'expir', 'dead', 'slow', 'damag', or
+        # 'repair' (e.g. 'Slow Cooker 5L' returned the dead-stock list).
+        if ql in ("expiring", "expired", "expiry"):
             ctx["mode"], ctx["heading"] = "list", "Expiring / expired products"
             ctx["items"] = [
                 {"name": a.product_id.display_name, "detail": (a.status or "").title()}
                 for a in sc("wms.expiry.alert", [("status", "in", ("expired", "urgent"))])
             ]
             return request.render("wms_reports.find_page", ctx)
-        if "dead" in ql or "slow" in ql:
+        if ql in ("dead", "dead stock", "slow"):
             ctx["mode"], ctx["heading"] = "list", "Dead / slow stock"
             ctx["items"] = [
                 {"name": f.product_id.display_name, "detail": "no recent movement"}
                 for f in sc("wms.forecast", [("velocity_class", "=", "dead")])
             ]
             return request.render("wms_reports.find_page", ctx)
-        if "damag" in ql:
+        if ql in ("damaged", "damage"):
             ctx["mode"], ctx["heading"] = "list", "Damaged items"
             ctx["items"] = [
                 {"name": d.product_id.display_name, "detail": "qty %g" % d.quantity}
                 for d in sc("wms.damage", [("state", "=", "confirmed")])
             ]
             return request.render("wms_reports.find_page", ctx)
-        if "repair" in ql:
+        if ql in ("repair", "under repair", "repairing"):
             ctx["mode"], ctx["heading"] = "list", "Items under repair"
             ctx["items"] = [
                 {"name": r.product_id.display_name, "detail": "qty %g" % r.quantity}

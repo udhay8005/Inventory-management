@@ -46,14 +46,24 @@ class TestValueDimensions(TransactionCase):
         self.assertAlmostEqual(sum(rows.mapped("value_at_risk")), 100.0, places=2)
 
     def test_damage_loss_value(self):
+        keeper = self.env["wms.storekeeper"].search([], limit=1) or self.env[
+            "wms.storekeeper"
+        ].create({"name": "VALDIM Keeper"})
         dmg = self.env["wms.damage"].create(
             {
                 "product_id": self.product.id,
                 "source_slot_id": self.floor.id,
                 "quantity": 3.0,
+                "wms_reported_by": "X",
+                "wms_authorized_by": "Y",
+                "wms_storekeeper_id": keeper.id,
             }
         )
-        # 3 x 20.0 = 60.0 (computed in draft, stored as a snapshot)
+        # FPAT High: damage_value is snapshotted at action_confirm time, NOT
+        # computed-each-time. A draft damage records no loss yet.
+        self.assertAlmostEqual(dmg.damage_value, 0.0, places=2)
+        dmg.action_confirm()
+        # 3 x 20.0 = 60.0, frozen onto the row.
         self.assertAlmostEqual(dmg.damage_value, 60.0, places=2)
 
     def test_dead_stock_value(self):
