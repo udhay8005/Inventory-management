@@ -22,6 +22,8 @@ Runs **natively on Windows** — no Docker required.
 - 🖥 **Executive Dashboard** at `/wms/dashboard` — one manager-only screen: health, stock totals, attention badges, today's activity
 - 🔎 **Smart Find** at `/wms/find` — type a name / SKU / barcode → slot + qty, or tap a chip ("low stock", "expiring", "dead stock", "damaged", "under repair")
 - 💰 **Cost / value reports** — Stock Value, Consumption Value (broken down by purpose: Cows / Pooja / Maintenance / …), Product Lifecycle, plus value-at-risk on Expiry / Damage / Dead Stock
+- 🎯 **Issued-for classification** — every Scan Issue tags purpose (Cows / Pooja / Maintenance / Project / Administration / Other), driving consumption-by-purpose pivots
+- 🔔 **Alert hardening** — low-stock / expiry / backup-stale / restore-fail / health-CRITICAL alerts delivered to every WMS Manager's Discuss Inbox (via `message_notify`), with optional email via `wms_reports.alert_email`
 - ↩️ **One-click Undo** within a configurable window (default 15 min) — compensating internal transfer, no deletes
 - 🧪 **One-button Self-Diagnostics** — DB / backup-file / disk / duplicate-SKU / orphan-slot / negative-stock probes in one screen
 - 📐 **Opt-in slot capacity enforcement** (`wms_location.enforce_capacity`)
