@@ -273,11 +273,22 @@ Select-String config\odoo.native.conf -Pattern '^list_db'   # list_db = False
 (Invoke-WebRequest http://localhost:8069/web/database/manager -UseBasicParsing -MaximumRedirection 0 -ErrorAction SilentlyContinue).StatusCode  # 303/redirect, not the manager
 ```
 
-### 4 — (Optional) Lock the health endpoint behind a token
-`/wms/health` is open by default (so monitors can poll it). To require a token,
-set the parameter in **Settings → Technical → System Parameters**:
-`wms_reports.health_token = <your-secret>`, then poll
-`http://localhost:8069/wms/health?token=<your-secret>`.
+### 4 — Health endpoint token (auto-generated at install)
+`scripts/install-native.ps1` auto-generates a 32-character hex token at install
+time and writes it to **Settings → Technical → System Parameters →
+`wms_reports.health_token`**. The endpoint is reachable with NO credentials
+*only* when the token is sent — either header `X-Health-Token: <secret>` or
+query string `?token=<secret>`. Without it, anonymous probes get a safe
+non-leaking minimal response.
+
+To **rotate** the token, generate a new 32-char hex string (e.g.
+`[Convert]::ToHexString((Get-RandomBytes 16))`), update the System Parameter,
+and re-configure every external monitor with the new value in lock-step. To
+**disable the gate** (open access, for an isolated monitoring LAN only), clear
+the parameter — the controller's `consteq` guard falls through and serves the
+snapshot to any caller.
+
+`📸 CAPTURE` — the System Parameter row with the token name visible (mask the value).
 
 ### 5 — Verify backups & health are real
 After Phase 13, `/wms/health` must report `HEALTHY` with a recent
