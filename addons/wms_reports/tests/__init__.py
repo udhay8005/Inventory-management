@@ -1,5 +1,6 @@
 from . import (
     test_acl_capability,
+    test_alert_hardening,
     test_audit_reconcile,
     test_backup_audit,
     test_dashboard,

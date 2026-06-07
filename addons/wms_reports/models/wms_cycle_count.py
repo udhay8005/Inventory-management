@@ -15,6 +15,8 @@ import logging
 from markupsafe import Markup
 from odoo import api, fields, models, tools
 
+from .wms_notify import notify_wms_managers
+
 _logger = logging.getLogger(__name__)
 
 
@@ -124,31 +126,11 @@ class WmsCycleCountReminderCron(models.AbstractModel):
             _logger.info("wms_cycle_count: no slots stale > 30 days, " "nothing to remind.")
             return
 
-        managers = self.env.ref(
-            "wms_location.group_wms_manager",
-            raise_if_not_found=False,
-        )
-        if not managers:
-            return
-        recipients = managers.all_user_ids
-        if not recipients:
-            return
-
         # Markup() so Odoo 19 renders the HTML instead of escaping it.
         body = Markup(
             "<p><b>%d slot(s)</b> haven't been counted in over 30 days. "
-            "Open <i>WMS → Reports → Cycle Count Due</i> to walk through "
-            "and reconcile them.</p>"
+            "Open <i>WMS &rsaquo; Reports &rsaquo; Cycle Count Due</i> to walk "
+            "through and reconcile them.</p>"
         ) % len(due)
-        for user in recipients:
-            user.partner_id.message_post(
-                body=body,
-                subject="WMS — Cycle count reminder",
-                message_type="notification",
-                subtype_xmlid="mail.mt_note",
-            )
-        _logger.info(
-            "wms_cycle_count: notified %d managers about " "%d stale slots.",
-            len(recipients),
-            len(due),
-        )
+        notify_wms_managers(self.env, body, "WMS - Cycle count reminder")
+        _logger.info("wms_cycle_count: notified managers about %d stale slots.", len(due))

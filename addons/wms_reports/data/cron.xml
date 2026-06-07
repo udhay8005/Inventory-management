@@ -72,5 +72,42 @@
             <field name="nextcall"
                    eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=0, second=0)"/>
         </record>
+
+        <!--
+            Hourly restore-drill failure detector (maturity C). The drill
+            script writes success=False rows directly; this cron pings WMS
+            managers (in-app + optional email) so a failure can no longer
+            sit silently in the audit table until someone opens the report.
+        -->
+        <record id="cron_wms_restore_drill_check" model="ir.cron">
+            <field name="name">WMS — Restore-drill failure alert</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_restore_drill()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=1)).replace(minute=15, second=0)"/>
+        </record>
+
+        <!--
+            Every 4h health-CRITICAL escalation (maturity C). The daily
+            freshness check fires at 08:00 only; CRITICAL is too important
+            to wait that long. Idempotent (one alert per ~20h).
+        -->
+        <record id="cron_wms_health_critical_escalate" model="ir.cron">
+            <field name="name">WMS — Health CRITICAL escalation</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_escalate_health_critical()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">4</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=4)).replace(minute=20, second=0)"/>
+        </record>
     </data>
 </odoo>
