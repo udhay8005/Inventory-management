@@ -44,7 +44,13 @@ Check **WMS → Warehouse Map**.
 
 ## 4. Create products
 **WMS → Products → Onboard Product** — enter name, **Kind**, UoM, expiry (for
-perishables). The wizard assigns a unique **SKU + barcode** and prints the
+perishables). Optional columns for SKU, barcode, Category, UoM, and unit
+cost let a paste-from-Excel batch carry existing labels and feed the value
+reports. The wizard **pre-validates the whole batch** (duplicate SKU /
+barcode / invalid slot / missing expiry on perishables) before writing
+anything, so a row-50 typo can't leave 49 half-saved products behind. It
+also assigns auto-SKUs + auto-barcodes where you leave them blank, then
+prints the
 **4×1 in thermal label**. Calibrate the printer's gap sensor first.
 
 ## 5. Receive inventory

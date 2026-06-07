@@ -51,6 +51,11 @@
                                 <field name="volume_litres"
                                        string="Litres"
                                        optional="hide"/>
+                                <field name="default_code" optional="hide"/>
+                                <field name="barcode" optional="hide"/>
+                                <field name="categ_id" optional="hide"/>
+                                <field name="uom_id" optional="hide"/>
+                                <field name="standard_price" optional="hide"/>
                                 <field name="supplier_id" optional="hide"/>
                                 <field name="list_price" optional="hide"/>
                             </list>
