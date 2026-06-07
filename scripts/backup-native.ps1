@@ -197,10 +197,19 @@ function Start-GpgPipe {
             $pwFile,
             [System.Text.Encoding]::UTF8.GetBytes($plain)
         )
-        & $gpg --batch --yes --pinentry-mode loopback `
-            --passphrase-file $pwFile `
-            --symmetric --cipher-algo AES256 `
-            -o $OutputFile $InputFile 2> $errFile
+        # Closure-sprint: invoke via cmd /c, NOT `& $gpg ... 2>$errFile`.
+        # PowerShell 5.1 wraps every line of native-command stderr as a
+        # NativeCommandError record, and with $ErrorActionPreference = 'Stop'
+        # the very first informational line gpg-agent prints ("gpg-agent
+        # 2.5.20 started" - normal start-up text on stderr) terminates the
+        # script BEFORE gpg even runs. cmd.exe doesn't propagate stderr as
+        # PowerShell errors, so the encrypt completes; stderr lands in the
+        # tempfile and we only surface it on a real exit code.
+        $cmd = '"' + $gpg + '" --batch --yes --pinentry-mode loopback ' +
+               '--passphrase-file "' + $pwFile + '" ' +
+               '--symmetric --cipher-algo AES256 ' +
+               '-o "' + $OutputFile + '" "' + $InputFile + '" 2> "' + $errFile + '"'
+        & cmd /c $cmd
         $rc = $LASTEXITCODE
         if ($rc -ne 0) {
             $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue

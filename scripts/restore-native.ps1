@@ -124,9 +124,15 @@ function Start-GpgDecrypt {
         [System.IO.File]::WriteAllBytes(
             $pwFile, [System.Text.Encoding]::UTF8.GetBytes($plain)
         )
-        & $gpg --batch --yes --pinentry-mode loopback `
-            --passphrase-file $pwFile `
-            --decrypt -o $OutputFile $InputFile 2> $errFile
+        # Closure-sprint: invoke via cmd /c so PowerShell never sees the
+        # gpg-agent start-up text on stderr (PS 5.1 wraps that as a fatal
+        # NativeCommandError under $ErrorActionPreference='Stop'). Same fix
+        # as backup-native.ps1; passphrase-file safety is preserved.
+        $cmd = '"' + $gpg + '" --batch --yes --pinentry-mode loopback ' +
+               '--passphrase-file "' + $pwFile + '" ' +
+               '--decrypt -o "' + $OutputFile + '" "' + $InputFile + '" ' +
+               '2> "' + $errFile + '"'
+        & cmd /c $cmd
         $rc = $LASTEXITCODE
         if ($rc -ne 0) {
             $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
