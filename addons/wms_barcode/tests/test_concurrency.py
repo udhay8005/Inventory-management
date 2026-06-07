@@ -142,15 +142,19 @@ class TestScanConcurrency(TransactionCase):
         self.product.product_tmpl_id.wms_daily_cap = 5.0
         # Seed a historical unflagged row: same product, same origin pattern,
         # but never went through the Scan Issue wizard.
-        historical = self.env["stock.picking"].sudo().create(
-            {
-                "picking_type_id": self.wh.int_type_id.id,
-                "location_id": self.wh.lot_stock_id.id,
-                "location_dest_id": self.wh.lot_stock_id.id,
-                "origin": "Barcode FIFO issue",
-                "wms_is_scan_issue": False,
-                "wms_storekeeper_id": self.keeper.id,
-            }
+        historical = (
+            self.env["stock.picking"]
+            .sudo()
+            .create(
+                {
+                    "picking_type_id": self.wh.int_type_id.id,
+                    "location_id": self.wh.lot_stock_id.id,
+                    "location_dest_id": self.wh.lot_stock_id.id,
+                    "origin": "Barcode FIFO issue",
+                    "wms_is_scan_issue": False,
+                    "wms_storekeeper_id": self.keeper.id,
+                }
+            )
         )
         self.assertFalse(historical.wms_is_scan_issue)
         wiz = self._new_issue(3.0)
