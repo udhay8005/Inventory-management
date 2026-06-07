@@ -17,8 +17,9 @@ import logging
 from markupsafe import Markup
 from odoo import api, models
 
+from .wms_notify import notify_wms_managers
+
 _logger = logging.getLogger(__name__)
-_TRUE = ("1", "true", "True", "yes", "on")
 
 
 class WmsStockAlert(models.AbstractModel):
@@ -53,43 +54,4 @@ class WmsStockAlert(models.AbstractModel):
             "<ul>%s</ul>%s"
             "<p>Open <i>WMS &#8594; Forecast / Reorder</i> to raise a purchase.</p>"
         ) % (len(low), Markup(rows), Markup(extra))
-        self._dispatch_to_managers(body, "WMS — %d product(s) need reordering" % len(low))
-
-    @api.model
-    def _dispatch_to_managers(self, body, subject):
-        """In-app notice to every WMS manager; optional email when enabled.
-
-        Uses message_notify (not partner.message_post) so the alert actually
-        lands in each manager's Discuss Inbox + systray — a plain message_post
-        on a partner record only reaches followers, which a user is NOT of
-        their own contact, so it would never surface.
-        """
-        managers = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
-        if not managers or not managers.all_user_ids:
-            return
-        partners = managers.all_user_ids.partner_id
-        try:
-            self.env["mail.thread"].message_notify(
-                partner_ids=partners.ids, body=body, subject=subject
-            )
-        except Exception:  # noqa: BLE001 - a notice must never break the cron
-            _logger.exception("wms.stock.alert: in-app notify failed")
-
-        email_on = (
-            self.env["ir.config_parameter"].sudo().get_param("wms_reports.alert_email", "0")
-            in _TRUE
-        )
-        if not email_on:
-            return
-        for user in managers.all_user_ids.filtered("email"):
-            try:
-                self.env["mail.mail"].sudo().create(
-                    {
-                        "subject": subject,
-                        "body_html": body,
-                        "email_to": user.email,
-                        "auto_delete": True,
-                    }
-                ).send()
-            except Exception:  # noqa: BLE001 - email is best-effort
-                _logger.exception("wms.stock.alert: email failed for %s", user.login)
+        notify_wms_managers(self.env, body, "WMS — %d product(s) need reordering" % len(low))

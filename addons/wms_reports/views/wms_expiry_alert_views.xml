@@ -16,6 +16,8 @@
                     <field name="expiry_date"/>
                     <field name="days_to_expiry"/>
                     <field name="on_hand"/>
+                    <field name="unit_cost" optional="hide"/>
+                    <field name="value_at_risk" sum="Value at risk"/>
                     <field name="batch_number"/>
                     <field name="status"/>
                 </list>

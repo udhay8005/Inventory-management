@@ -2,6 +2,8 @@ from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+from ..models.stock_picking import WMS_ISSUED_FOR_SELECTION
+
 
 class WmsScanIssue(models.TransientModel):
     """Scan-based outbound issue with strict FIFO across slots.
@@ -105,6 +107,15 @@ class WmsScanIssue(models.TransientModel):
         "shed B', 'replacing broken pump in plumbing room', 'monthly "
         "vaccination round for calves'. Required — no issue without "
         "an explanation. Copied to the resulting picking's audit log.",
+    )
+    issued_for = fields.Selection(
+        WMS_ISSUED_FOR_SELECTION,
+        string="Issued for",
+        default="other",
+        help="Which part of the trust is consuming this stock. The free-text "
+        "note above says WHY; this structured choice lets the Consumption "
+        "Value report total spend by purpose (Cows, Pooja, Maintenance, ...). "
+        "Defaults to Other so existing flows are never blocked.",
     )
 
     # Photo capture. Binary + widget="image" gives mobile browsers an
@@ -419,6 +430,7 @@ class WmsScanIssue(models.TransientModel):
                 "wms_taken_by": (self.taken_by or "").strip(),
                 "wms_ordered_by": (self.ordered_by or "").strip(),
                 "wms_storekeeper_id": self.storekeeper_id.id,
+                "wms_issued_for": self.issued_for,
             }
         )
         for line in self.plan_line_ids:

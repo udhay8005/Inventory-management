@@ -49,13 +49,24 @@ product-centric timeline. Manager-only, under **Reports**.
 | Report | Question it answers | How |
 |---|---|---|
 | **Stock Value** | "How much capital is on the shelves right now?" | unit cost × on-hand, counting **storage** locations only (slots / floor / lot-stock children) — the *Trust internal use* sink is excluded so already-consumed goods don't inflate the figure. |
-| **Consumption Value** | "What did we consume, by value, this month?" | unit cost × issued qty, per month. Counts only done Scan Issues; an issue that was **Undone** nets to zero. |
+| **Consumption Value** | "What did we consume, by value, this month — and for what?" | unit cost × issued qty, per month, **broken down by purpose** (Cows / Pooja / Maintenance / …) via the Scan-Issue *Issued for* field. Counts only done Scan Issues; an issue that was **Undone** nets to zero. |
 | **Product Lifecycle** | "What's the whole history of this item?" | reuses the Store-Keeper activity log grouped by product — received, issued, returned, damaged, repaired, newest first. |
 
 Unit cost comes from `product.standard_price`, a company-dependent JSONB field;
 the views read the right company's cost in SQL (`standard_price ->> company_id`)
 so value stays aggregatable in pivot and graph. All three views are
 `_auto = False` — no table to migrate, refreshed at module upgrade.
+
+### Value on the risk reports
+
+The same unit cost now puts a money figure on the three "risk" lists, so a
+trustee sees rupees, not just counts:
+
+| Report | New column | Meaning |
+|---|---|---|
+| **Expiry alerts** (`wms.expiry.alert`) | **Value at risk** | on-hand × cost — what the trust loses if expired/expiring stock isn't used in time (column sums). |
+| **Damaged items** (`wms.damage`) | **Loss value** | quantity × cost, **snapshotted at the time of the damage** so a later cost change never rewrites history. |
+| **Dead stock** (`wms.forecast`) | **Capital tied up** | on-hand × cost for non-moving stock — money that could be freed by consuming it. |
 
 ## Printable PDFs (`reports/*.xml`)
 

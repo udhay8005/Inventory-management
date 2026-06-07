@@ -46,6 +46,8 @@
                         <field name="wms_taken_by"/>
                         <field name="wms_ordered_by"/>
                         <field name="wms_storekeeper_id"/>
+                        <field name="wms_issued_for"
+                               invisible="not wms_issued_for"/>
                         <field name="wms_reversed_by_id" readonly="1"
                                invisible="not wms_reversed_by_id"/>
                     </group>

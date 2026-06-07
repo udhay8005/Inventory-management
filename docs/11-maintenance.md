@@ -66,13 +66,23 @@ Changing any of these takes effect immediately — no restart needed.
 
 ### Automatic alerts (no setup needed)
 
-Three crons quietly watch the warehouse and notify WMS managers **in-app** only
-when something needs attention (all use `message_notify`, so they land in the
-manager's Discuss Inbox):
+All alerts reach managers in their Discuss **Inbox** (via `message_notify` —
+the older `partner.message_post` path delivered nothing because users don't
+follow their own contact). When `wms_reports.alert_email` is set to `1`,
+the SAME alerts also email each manager.
 
 - **Daily low-stock alert** — products at or below their reorder level.
-- **Daily backup-freshness check** — a stale backup or restore drill.
+- **Daily backup-freshness check** — a stale backup or stale restore drill.
+- **Hourly restore-drill failure alert** — fires the moment a drill row
+  records `success=False`; no more silent DR failures.
+- **4-hourly health-CRITICAL escalation** — surfaces a CRITICAL health
+  snapshot in hours, not 24h. Idempotent (one alert per ~20h).
 - **Weekly expiry digest** — perishables expired or expiring within 30 days.
+- **Weekly cycle-count reminder** — slots not counted in over 30 days.
+- **Urgent-buy alert** — a damage event leaves the trust with zero spares.
+
+All seven use the same shared helper, so toggling `wms_reports.alert_email`
+turns email on for the whole set at once.
 
 Photos: Scan Receipt, Scan Issue, and Damage all accept an optional photo
 (the camera opens on a phone) that is attached to the record for the audit trail.

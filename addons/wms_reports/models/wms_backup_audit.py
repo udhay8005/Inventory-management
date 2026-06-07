@@ -22,6 +22,8 @@ from datetime import timedelta
 
 from odoo import api, fields, models
 
+from .wms_notify import notify_wms_managers
+
 _logger = logging.getLogger(__name__)
 
 # Thresholds (hours / days). Tunable in one place.
@@ -47,6 +49,7 @@ class WmsBackupAudit(models.Model):
             ("backup_offsite", "Off-site copy"),
             ("restore_drill", "Restore drill"),
             ("staleness_warning", "Staleness warning"),
+            ("health_critical", "Health CRITICAL escalation"),
         ],
         required=True,
         index=True,
@@ -55,6 +58,12 @@ class WmsBackupAudit(models.Model):
         default=False,
         index=True,
         help="True if the operation completed cleanly.",
+    )
+    notified = fields.Boolean(
+        default=False,
+        index=True,
+        help="Internal: True once the restore-drill-failure / health-critical "
+        "cron has alerted managers about this row. Prevents repeat alerts.",
     )
     event_time = fields.Datetime(
         default=fields.Datetime.now,
@@ -236,24 +245,78 @@ class WmsBackupAudit(models.Model):
         self._notify_managers(snap["status"], detail)
 
     @api.model
-    def _notify_managers(self, status, detail):
-        """Best-effort Discuss notice to WMS managers. Never raises."""
-        try:
+    def _cron_check_restore_drill(self):
+        """Notify managers when a restore drill row landed with success=False.
+
+        Closes the silent-failure gap: restore-drill.ps1 already records
+        successes and failures, but until now nobody was told - the manager
+        had to open the audit report to discover the drill failed. This cron
+        scans the latest restore_drill rows in the last 24h and pings managers
+        for each failure (suppressed if a notice for the same row already
+        fired - we mark the row's audit_type so the join is cheap).
+        """
+        cutoff = fields.Datetime.now() - timedelta(hours=24)
+        fails = self.sudo().search(
+            [
+                ("audit_type", "=", "restore_drill"),
+                ("success", "=", False),
+                ("event_time", ">=", cutoff),
+                ("notified", "=", False),
+            ]
+        )
+        if not fails:
+            return
+        for row in fails:
             from markupsafe import Markup
 
-            managers = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
-            if not managers or not managers.all_user_ids:
-                return
             body = Markup(
-                "<p>⚠️ <b>Backup health: %s</b></p><p>%s</p>"
-                "<p>Open <i>WMS → Reports → Backup &amp; DR Audit</i> for detail.</p>"
-            ) % (status, detail)
-            for user in managers.all_user_ids:
-                user.partner_id.message_post(
-                    body=body,
-                    subject="WMS — Backup health %s" % status,
-                    message_type="notification",
-                    subtype_xmlid="mail.mt_note",
-                )
-        except Exception:  # noqa: BLE001 - notification must never break the cron
-            _logger.exception("wms.backup.audit: manager notification failed")
+                "<p>&#9888; <b>Restore drill FAILED.</b></p>"
+                "<p>%s</p><p><i>Host:</i> %s &#183; <i>When:</i> %s</p>"
+                "<p>Open <i>WMS &#8594; Reports &#8594; Backup &amp; DR Audit</i> "
+                "to investigate.</p>"
+            ) % (row.message or "(no detail)", row.host or "?", row.event_time)
+            notify_wms_managers(self.env, body, "WMS - Restore drill FAILED")
+        fails.write({"notified": True})
+
+    @api.model
+    def _cron_escalate_health_critical(self):
+        """Escalate a CRITICAL health snapshot to managers immediately. The
+        existing freshness cron only fires once a day at 08:00; CRITICAL is too
+        important to wait that long. Runs every 4h, idempotent via the same
+        20h dedupe used for staleness warnings."""
+        snap = self._health_snapshot()
+        if snap["status"] != "CRITICAL":
+            return
+        cutoff = fields.Datetime.now() - timedelta(hours=20)
+        recent = self.sudo().search_count(
+            [
+                ("audit_type", "=", "health_critical"),
+                ("event_time", ">=", cutoff),
+            ]
+        )
+        if recent:
+            return
+        self.sudo().create(
+            {
+                "name": "health-critical",
+                "audit_type": "health_critical",
+                "success": False,
+                "event_time": fields.Datetime.now(),
+                "message": "Health CRITICAL: %s" % ("; ".join(snap["warnings"]) or "no detail"),
+                "host": "odoo-cron",
+            }
+        )
+        self._notify_managers("CRITICAL", "; ".join(snap["warnings"]) or "no detail")
+
+    @api.model
+    def _notify_managers(self, status, detail):
+        """Alert WMS managers about backup health. Delivered via the shared
+        notify helper so the message actually lands in their Discuss Inbox +
+        systray (the previous partner.message_post never did)."""
+        from markupsafe import Markup
+
+        body = Markup(
+            "<p>&#9888; <b>Backup health: %s</b></p><p>%s</p>"
+            "<p>Open <i>WMS &rsaquo; Reports &rsaquo; Backup &amp; DR Audit</i> for detail.</p>"
+        ) % (status, detail)
+        notify_wms_managers(self.env, body, "WMS - Backup health %s" % status)

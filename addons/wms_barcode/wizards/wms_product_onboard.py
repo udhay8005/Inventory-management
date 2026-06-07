@@ -63,6 +63,42 @@ class WmsProductOnboard(models.TransientModel):
                     "before you can submit."
                 )
             )
+
+        # Pre-import dup / invalid checks (maturity D). Catches a typo at the
+        # 50th row BEFORE any product/quant is created, so the trust never
+        # ends up with 49 half-saved rows and a confusing constraint error.
+        Product = self.env["product.product"].sudo()
+        Alias = self.env["wms.barcode.alias"].sudo()
+        skus_in_batch = set()
+        barcodes_in_batch = set()
+        for line in self.line_ids:
+            code = (line.default_code or "").strip()
+            if code:
+                if code in skus_in_batch:
+                    raise UserError(_("SKU %r is repeated on more than one row.") % code)
+                skus_in_batch.add(code)
+                if Product.search_count([("default_code", "=", code)]):
+                    raise UserError(_("SKU %r is already used by an existing product.") % code)
+            bc = (line.barcode or "").strip()
+            if bc:
+                if bc in barcodes_in_batch:
+                    raise UserError(_("Barcode %r is repeated on more than one row.") % bc)
+                barcodes_in_batch.add(bc)
+                if Product.search_count([("barcode", "=", bc)]) or Alias.search_count(
+                    [("name", "=", bc)]
+                ):
+                    raise UserError(
+                        _("Barcode %r is already used by an existing product / alias.") % bc
+                    )
+            if line.location_id and line.location_id.wms_location_type not in (
+                "slot",
+                "floor",
+            ):
+                raise UserError(
+                    _("Slot %r isn't a valid storage location - pick a slot " "or a floor zone.")
+                    % line.location_id.display_name
+                )
+
         for line in self.line_ids:
             if not line.name:
                 raise UserError(_("Row %d: product name is required.") % (line._origin.id or 0))
@@ -163,6 +199,17 @@ class WmsProductOnboard(models.TransientModel):
             }
             if line.list_price:
                 vals["list_price"] = line.list_price
+            if line.standard_price:
+                vals["standard_price"] = line.standard_price
+            if line.default_code:
+                vals["default_code"] = (line.default_code or "").strip()
+            if line.barcode:
+                vals["barcode"] = (line.barcode or "").strip()
+            if line.categ_id:
+                vals["categ_id"] = line.categ_id.id
+            if line.uom_id:
+                vals["uom_id"] = line.uom_id.id
+                vals["uom_po_id"] = line.uom_id.id
             # Hand the kind-specific extras to the template if the
             # Admin filled them on the wizard line.
             if line.expiry_date:
@@ -280,6 +327,35 @@ class WmsProductOnboardLine(models.TransientModel):
         domain=[("supplier_rank", ">", 0)],
     )
     list_price = fields.Float(string="Unit price (optional)")
+    standard_price = fields.Float(
+        string="Unit cost (optional)",
+        help="Per-unit cost (rupees). Drives the value reports - leave at 0 "
+        "if you don't track cost.",
+    )
+    # Optional pre-set SKU / barcode (the system still auto-generates these
+    # when blank). Surfaced so a CSV import can carry an existing label.
+    default_code = fields.Char(
+        string="SKU (optional)",
+        help="Leave blank to auto-generate from WMS Kind. If set, it must be "
+        "globally unique across all products.",
+    )
+    barcode = fields.Char(
+        string="Barcode (optional)",
+        help="Leave blank to auto-generate a Code128 / EAN-13. If set, it must "
+        "be globally unique across products + aliases.",
+    )
+    categ_id = fields.Many2one(
+        "product.category",
+        string="Category",
+        help="Optional Odoo category. Drives the category breakdown in the "
+        "Stock / Consumption Value reports. Leave blank for the default.",
+    )
+    uom_id = fields.Many2one(
+        "uom.uom",
+        string="UoM",
+        help="Unit of measure for the on-hand quantity (kg, L, units, ...). "
+        "Leave blank for the product-template default.",
+    )
 
     @api.onchange("location_scan")
     def _onchange_location_scan(self):

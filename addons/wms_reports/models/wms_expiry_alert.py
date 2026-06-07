@@ -19,6 +19,8 @@ the report.
 from markupsafe import Markup, escape
 from odoo import api, fields, models, tools
 
+from .wms_notify import notify_wms_managers
+
 
 class WmsExpiryAlert(models.Model):
     _name = "wms.expiry.alert"
@@ -53,6 +55,14 @@ class WmsExpiryAlert(models.Model):
         ],
         readonly=True,
     )
+    company_id = fields.Many2one("res.company", string="Company", readonly=True)
+    unit_cost = fields.Float(string="Unit cost", readonly=True)
+    value_at_risk = fields.Float(
+        string="Value at risk",
+        readonly=True,
+        help="On-hand quantity x unit cost. For expired / urgent rows this is "
+        "the money the trust stands to lose if the stock isn't used in time.",
+    )
 
     @api.model
     def init(self):
@@ -66,7 +76,8 @@ class WmsExpiryAlert(models.Model):
             """
             CREATE OR REPLACE VIEW wms_expiry_alert AS
             WITH on_hand AS (
-                SELECT sq.product_id, SUM(sq.quantity) AS qty
+                SELECT sq.product_id, SUM(sq.quantity) AS qty,
+                       MAX(sq.company_id) AS company_id
                   FROM stock_quant sq
                   JOIN stock_location sl ON sl.id = sq.location_id
                  WHERE sl.usage = 'internal'
@@ -78,6 +89,12 @@ class WmsExpiryAlert(models.Model):
                 pt.wms_expiry_date AS expiry_date,
                 (pt.wms_expiry_date - CURRENT_DATE)::int AS days_to_expiry,
                 COALESCE(oh.qty, 0) AS on_hand,
+                oh.company_id      AS company_id,
+                COALESCE((pp.standard_price ->> oh.company_id::text)::numeric, 0)
+                    AS unit_cost,
+                COALESCE(oh.qty, 0)
+                    * COALESCE((pp.standard_price ->> oh.company_id::text)::numeric, 0)
+                    AS value_at_risk,
                 pt.wms_batch_number AS batch_number,
                 CASE
                     WHEN pt.wms_expiry_date < CURRENT_DATE             THEN 'expired'
@@ -108,15 +125,6 @@ class WmsExpiryAlert(models.Model):
         if not urgent:
             return
 
-        # Find all WMS Manager users (group_wms_manager).
-        manager_group = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
-        if not manager_group:
-            return
-        manager_partners = manager_group.all_user_ids.partner_id
-
-        if not manager_partners:
-            return
-
         rows = [
             "<table style='border-collapse:collapse;font-family:Arial'>",
             "<tr><th style='text-align:left;padding:4px 8px;border-bottom:1px solid #ccc'>Product</th>"
@@ -145,14 +153,8 @@ class WmsExpiryAlert(models.Model):
             + "<p><i>Full list: WMS &rsaquo; Reports &rsaquo; Expiry alerts.</i></p>"
         )
 
-        # Post to each manager partner's inbox via a sudoed mail.thread
-        # call. We attach to res.users so Odoo's notification system
-        # routes it correctly per user.
-        Users = self.env["res.users"].sudo()
-        for user in manager_group.all_user_ids:
-            Users.browse(user.id).message_post(
-                body=body,
-                subject="WMS: weekly expiry digest",
-                message_type="notification",
-                partner_ids=[user.partner_id.id],
-            )
+        # Route through the shared helper -> Discuss Inbox (+ email when the
+        # wms_reports.alert_email parameter is on). Switched from the per-user
+        # message_post pattern which only reached followers, not the user's
+        # own inbox - so this digest was being silently missed.
+        notify_wms_managers(self.env, body, "WMS - weekly expiry digest")

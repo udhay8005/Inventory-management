@@ -32,6 +32,20 @@ class WmsDamage(models.Model):
         "CHECK(quantity > 0)",
         "Damage quantity must be greater than zero.",
     )
+    damage_value = fields.Float(
+        string="Loss value",
+        compute="_compute_damage_value",
+        store=True,
+        help="Quantity x the product's unit cost at the time the damage was "
+        "recorded - what this loss is worth to the trust. Stored as a snapshot "
+        "so a later cost change doesn't rewrite historical losses.",
+    )
+
+    @api.depends("product_id", "quantity")
+    def _compute_damage_value(self):
+        for rec in self:
+            rec.damage_value = (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0)
+
     source_slot_id = fields.Many2one(
         "stock.location",
         # Stock can live in slots (inside racks) OR floor zones (open
@@ -480,13 +494,15 @@ class WmsDamage(models.Model):
             "auth": self.wms_authorized_by or "(unspecified)",
             "keeper": (self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"),
         }
-        for user in group.all_user_ids:
-            user.partner_id.message_post(
-                body=body,
-                subject="WMS — URGENT BUY: %s" % self.product_id.display_name,
-                message_type="notification",
-                subtype_xmlid="mail.mt_note",
-            )
+        # message_notify -> Discuss Inbox + systray. A plain message_post on
+        # a partner only reaches followers; a user is NOT a follower of their
+        # own contact, so the previous loop was silently dropping urgent-buy
+        # alerts. See addons/wms_reports/models/wms_notify.py for the rationale.
+        self.env["mail.thread"].message_notify(
+            partner_ids=group.all_user_ids.partner_id.ids,
+            body=body,
+            subject="WMS - URGENT BUY: %s" % self.product_id.display_name,
+        )
 
     def action_create_repair_order(self):
         """Open a new wms.repair.order pre-filled from this damage event.
