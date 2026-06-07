@@ -56,7 +56,8 @@ prints the
 ## 5. Receive inventory
 **WMS → Scan Receipt** — pick the on-duty keeper + audit fields → scan product →
 quantity → scan destination slot → **Validate**. Confirm via
-**Reports → Where is it?**.
+**Operations → Find / Where is it?** (smart search page) or
+**Reports → Where is product X?** (drill-down).
 
 ## 6. Backup
 ```powershell

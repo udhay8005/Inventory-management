@@ -19,7 +19,14 @@ Runs **natively on Windows** — no Docker required.
 - 🔁 **Returnability classification** — product Kind (Raw / Packaging / Fluid / Finished Good / WIP / Consumable / Tool / Spare) drives whether Scan Return accepts it
 - 📈 **Buying recommendations** — daily-average usage + 7-day buffer for non-returnables; concurrent-users heuristic for tools/spares
 - 📊 **Reports** — Where-is-it / Warehouse map / Oldest stock (FIFO) / Slot occupancy / Cycle count due / Movement history / Low stock alerts / Dead stock / Reorder summary
+- 🖥 **Executive Dashboard** at `/wms/dashboard` — one manager-only screen: health, stock totals, attention badges, today's activity
+- 🔎 **Smart Find** at `/wms/find` — type a name / SKU / barcode → slot + qty, or tap a chip ("low stock", "expiring", "dead stock", "damaged", "under repair")
+- 💰 **Cost / value reports** — Stock Value, Consumption Value (broken down by purpose: Cows / Pooja / Maintenance / …), Product Lifecycle, plus value-at-risk on Expiry / Damage / Dead Stock
+- ↩️ **One-click Undo** within a configurable window (default 15 min) — compensating internal transfer, no deletes
+- 🧪 **One-button Self-Diagnostics** — DB / backup-file / disk / duplicate-SKU / orphan-slot / negative-stock probes in one screen
+- 📐 **Opt-in slot capacity enforcement** (`wms_location.enforce_capacity`)
 - 🤖 **Offline AI demand forecasting** — statsmodels-based, runs locally, no external API
+- 🛡️ **Off-site encrypted backup copy** — `BACKUP_OFFSITE_DIR` (USB, network share, OneDrive sync folder — all just paths), SHA-256 verified after copy
 
 ## Quickstart (Windows)
 
@@ -149,7 +156,7 @@ Inventory_mngt/
 - 📘 [Installation & Setup Guide](docs/INSTALLATION-GUIDE.md) — deploy from scratch (15 phases, with checkpoints + troubleshooting)
 - ⚡ [Admin Quick Start](docs/ADMIN-QUICK-START.md) — the ~15-minute admin path
 - 🧰 [Store Keeper Quick Start](docs/STOREKEEPER-QUICK-START.md) — the ~10-minute operator path
-- ✅ [Production Readiness Guide](docs/PRODUCTION-READINESS.md) — go-live sign-off
+- 📜 [Historical v19.0.5 sign-off](docs/PRODUCTION-READINESS-v19.0.5.md) — preserved as the v19.0.5 production-readiness record; see CHANGELOG for the current release
 - 💾 [Backup & Recovery Guide](docs/18-restore-drill.md) — encrypted backups + weekly restore drill
 - 🎓 [Training Guide](docs/21-training-system.md) — the in-app Help & Training academy
 
@@ -173,7 +180,7 @@ Architecture, design notes, and operational guides:
 - [`docs/16-hardware-guide.md`](docs/16-hardware-guide.md) — scanners + thermal printers
 - [`docs/17-ci-cd.md`](docs/17-ci-cd.md) — GitHub Actions pipeline + release flow
 - [`docs/20-end-to-end-flow.md`](docs/20-end-to-end-flow.md) — full lifecycle ASCII diagram
-- [`docs/PRODUCTION-READINESS.md`](docs/PRODUCTION-READINESS.md) — production sign-off checklist
+- [`docs/PRODUCTION-READINESS-v19.0.5.md`](docs/PRODUCTION-READINESS-v19.0.5.md) — historical sign-off record (v19.0.5)
 - [`docs/RUN-AS-SERVICE.md`](docs/RUN-AS-SERVICE.md) — run Odoo as an auto-starting Windows service
 - [`docs/LABEL-PRINTING.md`](docs/LABEL-PRINTING.md) — thermal 4×2 labels + printer gap calibration
 

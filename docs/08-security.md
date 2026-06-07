@@ -1,21 +1,49 @@
 # 08 — Security & access control
 
-## Role model (two roles + optional sub-roles)
+## Role model (two tiers: base role + capability sub-groups)
+
+The trust runs a **two-tier** model: every user picks ONE base role, and the
+Admin grants ONE OR MORE capability sub-groups on top. A bare Store Keeper
+with no sub-groups can VIEW reports but cannot scan anything — this matches
+how new hires are onboarded (shadow first, scan later).
 
 ```
-WMS / Store Keeper   ← every-day operator (scan, file damage, file repair-create)
-WMS / Manager        ← Admin (everything)
-WMS / Repair Tech    ← optional sub-role on top of Store Keeper, granted only when needed
+Base roles                            Optional capability sub-groups
+─────────────────────────────         ──────────────────────────────────
+WMS / Store Keeper                 +  group_wms_can_scan_receive
+WMS / Manager (= base + all)          group_wms_can_scan_issue
+WMS / Repair Tech (= base + repair)   group_wms_can_file_damage
+                                      group_wms_can_submit_audit
+                                      group_wms_can_manage_aliases
 ```
 
-| Group | xml_id | Implies | Capabilities |
+### Base roles
+
+| Group | xml_id | Implies | Effect |
 |---|---|---|---|
-| WMS / Store Keeper | `wms_location.group_wms_user` | `stock.group_stock_user` | Scan Receipt / Return / Issue, file Damage, click Create-Repair-Order, view-only on resulting Repair Orders, all reports |
-| WMS / Manager | `wms_location.group_wms_manager` | `stock.group_stock_manager`, `wms_location.group_wms_user` | Everything — including racks, slot creation, label config, roster maintenance, raw Inventory app access |
-| WMS / Repair Tech | `wms_repair_damage.group_repair_tech` | `wms_location.group_wms_user` | Adds write access on `wms.repair.order` for Start Repair / Mark Done / Scrap |
+| WMS / Store Keeper | `wms_location.group_wms_user` | `stock.group_stock_user` | Read-only on reports + menus, until granted a capability sub-group. |
+| WMS / Manager | `wms_location.group_wms_manager` | `stock.group_stock_manager`, `wms_location.group_wms_user`, ALL capability sub-groups | Everything — including racks, slot creation, label config, roster maintenance, /wms/dashboard, value reports, raw Inventory app access. |
+| WMS / Repair Tech | `wms_repair_damage.group_repair_tech` | `wms_location.group_wms_user` | Adds write access on `wms.repair.order` for Start Repair / Mark Done / Scrap. |
+
+### Capability sub-groups (granted PER USER by the Admin)
+
+| Group | xml_id | Adds | Why it's separate |
+|---|---|---|---|
+| Can Scan Receipt / Return | `wms_barcode.group_wms_can_scan_receive` | Scan Receipt wizard + Scan Return | Two-step new-hire onboarding — receipts first, issues later. |
+| Can Scan Issue | `wms_barcode.group_wms_can_scan_issue` | Scan Issue wizard (FEFO planner) | Issues have a daily cap + per-issue cap + audit triplet — only granted to keepers trusted with the budget. |
+| Can File Damage | `wms_repair_damage.group_wms_can_file_damage` | wms.damage form + action_confirm | Damage events drive the urgent-buy recommendation and lock the source slot. Limited per the trust's accountability policy. |
+| Can Submit Audit | `wms_reports.group_wms_can_submit_audit` | wms.audit start + submit (Admin still accepts) | Auditors walk slots and submit counts; the Admin alone applies the variance delta. |
+| Can Manage Aliases | `wms_barcode.group_wms_can_manage_aliases` | wms.barcode.alias maintenance | Aliases are barcode-to-product mappings; collisions silently route stock to the wrong product if mismanaged. |
+
+### Bare Store Keeper = read-only
+
+A user with ONLY `wms_location.group_wms_user` and NO capability sub-groups
+can open WMS menus and read reports but cannot scan, damage, or audit. This
+is the **shadow** state for a new hire — they can watch the screen during
+training and read the manuals without being able to write.
 
 The `admin` user is auto-added to `WMS / Manager` on first install of
-`wms_location`.
+`wms_location` (which implies every capability sub-group).
 
 ## Why Store Keepers keep `stock.group_stock_user` but lose the Inventory menu
 

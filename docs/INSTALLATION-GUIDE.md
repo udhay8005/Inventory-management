@@ -463,8 +463,8 @@ Receiving **into a specific slot** is the putaway — the slot you scanned is wh
 the stock now lives. (For bulk, choose a Floor Zone.)
 
 ### 3 — Verify the slot
-**WMS → Reports → Where is it?** (search the product) — it shows the slot and
-quantity. Or open the slot on the **Warehouse Map**.
+**WMS → Operations → Find / Where is it?** (search the product) — it shows the
+slot and quantity. Or open the slot on the **Warehouse Map**.
 
 ### 4 — Verify inventory
 **WMS → Reports → Slot Occupancy / Oldest Stock (FIFO)** — the new quantity
@@ -477,7 +477,7 @@ triplet shown in reports.
 
 `✅ CHECKPOINT` — the product shows the received quantity in the correct slot,
 and the move records the full audit triplet.
-`📸 CAPTURE` — the Scan Receipt confirmation + the "Where is it?" result.
+`📸 CAPTURE` — the Scan Receipt confirmation + the Find page result.
 
 ---
 

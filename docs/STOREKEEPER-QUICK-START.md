@@ -88,8 +88,9 @@ shelf. Pick your name, scan the item, scan the slot, **Validate**. (The product'
   then scan.
 - For **liquids / by-weight items**, the receipt asks for a **photo** — your
   phone camera opens automatically.
-- **Check stock fast:** **WMS → Reports → Where is it?** (search a product → see
-  its slot and quantity).
+- **Check stock fast:** **WMS → Operations → Find / Where is it?** (smart search
+  page — type a product name, SKU, or scan a barcode → see its slot and qty,
+  or tap a chip for "low stock" / "expiring" / "damaged" / "under repair").
 - Always pick **your own name** as the on-duty keeper — that's how the trust
   knows who handled what.
 
