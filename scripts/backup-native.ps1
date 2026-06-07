@@ -162,6 +162,24 @@ function Start-GpgPipe {
     # GPG writes informational notices (gpg-agent socket, first-run
     # keyring creation) to stderr; those aren't failures. We collect
     # stderr to a tempfile and only print it if gpg exits non-zero.
+    # ---- Self-heal a stale gpg-agent before each encrypt ----------------
+    # The agent leaves stale Unix-domain-style socket files in %APPDATA%\gnupg
+    # and %LOCALAPPDATA%\gnupg on Windows; once one of S.gpg-agent*
+    # ("ssh"/"extra"/"browser"/"") goes bad, every subsequent symmetric
+    # encrypt fails with "can't connect to the gpg-agent" until the user
+    # manually clears it. This block runs the same recovery on every
+    # invocation, so the nightly backup-native.ps1 cron can't silently fail
+    # again. Idempotent: a clean agent restarts in <1s.
+    try { & gpgconf --kill gpg-agent 2>&1 | Out-Null } catch {}
+    foreach ($dir in @("$env:APPDATA\gnupg", "$env:LOCALAPPDATA\gnupg")) {
+        if (Test-Path -LiteralPath $dir) {
+            Get-ChildItem -LiteralPath $dir -Filter 'S.gpg-agent*' `
+                -Force -ErrorAction SilentlyContinue |
+                ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+        }
+    }
+    try { & gpg-connect-agent /bye 2>&1 | Out-Null } catch {}
+
     $errFile = [System.IO.Path]::GetTempFileName()
     $plain = $null
     try {
