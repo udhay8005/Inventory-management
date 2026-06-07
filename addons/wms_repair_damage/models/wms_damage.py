@@ -34,17 +34,16 @@ class WmsDamage(models.Model):
     )
     damage_value = fields.Float(
         string="Loss value",
-        compute="_compute_damage_value",
-        store=True,
-        help="Quantity x the product's unit cost at the time the damage was "
-        "recorded - what this loss is worth to the trust. Stored as a snapshot "
-        "so a later cost change doesn't rewrite historical losses.",
+        readonly=True,
+        copy=False,
+        help="Quantity x the product's unit cost at the moment the damage "
+        "event was confirmed - what this loss was worth to the trust at the "
+        "time it happened. NOT recomputed when quantity or cost changes "
+        "later. FPAT High: the previous computed/depends pattern silently "
+        "re-rated past losses whenever quantity was edited (which itself "
+        "should not be allowed - see action_confirm and the readonly state "
+        "on the view).",
     )
-
-    @api.depends("product_id", "quantity")
-    def _compute_damage_value(self):
-        for rec in self:
-            rec.damage_value = (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0)
 
     source_slot_id = fields.Many2one(
         "stock.location",
@@ -248,11 +247,15 @@ class WmsDamage(models.Model):
             is_returnable = bool(rec.product_id.wms_is_returnable)
             product_name = rec.product_id.display_name
             qty = rec.quantity or 0.0
-            # wms_product_kind has a static selection list, so read it directly
-            # (the old callable()/fields_get fallback branch was always dead).
-            kind_label = dict(rec.product_id._fields["wms_product_kind"].selection).get(
-                rec.product_id.wms_product_kind, "Unclassified"
-            )
+            # FPAT Critical: wms_product_kind on product.product is RELATED to the
+            # field on product.template. For a related Selection, Odoo 19 sets
+            # _fields[...].selection to a lambda that resolves the parent's list
+            # at evaluation time - calling dict() on the lambda raises TypeError
+            # ('function' is not iterable). Read the static list from the
+            # template instead, so this works for both stored and related kinds.
+            kind_label = dict(
+                rec.product_id.product_tmpl_id._fields["wms_product_kind"].selection
+            ).get(rec.product_id.wms_product_kind, "Unclassified")
 
             if remaining <= 0 and is_returnable:
                 rec.recommended_action = "repair_returnable_only"
@@ -440,7 +443,17 @@ class WmsDamage(models.Model):
                 }
             )
             validate_reserved_or_abort(picking, rec.product_id, "send to Damage")
-            rec.write({"state": "confirmed", "picking_id": picking.id})
+            # FPAT High: snapshot the loss value at confirm time, then never
+            # touch it. quantity_value-x-cost is what the loss WAS worth when
+            # the damage actually happened; a later cost change or quantity
+            # edit must not rewrite history.
+            rec.write(
+                {
+                    "state": "confirmed",
+                    "picking_id": picking.id,
+                    "damage_value": (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0),
+                }
+            )
 
             # Mirror the audit-trail summary into the chatter so the
             # damage history stands on its own without cross-referencing

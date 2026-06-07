@@ -81,6 +81,21 @@ class WmsExpiryAlert(models.Model):
                   FROM stock_quant sq
                   JOIN stock_location sl ON sl.id = sq.location_id
                  WHERE sl.usage = 'internal'
+                       -- COALESCE because Odoo defaults Boolean fields to
+                       -- False via the ORM but raw INSERTs leave NULL, and
+                       -- 'x = FALSE' is NULL when x is NULL (Postgres).
+                       AND COALESCE(sl.wms_is_damage, FALSE) = FALSE
+                       AND COALESCE(sl.wms_is_repair, FALSE) = FALSE
+                       -- Storage only: under a warehouse's lot_stock_id.
+                       -- Excludes the 'Trust internal use' sink which holds
+                       -- already-consumed goods (also usage='internal'), so
+                       -- value-at-risk is the genuine on-shelf exposure.
+                       AND EXISTS (
+                           SELECT 1
+                             FROM stock_warehouse w
+                             JOIN stock_location ls ON ls.id = w.lot_stock_id
+                            WHERE sl.parent_path LIKE ls.parent_path || '%'
+                       )
                  GROUP BY sq.product_id
             )
             SELECT

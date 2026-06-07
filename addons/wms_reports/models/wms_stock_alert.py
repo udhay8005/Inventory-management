@@ -14,7 +14,7 @@ wms.expiry.alert); this fills the remaining gap — proactive reorder warnings.
 
 import logging
 
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from odoo import api, models
 
 from .wms_notify import notify_wms_managers
@@ -39,12 +39,18 @@ class WmsStockAlert(models.AbstractModel):
         )
         if not low:
             return
+        # FPAT High: escape() the product name + UoM. A product named
+        # '<script>alert(1)</script>' would otherwise post live HTML into
+        # every manager's Discuss Inbox - stored XSS that fires the next
+        # time any manager opens their inbox. Markup-wrapping the row HTML
+        # itself is fine because the literal template fragments are static
+        # and the only injection vectors are escape()'d.
         rows = "".join(
             "<li><b>%s</b> — suggest ordering %g %s</li>"
             % (
-                f.product_id.display_name,
+                escape(f.product_id.display_name or ""),
                 f.reorder_qty,
-                (f.product_id.uom_id.name or ""),
+                escape(f.product_id.uom_id.name or ""),
             )
             for f in low[:50]
         )

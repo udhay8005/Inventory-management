@@ -355,10 +355,24 @@ class WmsScanIssue(models.TransientModel):
     def action_validate(self):
         self.ensure_one()
         # ---- Idempotency: never issue twice ---------------------------------
-        # A double-click on Validate, or a page refresh that re-POSTs the
-        # form, would otherwise create a second picking and deduct the
-        # stock again. Once we've created a picking, this wizard is spent —
-        # just re-open the delivery that was already made.
+        # FPAT High: this MUST hold under real concurrency (two parallel RPC
+        # submits of the same wizard id). The previous pure-ORM check was
+        # cached and pre-lock, so two parallel calls both saw picking_id=NULL
+        # and both proceeded to create. We now SELECT FOR UPDATE the wizard
+        # row itself before doing anything else - the second caller waits,
+        # sees the now-populated picking_id, and short-circuits.
+        self.env.cr.execute(
+            "SELECT picking_id FROM wms_scan_issue WHERE id = %s FOR UPDATE",
+            (self.id,),
+        )
+        row = self.env.cr.fetchone()
+        if row and row[0]:
+            # Refresh the recordset so subsequent code sees the picking.
+            self.invalidate_recordset(["picking_id"])
+            return self._open_picking()
+        # In-Python fast-path for the common single-process case (avoids the
+        # round-trip to _open_picking when picking_id was set by an earlier
+        # write in the same env).
         if self.picking_id:
             return self._open_picking()
         if not self.plan_line_ids:
@@ -466,6 +480,11 @@ class WmsScanIssue(models.TransientModel):
             for ml in move.move_line_ids:
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
+                # FPAT High: snapshot unit cost ONTO the move line so the
+                # Consumption Value report reads a frozen number. The previous
+                # view joined to live product.standard_price which retroactively
+                # rewrote past months when the cost changed.
+                ml.wms_unit_cost_at_done = ml.product_id.standard_price or 0.0
         picking.button_validate()
         # Record the picking so a re-submit is a no-op (idempotency guard).
         self.picking_id = picking.id

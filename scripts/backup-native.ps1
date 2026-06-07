@@ -162,12 +162,45 @@ function Start-GpgPipe {
     # GPG writes informational notices (gpg-agent socket, first-run
     # keyring creation) to stderr; those aren't failures. We collect
     # stderr to a tempfile and only print it if gpg exits non-zero.
+    # ---- Self-heal a stale gpg-agent before each encrypt ----------------
+    # The agent leaves stale Unix-domain-style socket files in %APPDATA%\gnupg
+    # and %LOCALAPPDATA%\gnupg on Windows; once one of S.gpg-agent*
+    # ("ssh"/"extra"/"browser"/"") goes bad, every subsequent symmetric
+    # encrypt fails with "can't connect to the gpg-agent" until the user
+    # manually clears it. This block runs the same recovery on every
+    # invocation, so the nightly backup-native.ps1 cron can't silently fail
+    # again. Idempotent: a clean agent restarts in <1s.
+    try { & gpgconf --kill gpg-agent 2>&1 | Out-Null } catch {}
+    foreach ($dir in @("$env:APPDATA\gnupg", "$env:LOCALAPPDATA\gnupg")) {
+        if (Test-Path -LiteralPath $dir) {
+            Get-ChildItem -LiteralPath $dir -Filter 'S.gpg-agent*' `
+                -Force -ErrorAction SilentlyContinue |
+                ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+        }
+    }
+    try { & gpg-connect-agent /bye 2>&1 | Out-Null } catch {}
+
+    # FPAT High: the original `cmd /c echo $plain| gpg ...` pattern silently
+    # TRUNCATED the passphrase at the first &, |, <, >, ^ or % character that
+    # cmd.exe treats as a metacharacter (so a passphrase with a literal & in
+    # it produced encrypted backups nobody could ever decrypt). Switch to a
+    # short-lived passphrase FILE - gpg reads it directly, no shell
+    # interpretation, all printable bytes preserved.
     $errFile = [System.IO.Path]::GetTempFileName()
+    $pwFile = [System.IO.Path]::GetTempFileName()
     $plain = $null
     try {
         $plain = [System.Net.NetworkCredential]::new('', $Pass).Password
-        $cmd = "echo $plain| `"$gpg`" --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 -o `"$OutputFile`" `"$InputFile`" 2> `"$errFile`""
-        & cmd /c $cmd
+        # Write WITHOUT a trailing newline so gpg accepts the whole string.
+        # UTF-8 encoding keeps non-ASCII passphrases intact.
+        [System.IO.File]::WriteAllBytes(
+            $pwFile,
+            [System.Text.Encoding]::UTF8.GetBytes($plain)
+        )
+        & $gpg --batch --yes --pinentry-mode loopback `
+            --passphrase-file $pwFile `
+            --symmetric --cipher-algo AES256 `
+            -o $OutputFile $InputFile 2> $errFile
         $rc = $LASTEXITCODE
         if ($rc -ne 0) {
             $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
@@ -178,7 +211,13 @@ function Start-GpgPipe {
         # binding so a subsequent memory snapshot can't recover it.
         if ($plain) { $plain = ' ' * $plain.Length }
         $plain = $null
-        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+        # Overwrite the passphrase file once before unlink so a recovery
+        # tool can't pull it from the temp directory.
+        if (Test-Path -LiteralPath $pwFile) {
+            try { [System.IO.File]::WriteAllBytes($pwFile, (New-Object byte[] 64)) } catch {}
+            Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue
     }
 }
 

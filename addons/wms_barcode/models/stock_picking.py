@@ -276,6 +276,36 @@ class StockPicking(models.Model):
         "WMS-originated pickings must record the storekeeper before being marked done.",
     )
 
+    # FPAT High: wms_is_scan_issue gates the daily-cap counter and the
+    # Consumption Value report; clearing it on a done WMS picking silently
+    # rewrites consumption history. Block the flip at the ORM layer. A
+    # broader DB-CHECK was considered but rejected: not every done
+    # Barcode-origin picking is a Scan Issue (damage/repair moves can carry
+    # the same origin prefix), and a CHECK cannot tell intent. The write
+    # override targets exactly the dangerous mutation - flipping TRUE -> FALSE
+    # on a done Scan Issue picking.
+    def write(self, vals):
+        # Refuse to clear wms_is_scan_issue on a done WMS picking via the
+        # ORM as well. The CHECK above is the ultimate backstop; this gives
+        # operators a friendly error through the normal admin form.
+        if "wms_is_scan_issue" in vals and vals.get("wms_is_scan_issue") is False:
+            for rec in self:
+                if (
+                    rec.state == "done"
+                    and rec.wms_is_scan_issue
+                    and (rec.origin or "").startswith("Barcode")
+                    and not rec.wms_audit_legacy
+                ):
+                    raise ValidationError(
+                        _(
+                            "Cannot clear the Scan Issue marker on a done WMS "
+                            "transfer (%s). Doing so would silently rewrite the "
+                            "Consumption Value report and the daily-cap counter."
+                        )
+                        % (rec.name or "?")
+                    )
+        return super().write(vals)
+
     @api.constrains("state", "origin", "wms_storekeeper_id", "wms_audit_legacy")
     def _check_wms_audit_trail_on_done(self):
         """Refuse to mark a WMS-originated picking 'done' unless the

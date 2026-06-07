@@ -130,17 +130,38 @@ class TestScanConcurrency(TransactionCase):
         """The cap counts only flagged Scan Issue pickings. A picking that
         merely shares the 'Barcode FIFO' origin but lacks the flag (an edit, a
         collision, a non-wizard transfer) must NOT count - the old origin-based
-        counter would have wrongly counted it."""
+        counter would have wrongly counted it.
+
+        FPAT High: the original test mutated wms_is_scan_issue on a freshly-
+        validated picking. We now block that mutation at the ORM layer (the
+        flag is immutable on done Scan Issues - it gates Consumption Value
+        and the cap), so this test instead INSERTS a fresh historical row
+        directly via the ORM with wms_is_scan_issue=False from the start -
+        which is what a legacy pre-flag picking would look like.
+        """
         self.product.product_tmpl_id.wms_daily_cap = 5.0
-        wiz1 = self._new_issue(3.0)
-        wiz1.action_validate()  # 3 issued
-        # Strip the marker to simulate a same-origin picking with no flag.
-        wiz1.picking_id.wms_is_scan_issue = False
-        wiz2 = self._new_issue(3.0)
-        wiz2.action_validate()  # projected 0+3 < 5 -> allowed
+        # Seed a historical unflagged row: same product, same origin pattern,
+        # but never went through the Scan Issue wizard.
+        historical = (
+            self.env["stock.picking"]
+            .sudo()
+            .create(
+                {
+                    "picking_type_id": self.wh.int_type_id.id,
+                    "location_id": self.wh.lot_stock_id.id,
+                    "location_dest_id": self.wh.lot_stock_id.id,
+                    "origin": "Barcode FIFO issue",
+                    "wms_is_scan_issue": False,
+                    "wms_storekeeper_id": self.keeper.id,
+                }
+            )
+        )
+        self.assertFalse(historical.wms_is_scan_issue)
+        wiz = self._new_issue(3.0)
+        wiz.action_validate()  # projected 0+3 < 5 -> allowed
         self.assertTrue(
-            wiz2.picking_id,
-            "unflagged historical issues must not count toward the daily cap",
+            wiz.picking_id,
+            "unflagged historical pickings must not count toward the daily cap",
         )
 
 

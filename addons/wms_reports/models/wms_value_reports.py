@@ -105,11 +105,22 @@ class WmsConsumptionValueReport(models.Model):
                 sp.wms_issued_for AS issued_for,
                 date_trunc('month', sml.date)::date AS period,
                 SUM(sml.quantity) AS qty_out,
-                COALESCE((pp.standard_price ->> sml.company_id::text)::numeric, 0)
-                    AS unit_cost,
-                SUM(sml.quantity)
-                    * COALESCE((pp.standard_price ->> sml.company_id::text)::numeric, 0)
-                    AS consumption_value
+                -- FPAT High: read the snapshot cost frozen at validate-time
+                -- (wms_unit_cost_at_done) so a later standard_price change
+                -- does not rewrite past months. Fall back to current cost
+                -- ONLY for legacy rows where the snapshot is NULL (pre-v16).
+                COALESCE(
+                    sml.wms_unit_cost_at_done,
+                    (pp.standard_price ->> sml.company_id::text)::numeric,
+                    0
+                ) AS unit_cost,
+                SUM(
+                    sml.quantity * COALESCE(
+                        sml.wms_unit_cost_at_done,
+                        (pp.standard_price ->> sml.company_id::text)::numeric,
+                        0
+                    )
+                ) AS consumption_value
             FROM stock_move_line sml
             JOIN stock_picking sp ON sp.id = sml.picking_id
             JOIN product_product pp ON pp.id = sml.product_id
@@ -119,6 +130,7 @@ class WmsConsumptionValueReport(models.Model):
                   -- consumption: the stock came straight back, so exclude it.
                   AND sp.wms_reversed_by_id IS NULL
             GROUP BY date_trunc('month', sml.date), sml.product_id,
-                     pt.categ_id, sml.company_id, sp.wms_issued_for, pp.standard_price
+                     pt.categ_id, sml.company_id, sp.wms_issued_for,
+                     sml.wms_unit_cost_at_done, pp.standard_price
             """
         )

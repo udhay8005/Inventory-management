@@ -79,6 +79,17 @@ class StockQuant(models.Model):
         capped = self.location_id.filtered(
             lambda loc: loc.usage == "internal" and loc.wms_capacity_units > 0
         )
+        # FPAT High: serialise the on-hand recompute under concurrent writers
+        # to the same capped location. Without this lock two parallel quant
+        # writes can each see on_hand <= capacity, each pass the check, and
+        # together end up over capacity. Locking the touched location rows
+        # first forces the second writer to wait until the first commits, so
+        # its recompute sees the updated total.
+        if capped:
+            self.env.cr.execute(
+                "SELECT id FROM stock_location WHERE id = ANY(%s) FOR UPDATE",
+                (list(capped.ids),),
+            )
         for loc in capped:
             on_hand = sum(
                 Quant.search([("location_id", "=", loc.id), ("quantity", ">", 0)]).mapped(
@@ -102,7 +113,39 @@ class StockQuant(models.Model):
 
         Shared by the Scan Issue planner (find_oldest_quants_for_product) and
         the _gather reservation hook so every removal path agrees. Pooling is
-        always within one product/template (no cross-product substitution);
-        order oldest-first by in_date (FIFO), id as a stable tiebreaker.
+        always within one product/template (no cross-product substitution).
+
+        Order:
+          * If the template carries a wms_expiry_date OR its
+            wms_product_kind is in EXPIRY_SENSITIVE_KINDS (medicine, feed,
+            fluid, pooja), sort EARLIEST-EXPIRING FIRST (FEFO), falling back
+            to in_date when expiry is not set on a sibling quant.
+          * Otherwise sort OLDEST-ARRIVING FIRST (FIFO).
+
+        FPAT High: the wizard previously banner-printed "FEFO: earliest expiry
+        first" for medicine/feed/fluid/pooja but the actual sort never read
+        wms_expiry_date. A January-arrived batch with December expiry shipped
+        ahead of a March-arrived batch expiring next month, and the
+        expiring batch ended up thrown out. This makes the promise honest.
         """
+        from datetime import date
+
+        from .product_template import EXPIRY_SENSITIVE_KINDS
+
+        far_future = date(9999, 12, 31)
+        # All quants in `self` share a template (the planner pools by template
+        # already) so we read the kind+expiry off the first one for the policy
+        # decision, then sort the whole recordset by per-quant expiry.
+        if not self:
+            return self
+        tmpl = self[0].product_id.product_tmpl_id
+        use_fefo = tmpl.wms_product_kind in EXPIRY_SENSITIVE_KINDS or bool(tmpl.wms_expiry_date)
+        if use_fefo:
+            return self.sorted(
+                key=lambda q: (
+                    q.product_id.product_tmpl_id.wms_expiry_date or far_future,
+                    q.in_date or q.create_date,
+                    q.id,
+                )
+            )
         return self.sorted(key=lambda q: (q.in_date or q.create_date, q.id))

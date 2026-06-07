@@ -112,12 +112,21 @@ function Start-GpgDecrypt {
     # gpg's stdin via cmd's `echo|` (mirrors backup-native.ps1's Start-GpgPipe).
     # Capture stderr; only print it if gpg actually failed (gpg-agent logs
     # aren't errors).
+    # FPAT High: passphrases containing cmd.exe metacharacters (& | < > ^ %)
+    # were silently truncated by the previous `cmd /c echo|gpg` invocation,
+    # making the encrypted backup unrecoverable. Use a passphrase FILE so
+    # the shell never sees the passphrase.
     $errFile = [System.IO.Path]::GetTempFileName()
+    $pwFile = [System.IO.Path]::GetTempFileName()
     $plain = $null
     try {
         $plain = [System.Net.NetworkCredential]::new('', $Pass).Password
-        $cmd = "echo $plain| `"$gpg`" --batch --yes --passphrase-fd 0 --decrypt -o `"$OutputFile`" `"$InputFile`" 2> `"$errFile`""
-        & cmd /c $cmd
+        [System.IO.File]::WriteAllBytes(
+            $pwFile, [System.Text.Encoding]::UTF8.GetBytes($plain)
+        )
+        & $gpg --batch --yes --pinentry-mode loopback `
+            --passphrase-file $pwFile `
+            --decrypt -o $OutputFile $InputFile 2> $errFile
         $rc = $LASTEXITCODE
         if ($rc -ne 0) {
             $stderr = Get-Content $errFile -Raw -ErrorAction SilentlyContinue
@@ -125,7 +134,11 @@ function Start-GpgDecrypt {
         }
     } finally {
         $plain = $null   # wipe the plaintext local
-        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $pwFile) {
+            try { [System.IO.File]::WriteAllBytes($pwFile, (New-Object byte[] 64)) } catch {}
+            Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue
     }
 }
 
