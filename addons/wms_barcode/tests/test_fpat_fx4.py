@@ -17,6 +17,20 @@ class TestFpatFx4Idempotency(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.wh = cls.env["stock.warehouse"].search([], limit=1)
+        # Ensure at least one putaway target exists - the Scan Receipt wizard's
+        # auto-slot-assign fails the whole test on a fresh CI DB without it.
+        cls.floor = cls.env["stock.location"].search(
+            [("wms_location_type", "in", ("slot", "floor"))], limit=1
+        )
+        if not cls.floor:
+            cls.floor = cls.env["stock.location"].create(
+                {
+                    "name": "FX4 Receive Floor",
+                    "usage": "internal",
+                    "location_id": cls.wh.lot_stock_id.id,
+                    "wms_location_type": "floor",
+                }
+            )
         cls.keeper = cls.env["wms.storekeeper"].search([], limit=1) or cls.env[
             "wms.storekeeper"
         ].create({"name": "FX4 Keeper"})
