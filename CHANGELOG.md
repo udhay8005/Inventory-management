@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.16.1.0] — 2026-06-07 — Closure-sprint hotfix
+
+Single security-relevant patch identified by the v16 re-FPAT pass.
+
+- **`scripts/install-native.ps1` placeholder deny-list silently no-op** — line 508 referenced an undefined `$RepoRoot`; PowerShell's default loose mode let `Join-Path` resolve to just `.env`, so on a fresh install + non-repo CWD the gate skipped without warning. A leftover `BACKUP_PASSPHRASE=changeme_backup_passphrase` could ship to prod and produce externally-decryptable backup artifacts.
+  - Use the already-resolved `$EnvPath` built at the top of the script.
+  - Add `Set-StrictMode -Version Latest` so the same class of typo fails loudly at install time instead of silently skipping security gates.
+
 ## [v19.0.16.0.0] — 2026-06-07 — FPAT remediation (4 Criticals + 19 Highs)
 
 Closes every Critical and the highest-impact High findings from the FPAT

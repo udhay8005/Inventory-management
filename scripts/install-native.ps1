@@ -55,6 +55,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Closure-sprint: catch typos like the historical $RepoRoot/$ProjectRoot bug
+# (Join-Path silently returned just '.env' when the first arg was undefined,
+# so the placeholder deny-list block at the bottom became a no-op). StrictMode
+# raises on read of undefined variables now, so the same class of bug fails
+# loudly at install time.
+Set-StrictMode -Version Latest
 $ProjectRoot   = Split-Path -Parent $PSScriptRoot
 $OdooSrc       = Join-Path $ProjectRoot '.odoo'
 $VenvDir       = Join-Path $ProjectRoot '.venv'
@@ -505,8 +511,12 @@ if (Test-Path $initMarker) {
 # FPAT High: an install that leaves ODOO_USER=admin / DB_PASSWORD=odoo_local_dev_pw
 # / BACKUP_PASSPHRASE=changeme_backup_passphrase is begging to be hacked. Fail
 # the install with a clear instruction rather than silently going to prod.
-$envPath = Join-Path $RepoRoot ".env"
-if (Test-Path -LiteralPath $envPath) {
+# Step 8 / closure-sprint: the placeholder deny-list was a no-op because
+# $RepoRoot was undefined in PowerShell's default (non-Strict) mode - the
+# Join-Path returned just '.env', which on a fresh install + non-repo CWD
+# silently failed Test-Path and skipped the gate. Use the already-resolved
+# $EnvPath built at the top of the script.
+if (Test-Path -LiteralPath $EnvPath) {
     $denylist = @(
         'admin',
         'odoo_local_dev_pw',
@@ -517,7 +527,7 @@ if (Test-Path -LiteralPath $envPath) {
         'YOUR_PASSPHRASE_HERE'
     )
     $offenders = @()
-    Get-Content -LiteralPath $envPath | ForEach-Object {
+    Get-Content -LiteralPath $EnvPath | ForEach-Object {
         $line = $_.Trim()
         if ($line -and -not $line.StartsWith('#') -and $line.Contains('=')) {
             $kv = $line.Split('=', 2)
