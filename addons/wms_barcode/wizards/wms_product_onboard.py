@@ -182,6 +182,26 @@ class WmsProductOnboard(models.TransientModel):
 
     def _do_onboard(self):
         """Returns the recordset of newly-created product.product."""
+        # FPAT High: a double-click on "Onboard + Print labels" (or any other
+        # mid-action re-fire of the wizard) used to silently create a SECOND
+        # set of products with different auto-SKUs. Block re-entry by reading
+        # the `summary` field on a fresh DB cursor inside a row lock; the
+        # field is set at the end of the first run, so the second run sees
+        # it and raises before touching product.template.create.
+        self.env.cr.execute(
+            "SELECT summary FROM wms_product_onboard WHERE id = %s FOR UPDATE",
+            (self.id,),
+        )
+        row = self.env.cr.fetchone()
+        if row and row[0]:
+            raise UserError(
+                _(
+                    "This onboarding batch has already been submitted "
+                    "(%s). Open a new 'Onboard products' wizard for the "
+                    "next batch."
+                )
+                % row[0]
+            )
         Product = self.env["product.product"]
         Template = self.env["product.template"]
         Quant = self.env["stock.quant"].sudo()

@@ -130,9 +130,20 @@ class WmsScanReceipt(models.TransientModel):
 
     def action_validate(self):
         self.ensure_one()
-        # Idempotency: a double-click / refresh re-submit must not receive
-        # the delivery twice (which would add the stock twice). Once a
-        # receipt exists, re-open it instead of making another.
+        # FPAT High: under real concurrency (two parallel RPC submits of the
+        # same wizard id) the pre-lock Python check let both pass. We now
+        # SELECT FOR UPDATE the wizard row so the second caller blocks on
+        # the first, then sees the now-populated picking_id and short-
+        # circuits. Receipts don't reserve stock so no per-product lock is
+        # needed - the wizard-row lock is sufficient.
+        self.env.cr.execute(
+            "SELECT picking_id FROM wms_scan_receipt WHERE id = %s FOR UPDATE",
+            (self.id,),
+        )
+        row = self.env.cr.fetchone()
+        if row and row[0]:
+            self.invalidate_recordset(["picking_id"])
+            return self._open_picking()
         if self.picking_id:
             return self._open_picking()
         if not self.line_ids:
