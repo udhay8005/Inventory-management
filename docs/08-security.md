@@ -14,7 +14,10 @@ WMS / Store Keeper                 +  group_wms_can_scan_receive
 WMS / Manager (= base + all)          group_wms_can_scan_issue
 WMS / Repair Tech (= base + repair)   group_wms_can_file_damage
                                       group_wms_can_submit_audit
-                                      group_wms_can_manage_aliases
+                                      group_wms_can_manage_catalog
+
+(All capability sub-groups live in the `wms_location` namespace, e.g.
+`wms_location.group_wms_can_scan_receive`.)
 ```
 
 ### Base roles
@@ -29,11 +32,11 @@ WMS / Repair Tech (= base + repair)   group_wms_can_file_damage
 
 | Group | xml_id | Adds | Why it's separate |
 |---|---|---|---|
-| Can Scan Receipt / Return | `wms_barcode.group_wms_can_scan_receive` | Scan Receipt wizard + Scan Return | Two-step new-hire onboarding — receipts first, issues later. |
-| Can Scan Issue | `wms_barcode.group_wms_can_scan_issue` | Scan Issue wizard (FEFO planner) | Issues have a daily cap + per-issue cap + audit triplet — only granted to keepers trusted with the budget. |
-| Can File Damage | `wms_repair_damage.group_wms_can_file_damage` | wms.damage form + action_confirm | Damage events drive the urgent-buy recommendation and lock the source slot. Limited per the trust's accountability policy. |
-| Can Submit Audit | `wms_reports.group_wms_can_submit_audit` | wms.audit start + submit (Admin still accepts) | Auditors walk slots and submit counts; the Admin alone applies the variance delta. |
-| Can Manage Aliases | `wms_barcode.group_wms_can_manage_aliases` | wms.barcode.alias maintenance | Aliases are barcode-to-product mappings; collisions silently route stock to the wrong product if mismanaged. |
+| Can Scan Receipt / Return | `wms_location.group_wms_can_scan_receive` | Scan Receipt wizard + Scan Return | Two-step new-hire onboarding — receipts first, issues later. |
+| Can Scan Issue | `wms_location.group_wms_can_scan_issue` | Scan Issue wizard (FEFO planner) | Issues have a daily cap + per-issue cap + audit triplet — only granted to keepers trusted with the budget. |
+| Can File Damage | `wms_location.group_wms_can_file_damage` | wms.damage form + action_confirm | Damage events drive the urgent-buy recommendation and lock the source slot. Limited per the trust's accountability policy. |
+| Can Submit Audit | `wms_location.group_wms_can_submit_audit` | wms.audit start + submit (Admin still accepts) | Auditors walk slots and submit counts; the Admin alone applies the variance delta. |
+| Can Manage Catalog | `wms_location.group_wms_can_manage_catalog` | wms.barcode.alias + carton-label / catalog maintenance | Aliases are barcode-to-product mappings; collisions silently route stock to the wrong product if mismanaged. All five sub-groups are defined in the `wms_location` addon (single source of truth), even though they gate features in `wms_barcode`, `wms_repair_damage`, and `wms_reports`. |
 
 ### Bare Store Keeper = read-only
 
@@ -125,9 +128,59 @@ fans out a Discuss notification to every member of `WMS / Manager` via
 
 ## Secrets
 
-- All passwords in `.env`, never in compose or in git.
+- All passwords in `.env`, never in checked-in config (`config/*.conf`) or in git.
 - `admin_passwd` is the master-key for the DB manager; rotate after first install.
 - Use Odoo's API keys feature for the optional AI worker rather than the user password if exposing across networks.
+
+## Enumerated security controls (what ships live)
+
+The following controls are shipped and verified in the live build — they are
+not aspirational. Each maps to a concrete file or runtime artefact.
+
+1. **Database manager UI hard-disabled.** `config/odoo.native.conf` ships with
+   `list_db = False` **and** `db_listing = False`, plus a `/web/database/*`
+   lockdown redirect in `wms_reports`. The DB selector is not reachable via
+   URL guessing.
+2. **Two-tier role model + five capability sub-groups.** Base roles —
+   WMS / Store Keeper (`wms_location.group_wms_user`), WMS / Manager
+   (`wms_location.group_wms_manager`), WMS / Repair Tech
+   (`wms_repair_damage.group_repair_tech`), plus optional WMS / Buyer
+   (`wms_location.group_buyer`). Five capability sub-groups, **all** in the
+   `wms_location` namespace: `group_wms_can_scan_receive`,
+   `group_wms_can_scan_issue`, `group_wms_can_file_damage`,
+   `group_wms_can_submit_audit`, `group_wms_can_manage_catalog`.
+3. **`/wms/health` is token-gated.** The route is `auth='public'` but
+   compares the supplied token against the `ir.config_parameter`
+   `wms_reports.health_token` via `odoo.tools.consteq` (constant-time).
+   `install-native.ps1` auto-generates a 32-hex token at install time.
+   Accepted as `?token=<v>` query string **or** `X-Health-Token` header.
+   Missing/wrong → HTTP 401 `{"status":"unauthorized"}`; OK → 200 with the
+   diagnostic JSON body; degraded → 503 with the same body shape;
+   internal exception → 503 `{"status":"CRITICAL","detail":"health check failed"}`.
+4. **Backup envelope cipher.** `scripts\backup-encrypted.ps1` invokes
+   `GPG --symmetric --cipher-algo AES256`, passing the passphrase via a
+   short-lived `--passphrase-file` invoked through `cmd /c` (the `cmd /c`
+   hop avoids PowerShell 5.1's `NativeCommandError` on gpg-agent stderr).
+5. **Integrity gate.** Each backup writes a SHA-256 checksum next to the
+   `.gpg` envelope, and the restore drill runs `pg_restore --list` requiring
+   **≥100 TOC entries** before the dump is considered good.
+6. **Off-site copy is failure-safe.** `BACKUP_OFFSITE_DIR` is read **only**
+   from `.env`. Blank → off-site disabled (local backup still succeeds).
+   Set → the destination directory is created if missing, the `.gpg` is
+   copied, SHA-256 is **re-verified at the destination**, and retention is
+   mirrored (`-Retain`, default 14). Any off-site failure is swallowed so it
+   never fails the local backup.
+7. **Scheduled tasks run as SYSTEM.** Both `WMS Daily Backup` and
+   `WMS Weekly Restore Drill` are registered with principal
+   `NT AUTHORITY\SYSTEM`, `LogonType=ServiceAccount`, `RunLevel=Highest`,
+   `-StartWhenAvailable`, `ExecutionTimeLimit=2h`,
+   `MultipleInstances=IgnoreNew`. Because they run as SYSTEM, any
+   `BACKUP_OFFSITE_DIR` path must be reachable by SYSTEM (UNC paths need a
+   pre-cached SYSTEM credential).
+8. **Placeholder-password rejection.** `install-native.ps1` rejects obvious
+   placeholder strings (`changeme*`, `admin`, and similar) before bringing
+   the service up — first-install operators cannot ship the trust with the
+   sample password still in `.env`.
 
 ## Hardening checklist
 
@@ -135,7 +188,8 @@ fans out a Discuss notification to every member of `WMS / Manager` via
 - [ ] Set `proxy_mode=True` only when behind a real TLS terminator.
 - [x] Disable the database manager in prod: `list_db = False` AND `db_listing = False` in `config/odoo.native.conf` (shipped + verified live).
 - [ ] Restrict `pg_hba` so only the local Odoo service (127.0.0.1, system user) can reach PostgreSQL on port 1088.
+      Note: port **1088** (not the PG default 5432) is used to avoid clashing with any pre-existing PostgreSQL instance already on the box — `config/odoo.native.conf` ships with `db_port = 1088` to match. `db_host=localhost` in `odoo.native.conf` only controls Odoo's **client** connection to PostgreSQL — Odoo's HTTP server still binds `0.0.0.0:8069` unless `http_interface` is set in the conf. Both the `pg_hba` lockdown and an explicit `http_interface = 127.0.0.1` (when fronted by IIS/nginx) are open hardening tasks.
 - [x] Token-gate `/wms/health`: install-native auto-generates a 32-char hex `wms_reports.health_token` parameter (verified live: anonymous probes return `{"status":"unauthorized"}` with HTTP 401).
 - [ ] Branch protection on `main`: require PR + green CI before merge.
-- [ ] Run `cd .odoo && git pull origin 19.0 && cd .. && .venv\Scripts\pip install -r .odoo\requirements.txt --upgrade` monthly for Odoo CE security patches; then restart with `scripts\start-native.ps1`.
+- [ ] Run the following monthly for Odoo CE security patches (PowerShell 5.1-safe chaining — `if ($?)` runs the next step only if the previous one succeeded): `cd .odoo; if ($?) { git pull origin 19.0 }; if ($?) { cd .. }; if ($?) { .venv\Scripts\pip install -r .odoo\requirements.txt --upgrade }`; then restart with `scripts\start-native.ps1`.
 - [ ] Schedule `pg_dump` backups + restore drill quarterly.

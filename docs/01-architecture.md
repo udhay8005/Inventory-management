@@ -5,7 +5,7 @@
 | Layer | Choice | Why |
 |---|---|---|
 | ERP core | **Odoo CE 19** | Free, mature inventory + barcode primitives, audited security |
-| DB | **PostgreSQL 15 / 16 / 17 (auto-detected)** | Odoo's native DB; the install script detects whichever postgresql-x64 service is present. Supports partial indexes for fast quant lookups |
+| DB | **PostgreSQL 15/16/17 (auto-detected; winget installs 17 by default)** | Odoo's native DB; the install script detects whichever postgresql-x64 service is present. Supports partial indexes for fast quant lookups |
 | Forecasting | **statsmodels (Holt-Winters / SES)** | CPU-only, ~30MB resident, runs on a Pi 4 |
 | Deployment | **Native Windows (no Docker)** | `scripts/install-native.ps1` + `start-native.ps1`; Odoo runs in a venv against the local PostgreSQL service. Docker was removed. |
 | Optional AI worker | Native Python process (`scripts/start-ai-worker.ps1`) | Detach forecasts from Odoo when memory is tight |
@@ -13,6 +13,9 @@
 ## Module layering
 
 ```
++----------------------------------------------------+
+| wms_training       (Help Center, guided tours,     |
+|                     beginner mode)                 |
 +----------------------------------------------------+
 | wms_reports        (dashboards, printable reports) |
 +----------------------------------------------------+
@@ -29,6 +32,10 @@
 | Odoo CE 19 stock, product, purchase, repair        |
 +----------------------------------------------------+
 ```
+
+`wms_training` sits at the top of the stack — it depends on `wms_location`,
+`wms_barcode`, `wms_repair_damage`, `wms_reports`, and `web` (per its manifest),
+and ships the Help Center, guided tours, and beginner-mode onboarding.
 
 Each module above the line only depends on what's below it. `wms_location` is
 the foundation; everything else degrades gracefully without the AI module.

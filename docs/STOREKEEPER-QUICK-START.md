@@ -3,7 +3,7 @@
 For the people working the store desk. You scan goods in and out; the system
 records **who did what**. Works on a PC, phone, or tablet on the same WiFi.
 
-> Stuck on any screen? Tap **Help & Training** in the WMS menu — it has a short
+> Stuck on any screen? Tap the top-level **Help & Training** app menu — it has a short
 > guided tour and step-by-step articles for everything below. **Beginner Mode**
 > (on by default) adds hints and an extra "are you sure?" on risky actions.
 
@@ -29,8 +29,14 @@ barcode — the page tells you **which slot(s)** it's in and **how much** is on
 hand. Or tap a chip (**low stock**, **expiring**, **dead stock**, **damaged**,
 **under repair**) for an instant list. Works great on a phone.
 
+> **Find / Where is it? vs Where is product X?** — *Find / Where is it?*
+> (Operations menu, `/wms/find`) is your quick all-purpose search by barcode,
+> SKU, or product name. *Where is product X?* (Reports menu) is the drill-down
+> report that lists slot-by-slot stock for one specific product. Use Find for
+> day-to-day lookups; use the report when you need the full picture for one item.
+
 ## 2. Scan Receipt (goods coming IN)
-**WMS → Scan Receipt**
+**WMS → Operations → Scan Receipt**
 1. Pick your name + fill the audit fields.
 2. **Scan the product barcode** (or pick it) → type the **quantity**.
 3. **Scan the destination slot** label (e.g. `R01-SH02-C01-SL01`).
@@ -42,40 +48,42 @@ placed them. For loose/bulk items, scan a **Floor Zone** (`F-01`) instead of a
 rack slot.
 
 ## 4. Scan Issue (goods going OUT)
-**WMS → Scan Issue**
-1. Pick your name + the audit fields + **Issued for** (Cows / Pooja /
-   Maintenance / …) + why (usage note). The *Issued for* choice is what lets
-   managers see "how much did Cows cost vs Pooja" in the Consumption Value
-   report — it defaults to *Other*, so pick the right one.
-2. **Scan the product** → quantity to give out.
-3. The system picks the **oldest stock first (FIFO)** / **earliest-expiry first
+**WMS → Operations → Scan Issue (FIFO)**
+1. Fill the **four mandatory audit fields**: *Taken by*, *Ordered by*,
+   *Store Keeper on duty* (your roster name), and *Reason / usage note*
+   (why). The wizard won't validate with any of these blank.
+2. Optionally pick **Issued for** (Cows / Pooja / Maintenance / …) — this is
+   a separate category dropdown that defaults to *Other*. It's not required,
+   but setting it correctly lets managers see "how much did Cows cost vs
+   Pooja" in the Consumption Value report.
+3. **Scan the product** → quantity to give out.
+4. The system picks the **oldest stock first (FIFO)** / **earliest-expiry first
    (FEFO)** automatically and shows the plan.
-4. Tap **Validate**. Stock leaves the slot.
+5. Tap **Validate**. Stock leaves the slot.
 > If you hit a **daily limit** or **stock-out** message, stop and tell a manager —
 > don't force it.
 
 ### Made a mistake? Undo it
-If you just issued the wrong item or quantity, open that transfer
-(**WMS → Transfers**, or the one that opened after you validated) and tap the
-orange **Undo this transfer** button. The system puts the stock straight back —
+If you just issued the wrong item or quantity, open the transfer that opened
+after you validated and tap the orange **Undo this transfer** button. The system puts the stock straight back —
 no manual return needed. The button only shows for a short window (15 minutes by
 default) and only while the stock is still where you put it. After that, use
 **Scan Return** instead.
 
 ## 5. Scan Return (goods coming BACK)
-**WMS → Scan Return** — for returnable items (tools, spares) coming back to the
-shelf. Pick your name, scan the item, scan the slot, **Validate**. (The product's
+**WMS → Operations → Scan Return** — for returnable items (tools, spares) coming
+back to the shelf. Pick your name, scan the item, scan the slot, **Validate**. (The product's
 *Kind* decides whether returns are allowed.)
 
 ## 6. Damage (something is broken/spoiled)
-**WMS → Damage → New**
+**WMS → Operations → Damages**
 1. Pick your name; enter **Reported by** and **Authorised by**.
 2. Scan the product + the slot it's in + the damaged quantity.
 3. **Confirm** → the stock moves to the **Damage** location (out of normal stock).
 > Can't repair it yourself — a manager decides repair vs. write-off.
 
 ## 7. Audit (count a slot)
-**WMS → Inventory Audits** (if you have the *Submit audits* permission)
+**WMS → Operations → Inventory audits** (if you have the *Submit audits* permission)
 1. Start an audit; the system lists what it *thinks* is in each slot.
 2. **Count the shelf** and enter the real numbers.
 3. **Submit** for a manager to review and accept — accepting fixes the books to
@@ -93,6 +101,13 @@ shelf. Pick your name, scan the item, scan the slot, **Validate**. (The product'
   or tap a chip for "low stock" / "expiring" / "damaged" / "under repair").
 - Always pick **your own name** as the on-duty keeper — that's how the trust
   knows who handled what.
+
+## FAQ
+
+**A menu like Damages or Inventory audits isn't showing up — why?** Your user
+account is missing the corresponding capability sub-group
+(`group_wms_can_file_damage`, `group_wms_can_submit_audit`). Ask the Manager
+to tick the right capability under your user profile.
 
 That's the whole job. Full picture for managers:
 **[ADMIN-QUICK-START.md](ADMIN-QUICK-START.md)** · **[INSTALLATION-GUIDE.md](INSTALLATION-GUIDE.md)**.

@@ -79,7 +79,8 @@ These are *wrappers* — they generate `stock.move`s, not bypass them.
 wms.damage           ─ source slot ─→ Damage Location  (internal, wms_is_damage)
 wms.repair.order     Damage Loc ─→ Repair-Out (vendor-style internal)
                                   └─→ back to source slot on completion
-wms.return           customer ─→ Return holding ─→ original slot (or new)
+wms.scan.receipt     customer ─→ Return holding ─→ original slot (or new)
+(return mode)        (action_wms_scan_return sets default_is_return=True)
 ```
 
 Status fields, photos (`ir.attachment`), reason notes, and links to the

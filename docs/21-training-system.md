@@ -14,15 +14,15 @@ This system is **additive**: it wraps the existing six addons (`wms_location`, `
 ### 1.1 Guiding principles
 
 1. **Learn in the real app, not a separate course.** A temporary helper will not read a PDF. Training must appear *on the screen where the work happens* — a tip beside the field, a guided tour over the real button, an example in the empty-list placeholder.
-2. **Three delivery layers, one source of truth.** Everything keys off two existing facts already in the database: the user's **group** (`group_wms_manager` / `group_wms_user` + capability sub-groups) and a new **Beginner Mode** flag on `res.users`. No third notion of "skill level" is invented.
+2. **Three delivery layers, one source of truth.** Everything keys off two existing facts already in the database: the user's **base role** (`group_wms_user` / `group_wms_manager` / `group_repair_tech`, plus the optional `group_buyer`) together with their **capability sub-groups** (all five in the `wms_location.*` namespace — `group_wms_can_scan_receive`, `group_wms_can_scan_issue`, `group_wms_can_file_damage`, `group_wms_can_submit_audit`, `group_wms_can_manage_catalog`) and a new **Beginner Mode** flag on `res.users`. No third notion of "skill level" is invented.
 3. **Never block the expert.** Every guided element is dismissible and remembered. A two-year storekeeper sees almost nothing; a day-one helper sees everything.
-4. **Build on Odoo 19 primitives, do not fight them.** Use `web_tour` for walkthroughs, `field help=` + view tooltips for hints, a small `help.article` model for the help center, `res.users` boolean for Beginner Mode, standard `mail.thread` for "what happened" explanations. No bespoke front-end framework.
+4. **Build on Odoo 19 primitives, do not fight them.** Use HTML `wms.help.article` records (with the install-time link-rewriter `hooks.apply_tour_action_links`) for walkthroughs, `field help=` + view tooltips for hints, a `wms.help.article` model for the help center, a `res.users` boolean for Beginner Mode, standard `mail.thread` for "what happened" explanations. No bespoke front-end framework, no JS tour engine.
 
 ### 1.2 The four pillars (and the Odoo 19 primitive each uses)
 
 | Pillar | What the helper experiences | Odoo 19 mechanism |
 |---|---|---|
-| **A. Guided Tours** | "Show me how" walkthroughs that point at the real buttons and make you do each step | `web_tour` JS tours in `registry.category("web_tour.tours")`, launched from a help menu / button |
+| **A. Guided Tours** | Step-by-step walkthroughs that link straight to the real screen for each step | HTML articles (`wms.help.article`) whose `<a href="/odoo/action-PENDING-…">` placeholders are rewritten at install/upgrade by `hooks.apply_tour_action_links` to point at the real backend actions. **Not** `web_tour` JS tours. |
 | **B. Inline Help (tooltips & banners)** | The little hint under a field; the coloured banner at the top of a form | `field help=` attributes, `<field help="...">` view overrides, `alert` `<div>` banners (pattern already in `scan_receipt_views.xml`) |
 | **C. Help Center** | A searchable list of short "How do I…?" articles inside the WMS app | New `wms.help.article` model + kanban/form views + a global search bar |
 | **D. Beginner Mode safety net** | Extra explanations, bigger confirmations, dangerous buttons hidden | New `res.users.wms_beginner_mode` boolean read by views (`invisible`/`readonly`), tours, and confirmation dialogs |
@@ -35,11 +35,14 @@ A **single new addon `wms_training`** (depends on all six WMS addons + `web`, `m
 
 ```
 res.users.wms_beginner_mode  ──┐
-group_wms_manager / _user / ───┼──►  decides what each user sees
-   capability sub-groups       │
+base role (group_wms_user /  ──┼──►  decides what each user sees
+   _manager / _repair_tech,    │
+   + optional group_buyer)     │
+capability sub-groups (all 5   │
+   in wms_location.*)          │
                                ├──►  (B) view tooltips & banners  (invisible="not wms_beginner_mode")
                                ├──►  (A) which tours auto-offer    (tour.groups + beginner check)
-                               ├──►  (C) help articles filtered by role
+                               ├──►  (C) help articles filtered by role + capability
                                └──►  (D) confirmations / hidden danger buttons
 ```
 
@@ -54,14 +57,14 @@ The mental model of the target user: *"I scan things in, I scan things out, I co
 3. **Show the consequence before the action, not after.** This is *already* the design of Scan Issue (the FIFO/FEFO plan table shows which slot the stock will leave *before* Validate). Make this a stated principle and apply it to Damage and Audit too.
 4. **Explain in terms of the physical world.** "Scan the **shelf label**" not "set `location_dest_id`". "The system takes the **oldest stock first** so nothing expires on the shelf" not "FIFO removal strategy".
 5. **Forgiveness over prevention where data is recoverable; hard stops only where it is not.** A wrong scan is fixable (remove the line). Stock walking out unscanned is not. Beginner Mode therefore adds *confirmations* (reversible-but-annoying) rather than *blocks*, except on the genuinely destructive actions (delete location, scrap, accept audit, download/restore backup).
-6. **The empty state is a teacher.** Every list action gets a friendly `help=""` empty-state message (Odoo 19 renders the action's `help` as the no-records placeholder) that says what the screen is and links the matching tour. Example for the Audits list: *"No stock counts yet. A stock count is where you walk the racks and check the real amount against the computer. Press **New** to start one, or click **Show me how**."*
+6. **The empty state is a teacher.** Every list action gets a friendly `help=""` empty-state message (Odoo 19 renders the action's `help` as the no-records placeholder) that says what the screen is and links the matching tour. Example for the Audits list: *"No stock counts yet. A stock count is where you walk the racks and check the real amount against the computer. Press **New** to start one, or open **Help & Training → Getting Started** for a walk-through."* (Adding these action-level empty states is roadmap — see §13 Phase 2.)
 7. **Always a way out and a way to ask.** A persistent **Help (?)** entry in the WMS menu and a floating "Need help?" affordance (see §13) so a stuck helper is never more than one tap from the relevant article or from "call the Admin" contact info.
 
 ---
 
 ## 3. Role-Based Training Design
 
-Three audiences map **exactly** onto groups that already exist — no new roles invented.
+The security model is **three base roles** (`group_wms_user` = Store Keeper, `group_wms_manager` = Manager, `group_repair_tech` = Repair Tech) plus an **optional fourth** (`group_buyer` = Buyer), layered with **five capability sub-groups** that live entirely in the `wms_location.*` namespace (`group_wms_can_scan_receive`, `group_wms_can_scan_issue`, `group_wms_can_file_damage`, `group_wms_can_submit_audit`, `group_wms_can_manage_catalog`). Training audiences map **exactly** onto those groups — no new roles invented.
 
 ### 3.1 Admin / Manager — `group_wms_manager`
 - **Knows or must learn:** the whole system, plus setup-only tasks: onboarding products, generating racks/zones, reviewing & accepting audits, authorising repairs, reading reports/forecasts, **and the dangerous ops** (delete location, scrap, backup download, restore).
@@ -75,58 +78,67 @@ This is the core training audience. Crucially, **what a keeper is *trained on* m
 - **Beginner Mode default:** **ON** for any newly created Store Keeper login (set in `wms.storekeeper.action_create_login`, see §10), because most are new/temporary.
 - **Tone:** maximum simplicity and reassurance; heavy use of the "your name is recorded, mistakes are easy to fix, just ask" message already in the onboarding script (`docs/15`).
 
-### 3.3 Read-only viewer — `group_wms_user` with **no** capability sub-groups
+### 3.3 Repair Tech — `group_repair_tech`
+A first-class base role for the bench technician who works damage triage and repair orders. The Repair Tech is **not** a storekeeper — by default they do not hold Scan Receipt or Scan Issue capabilities, and the daily put-away / give-out scan menus are not their job.
+- **Knows or must learn:** the **Repair Orders** workflow (assess → repair → return-to-stock or scrap-recommend), the **damage triage** flows (reading a Damage record raised by a keeper, attaching parts/labour, recording outcome), and how to hand a repaired item back to a keeper for re-shelving.
+- **Training surface:** a dedicated **"Repair Tech daily rhythm"** tour covering the Repair Orders list, the damage queue, and the "what to do when an item can't be saved" path (which routes through a Manager — Repair Techs never scrap directly). Help-Center filter shows repair/damage articles plus the orientation set; receive/issue/audit recipes are hidden.
+- **Beginner Mode default:** **ON** for newly created Repair Tech logins (same factory hook as keepers), **OFF** once the tech is trained.
+
+### 3.4 Buyer — `group_buyer` (optional)
+An optional purchasing role for a trust member who needs to read forecasts and reorder reports without touching stock. May or may not be installed depending on the deployment.
+- **Training surface:** the orientation tour, the forecast / reorder articles, and the "Where is product X?" recipe — nothing that requires write access to stock. If `group_buyer` is not installed, this row simply does not apply.
+- **Beginner Mode default:** **ON** initially (low-frequency users benefit from the guard-rails).
+
+### 3.5 Read-only viewer — `group_wms_user` with **no** capability sub-groups
 The security model explicitly supports this: a user in `group_wms_user` alone "can log in and browse, but the Scan Receipt menu / Damage form / Audit list never appear." This is the natural **read-only / trainee-observer** role (e.g. a trustee who only wants to *see* stock, or a brand-new helper on day zero before capabilities are granted).
 - **Training surface:** a short **"Find your way around"** orientation tour (open the app, read the Warehouse Map, use "Where is product X?", read a report) — nothing that requires write access. Help articles filtered to read-only/"understanding the system" topics. A clear banner on the dashboard: *"You can look but not change things yet. When you're ready to start receiving or issuing stock, ask your Admin to switch on those buttons for you."*
 
-### 3.4 Role → content matrix
+### 3.6 Role → content matrix
 
-| Content | Read-only (`group_wms_user` only) | Store Keeper (with caps) | Manager |
-|---|---|---|---|
-| Orientation tour ("Find your way around") | Yes (auto) | Yes | Yes |
-| Scan Receipt / Return tour | — | If `can_scan_receive` | Yes |
-| Scan Issue (FIFO/FEFO) tour | — | If `can_scan_issue` | Yes |
-| File Damage tour | — | If `can_file_damage` | Yes |
-| Stock Count (Audit) tour | — | If `can_submit_audit` | Yes |
-| "Where is product X?" / reports tour | Yes | Yes | Yes |
-| Set-up tours (racks, zones, onboard product) | — | — | Yes |
-| Repair, backup/restore, forecast articles | — | — | Yes |
-| Beginner Mode default | ON | ON | OFF |
+| Content | Read-only (`group_wms_user` only) | Store Keeper (with caps) | Repair Tech (`group_repair_tech`) | Buyer (`group_buyer`, optional) | Manager |
+|---|---|---|---|---|---|
+| Orientation tour ("Find your way around") | Yes (auto) | Yes | Yes | Yes | Yes |
+| Scan Receipt / Return tour | — | If `can_scan_receive` | — (not their job) | — | Yes |
+| Scan Issue (FIFO/FEFO) tour | — | If `can_scan_issue` | — (not their job) | — | Yes |
+| File Damage tour | — | If `can_file_damage` | Yes (reads the damage queue) | — | Yes |
+| Stock Count (Audit) tour | — | If `can_submit_audit` | — | — | Yes |
+| Repair Orders / bench workflow tour | — | — | Yes (primary tour) | — | Yes |
+| "Where is product X?" / reports tour | Yes | Yes | Yes | Yes | Yes |
+| Forecast / reorder articles | — | — | — | Yes | Yes |
+| Set-up tours (racks, zones, onboard product) | — | — | — | — | Yes |
+| Backup/restore, security articles | — | — | — | — | Yes |
+| Beginner Mode default | ON | ON | ON | ON | OFF |
 
 ---
 
 ## 4. Interactive Help Design (Guided Tours — pillar A)
 
 ### 4.1 Technology
-Odoo 19 ships the **`web_tour`** system. A tour is JS registered in `registry.category("web_tour.tours")` with an ordered `steps` array; each step has a `trigger` (CSS selector of the real element), `content` (the bubble text — **simple language**), `position`, and optional `run` (`"click"`, `text "50"`, etc.). Tours can be:
-- **Onboarding tours** (`url` + auto-start) that run once for a user, OR
-- **On-demand tours** launched from a button/menu via the tour service.
+"Guided tour" is the user-facing name, but the **shipped mechanism is HTML, not JavaScript**. Each tour is a record of `wms.help.article` whose `body_html` contains a numbered list of steps; each step is a link of the form `<a href="/odoo/action-PENDING-&lt;xmlid&gt;">…</a>`. At install/upgrade the post-init / migration hook `wms_training.hooks.apply_tour_action_links` rewrites every `action-PENDING-<xmlid>` placeholder to the resolved numeric action id, so each step jumps straight to the right backend screen. There are **no `web_tour` JS tours, no `registry.category("web_tour.tours")` entries, no CSS-selector `trigger` steps, and no `assets` bundle** in this addon.
 
-We use the **on-demand + once-only-auto** pattern: a beginner is *offered* the tour (a dismissible prompt) the first time they open a screen; thereafter they relaunch it from **WMS → Help → Show me how**.
+The shipped tours are reached from **Help & Training → Getting Started** (a top-level Odoo app menu — see §12); each step is a hyperlink the helper clicks to land on the real screen, then they return to the article for the next step.
 
-### 4.2 Tours to ship (initial set)
+### 4.2 Tours shipped in this release
 
-| Tour key | Title (helper-facing) | Steps cover | Gated by |
+Four HTML-article tours ship today, each gated by article record rules so the helper only sees the ones relevant to their role:
+
+| Article xmlid | Title (helper-facing) | Steps | Gated for |
 |---|---|---|---|
-| `wms_tour_orientation` | "Find your way around" | App home, the WMS menu sections, Warehouse Map, "Where is product X?" | all WMS users |
-| `wms_tour_scan_receipt` | "Put stock in (Scan Receipt)" | Open wizard → read the green "Scanner ready" banner → scan a product → check qty → scan a shelf → tick Quality check → pick on-duty keeper → Validate & Print | `can_scan_receive` |
-| `wms_tour_scan_return` | "Take a tool back in (Scan Return)" | Same wizard, return mode banner, returnable-only caveat | `can_scan_receive` |
-| `wms_tour_scan_issue` | "Take stock out (oldest first)" | Pick destination → set quantity → scan → **read the plan table (this is the oldest stock, take from these shelves)** → fill Taken by / Ordered by / Reason → photo if asked → Validate | `can_scan_issue` |
-| `wms_tour_damage` | "Report a broken or expired item" | New → product, qty, source slot, reason, photo → Confirm | `can_file_damage` |
-| `wms_tour_audit` | "Do a stock count" | New → Start → walk and type counted qty per line → Submit to Admin | `can_submit_audit` |
-| `wms_tour_find_product` | "Where is something stored?" | Reports → Where is product X? → search → read "Next to pick" row → open visual grid | all |
-| `wms_tour_admin_setup` | "Set up your warehouse (Admin)" | Onboard a product → generate a rack → generate a zone → print labels → create a storekeeper login | `group_wms_manager` |
-| `wms_tour_admin_review` | "Review a submitted stock count (Admin)" | Open submitted audit → read variances → Accept or Reject | `group_wms_manager` |
-| `wms_tour_beginner_intro` | "Welcome — 90-second tour" | What WMS is, the 3 rules of scanning, where Help lives, how to turn Beginner Mode on/off | auto on first login |
+| `wms_training.help_tour_first_login` | "Your first login — what to do" | 4 | every WMS user (first thing they read) |
+| `wms_training.help_tour_storekeeper` | "Daily storekeeper rhythm" | 5 | `group_wms_user` (with any capability sub-group) |
+| `wms_training.help_tour_admin` | "Admin walk-through — set things up" | 6 | `group_wms_manager` |
+| `wms_training.help_tour_readonly` | "Find your way around (look only)" | 5 | `group_wms_user` with no capability sub-groups |
 
-### 4.3 Step content style (example, Scan Issue)
-> Step on the plan table: *"This list is the computer telling you **which shelves to take from**. It always picks the **oldest stock first** (for medicine and feed, the **soonest-to-expire** first) so nothing goes bad on the shelf. Take from the shelves shown here — even if a fuller shelf is closer."*
+Each step is one `<a href="/odoo/action-PENDING-&lt;xmlid&gt;">` link inside the article body; `hooks.apply_tour_action_links` rewrites those placeholders at install. Adding a new tour = adding a `wms.help.article` data record with PENDING links and re-running `-u wms_training`. Future-roadmap tours (per-capability scan tours, find-product, admin-review) are tracked under §13 Phase 3 and not in this release.
 
-Each tour's source: the verbatim human script in `docs/15-onboarding-script.md` is the content seed — we are turning that proven 30-minute script into clickable tours, keeping its exact phrasing and "3 rules of scanning".
+### 4.3 Step content style (example, storekeeper rhythm)
+> Step linking to Scan Issue: *"This screen is the computer telling you **which shelves to take from**. It always picks the **oldest stock first** (for medicine and feed, the **soonest-to-expire** first) so nothing goes bad on the shelf. Take from the shelves shown — even if a fuller shelf is closer."*
+
+Each tour's source: the verbatim human script in `docs/15-onboarding-script.md` is the content seed — the four shipped tours turn that proven 30-minute script into linked HTML steps, keeping its exact phrasing and "3 rules of scanning".
 
 ### 4.4 Re-launch & tracking
-- A **"Show me how"** button appears in the header of each major wizard/list (a `<button>` in the view that calls a small server action / client action starting the matching tour). In Beginner Mode the button is shown prominently; otherwise it is tucked in the cog/Help menu.
-- "Tour completed" is tracked by Odoo's own consumed-tour mechanism so an auto-offered tour does not nag after completion. A **"Reset my tours"** action under Help lets a returning seasonal helper re-enable the prompts.
+- Tours are plain articles, so re-launching is just opening the article again from **Help & Training → Getting Started** or **Help & Training → Help Center**. There is no "Show me how" button widget, no client-side launcher, and no auto-offer-once nagging in this release — those are roadmap items (see §13 Phase 3).
+- There is no "Reset my tours" action either. Because tours are articles, "resetting" just means re-opening the article; there is no per-user consumed-tour state to clear.
 
 ---
 
@@ -165,9 +177,9 @@ Short, numbered, screenshot-light "How do I …?" recipes for each real job. Eac
 - "(Admin) Generate a new rack"
 
 ### 6.2 Multi-screen guided tours
-For the two workflows that genuinely cross screens, ship `web_tour` tours that navigate between menus mid-tour (web_tour supports steps that click menu items and wait for the next view):
-- **"Receive → store → find it again"** (Receipt wizard → Warehouse Map → Where is product X?) — proves to a beginner that what they scanned really landed somewhere they can find.
-- **"Count → Admin review"** is split across two role-tours (`wms_tour_audit` for the keeper, `wms_tour_admin_review` for the Admin) because they are done by different people; the keeper article ends with "your Admin now checks it."
+The four shipped tours already cross screens — each step is a hyperlink to a different backend action, resolved at install by `hooks.apply_tour_action_links`. The pattern is naturally cross-screen because the helper navigates step-by-step via the link instead of being driven by a JS engine. Future cross-workflow tours considered:
+- **"Receive → store → find it again"** (Receipt wizard → Warehouse Map → Where is product X?) — would prove to a beginner that what they scanned really landed somewhere they can find. Roadmap.
+- **"Count → Admin review"** would split across two role-tours because they are done by different people; the keeper article would end with "your Admin now checks it." Roadmap.
 
 ### 6.3 The "what just happened" explainer
 A recurring novice fear is *"did it work?"*. Every successful Validate already lands the user on the created record whose **chatter** logs a plain-English audit line (see `scan_issue.action_validate`'s "Issued. Taken by … ordered by … Store Keeper on duty …"). In Beginner Mode, add a **success toast + a one-line banner on the result record**: *"Done! Stock was taken from the shelves shown. This is now recorded with your name. You can close this."* This closes the loop the tour opened.
@@ -188,7 +200,7 @@ wms.help.article
   keywords        Char     (extra search terms: "issue, give, FIFO, remove")
   group_ids       m2m → res.groups  (who may see it; defaults to group_wms_user)
   capability_id   m2o → res.groups  (optional: only show if user holds this cap)
-  tour_id         Char     (optional web_tour key → renders a "Show me how" button)
+  tour_id         Char     (optional roadmap field — would render a "Show me how" button; not in this release)
   related_action  Reference (optional: "Take me to this screen" button)
   is_admin_only   Boolean  (shortcut for category gating)
   active          Boolean
@@ -201,7 +213,7 @@ wms.help.category
 
 ### 7.2 Views & access
 - **Kanban** grouped by category (big tap-friendly cards) as the landing view — ideal on tablets.
-- **Form** = the article reader: rendered `body`, a **"Show me how"** button if `tour_id` set, a **"Open this screen"** button if `related_action` set, and a **"Was this helpful?"** thumbs widget writing to a tiny `helpful_count` (drives §15 maintenance).
+- **Form** = the article reader: rendered `body_html` with inline step links resolved by `hooks.apply_tour_action_links` (the tours articles use this; recipe articles can mix step links and prose). A "Was this helpful?" thumbs widget is a planned addition (see §13 Phase 4); it is not in this release.
 - **ACL:** read for `group_wms_user` (so everyone sees help); create/write/unlink for `group_wms_manager` only (Admins curate content). Record rules hide `is_admin_only` / capability-gated articles from keepers who lack the capability — so a Receive-only keeper is never shown the Issue article.
 - **Search:** the standard Odoo search bar over `name`, `body`, `keywords`. Articles are also exposed to the global **command palette** (Ctrl/Cmd-K) so a literate user can jump straight to an answer.
 
@@ -252,7 +264,7 @@ wms_beginner_mode = fields.Boolean(
 
 ### 9.2 Behaviour 1 — extra guidance (ON)
 - The long "what this screen is for" banners (§5.2) render only when beginner.
-- "Show me how" tour buttons are prominent.
+- The Help & Training menu link is surfaced more prominently (roadmap; today the menu is always present at the top level).
 - Success explainer toast/banner after each Validate (§6.3).
 - Empty-state placeholders show the fuller, friendlier copy.
 - Advanced fields/notebook pages stay collapsed.
@@ -284,8 +296,8 @@ Beginner Mode is **orthogonal** to group: a Manager *can* turn it on (useful for
 
 The real deployment is tablets in a shed, sometimes one-handed, sometimes on a flaky LAN/HTTPS tunnel (`docs/12`). The training layer must be *more* helpful, not less, on small screens.
 
-1. **Tap targets ≥ 48px.** Tour bubbles, "Show me how", help cards, and confirm buttons use Odoo's `btn-lg` / large kanban cards. Help Center landing is a kanban of big cards (§7.2).
-2. **Tours must work on touch.** `web_tour` steps use `run: "click"`/`text` which map to taps; avoid hover-only triggers. Tooltip "i" hints are reachable by tap (Odoo handles this) — but because hover is unreliable on touch, **critical guidance goes in banners/placeholders, not hover-only `help=`**. `help=` is the *secondary* layer on mobile.
+1. **Tap targets ≥ 48px.** Help cards and confirm buttons use Odoo's `btn-lg` / large kanban cards. Help Center landing is a kanban of big cards (§7.2).
+2. **Tours must work on touch.** Because the shipped tours are HTML articles with link steps, "tapping a step" is just tapping a hyperlink — already touch-native. Tooltip "i" hints are reachable by tap (Odoo handles this) — but because hover is unreliable on touch, **critical guidance goes in banners/placeholders, not hover-only `help=`**. `help=` is the *secondary* layer on mobile.
 3. **Camera-first flows.** The Scan Issue photo field already renders as a single "Take photo" button opening the OS camera on mobile (`widget="image"`, `capture`). The tour explicitly teaches this and the help article notes the **HTTPS requirement** for the camera (from `docs/12`): "If the photo button doesn't open the camera, you're on plain http — ask the Admin for the secure (https) address."
 4. **Scanner-aware copy.** The barcode wizards inherit `barcodes.barcode_events_mixin` (HID scanner ENTER auto-fires). Mobile help covers both a hardware scanner *and* the on-screen field; the "scan won't register — tap the field once" tip from the onboarding FAQ becomes a pinned banner in Beginner Mode.
 5. **Vertical, single-column forms.** The scan wizards already use Bootstrap `col-12 col-md-*` responsive grids — keep every training-added banner/field in that pattern so it stacks cleanly on a phone.
@@ -294,105 +306,75 @@ The real deployment is tablets in a shed, sometimes one-handed, sometimes on a f
 
 ---
 
-## 11. Files / Modules to Create
+## 11. Files / Modules — live addon shape
 
-A single new addon **`wms_training`**. Proposed manifest dependencies: `["wms_location", "wms_barcode", "wms_repair_damage", "wms_reports", "wms_ai_forecast", "wms_fifo", "web", "mail"]`. Concrete file list:
+A single addon **`wms_training`**. The shipped layout is intentionally minimal — no assets bundle, no JavaScript, no OWL widgets, no client actions. Tours are HTML articles and the only "code" that touches them at install time is `hooks.apply_tour_action_links`.
 
 ```
 addons/wms_training/
 ├── __init__.py
-├── __manifest__.py                      # name, depends (above), data+assets bundles, license LGPL-3
+├── __manifest__.py                       # depends on wms_location/_barcode/_repair_damage/_reports/_ai_forecast/_fifo + web + mail; application=False (no Apps-grid tile); LGPL-3
+├── hooks.py                              # apply_tour_action_links: rewrites <a href="/odoo/action-PENDING-<xmlid>"> to /odoo/action-<resolved-id> across every wms.help.article body_html; runs from post_init_hook and migrations
 ├── models/
 │   ├── __init__.py
-│   ├── res_users.py                     # add wms_beginner_mode boolean + inject into user context
-│   ├── wms_help_article.py              # wms.help.article + wms.help.category models
-│   └── wms_training_mixin.py            # optional: helper to compute beginner banners / "show me how" availability
-├── wizards/
-│   ├── __init__.py
-│   ├── wms_confirm_dialog.py            # transient model powering Beginner-Mode confirmations
-│   └── wms_confirm_dialog_views.xml
+│   ├── res_users.py                      # wms_beginner_mode boolean (extends res.users)
+│   ├── wms_help_article.py               # wms.help.article model (kanban + form reader)
+│   └── wms_repair_order.py               # repair-order touch-up so Scrap/Repair links resolve in tours
 ├── views/
-│   ├── menus.xml                        # WMS → Help (root help menu + dashboard action); "Reset my tours"
-│   ├── wms_help_article_views.xml       # kanban (landing), form (reader), search; actions
-│   ├── wms_help_category_views.xml
-│   ├── res_users_views.xml              # Beginner-mode toggle in Preferences + Settings→Users
-│   ├── wms_training_dashboard.xml       # client-action / OWL dashboard: "Welcome", tour launcher, beginner toggle
-│   ├── tooltip_overrides_location.xml   # <field help=...> + banners injected into wms_location forms
-│   ├── tooltip_overrides_barcode.xml    # banners/help on scan wizards (extends existing alert divs, beginner-gated)
-│   ├── tooltip_overrides_repair.xml     # Damage/Repair form guidance
-│   ├── tooltip_overrides_reports.xml    # report list help= empty-states
-│   └── empty_state_help.xml             # action help="" placeholders across the WMS actions
+│   ├── wms_help_article_views.xml        # article kanban + form views + actions; ALSO declares the top-level "Help & Training" menu inline (no separate menus.xml — see lines 110-125)
+│   ├── res_users_views.xml               # Beginner-mode toggle in Preferences + Settings → Users
+│   └── wms_repair_scrap_views.xml        # adjusts the Scrap action so the admin tour step lands cleanly
 ├── data/
-│   ├── wms_help_category_data.xml       # the 7 categories (noupdate="1")
-│   ├── wms_help_article_data.xml        # seeded articles from docs/ (noupdate="1")
-│   └── wms_training_settings.xml        # default: new storekeeper logins → beginner_mode = True hook wiring
+│   ├── help_articles.xml                 # seeded recipe / how-to articles (noupdate="1")
+│   ├── guided_tours.xml                  # the 4 tour articles: help_tour_first_login (4 steps), help_tour_storekeeper (5), help_tour_admin (6), help_tour_readonly (5) — each step is one /odoo/action-PENDING-<xmlid> link
+│   └── training_index.xml                # category / landing index records
 ├── security/
-│   ├── ir.model.access.csv              # article read=all WMS users, write=manager; category same
-│   └── wms_training_rules.xml           # record rules: hide admin-only / capability-gated articles
+│   └── ir.model.access.csv               # article read for WMS users, write for managers
 ├── static/
-│   ├── description/
-│   │   └── icon.png
-│   └── src/
-│       ├── js/
-│       │   ├── tours/
-│       │   │   ├── tour_orientation.js
-│       │   │   ├── tour_scan_receipt.js
-│       │   │   ├── tour_scan_return.js
-│       │   │   ├── tour_scan_issue.js
-│       │   │   ├── tour_damage.js
-│       │   │   ├── tour_audit.js
-│       │   │   ├── tour_find_product.js
-│       │   │   ├── tour_admin_setup.js
-│       │   │   ├── tour_admin_review.js
-│       │   │   └── tour_beginner_intro.js
-│       │   ├── help_launcher/             # OWL widget: floating "Need help?" button + "Show me how"
-│       │   │   ├── help_launcher.js
-│       │   │   ├── help_launcher.xml
-│       │   │   └── help_launcher.scss
-│       │   └── beginner_confirm/          # OWL hook wiring the confirm dialog to Validate in beginner mode
-│       │       └── beginner_confirm.js
-│       └── scss/
-│           └── wms_training.scss
-├── tests/
-│   ├── __init__.py
-│   ├── test_help_article_access.py       # keeper can read, not write; capability gating hides Issue article
-│   ├── test_beginner_mode.py             # toggle persists; new storekeeper login defaults ON
-│   └── test_tours.py                     # HttpCase: each tour runs end-to-end for a seeded user/role
-└── README.md                             # how to add a new article/tour; the tooltip coverage checklist
+│   └── img/
+│       ├── annotated/                    # annotated UI screenshots embedded in article bodies
+│       └── diagrams/                     # flow diagrams embedded in article bodies
+├── migrations/
+│   ├── 19.0.1.5.0/                       # earlier migration step
+│   └── 19.0.1.6.0/post-migrate.py        # re-runs apply_tour_action_links so existing installs pick up new tour links
+└── tests/
+    ├── __init__.py
+    ├── test_beginner_mode.py             # toggle persists; default ON path
+    ├── test_help_video.py                # rendered article body smoke test
+    └── test_tour_links.py                # every /odoo/action-PENDING-<xmlid> resolves to a live ir.actions record after hooks run
 ```
 
-Manifest `assets` registration (Odoo 19 pattern, mirrors `wms_location`):
-```python
-"assets": {
-    "web.assets_backend": [
-        "wms_training/static/src/scss/wms_training.scss",
-        "wms_training/static/src/js/tours/*.js",
-        "wms_training/static/src/js/help_launcher/**/*",
-        "wms_training/static/src/js/beginner_confirm/beginner_confirm.js",
-    ],
-},
-```
+Notes:
+- **No `static/description/icon.png`** ships. The manifest is `application=False`, so the addon installs without an Apps-grid tile; it surfaces only via the top-level "Help & Training" Odoo app menu its views declare.
+- **No `assets` registration** in the manifest. There is no `web.assets_backend` block — nothing to bundle, because there is no JS/SCSS.
+- **No `menus.xml`, no `wms_help_category_views.xml`, no `wms_training_dashboard.xml`, no `tooltip_overrides_*.xml`, no `wizards/`.** Those are roadmap (§13 Phase 2-3); the live release relies on the existing addons' tooltips/banners.
+- **The "Help & Training" menu and its two children (Getting Started, Help Center) are declared inline at the bottom of `views/wms_help_article_views.xml` (lines 110-125)** — top-level Odoo app menu, `sequence=6`, `groups="base.group_user"`. It is NOT a submenu under WMS (see §12).
 
 ---
 
-## 12. Recommended UI Placement
+## 12. UI Placement — what ships today vs. roadmap
 
-Where each piece lives in the existing WMS menu/UX (menu root `wms_location.menu_wms_root`, sections Operations / Configuration / Reports / Forecot / Backup):
+### 12.1 Shipped placement
 
 | Piece | Placement | Why there |
 |---|---|---|
-| **Help menu (root)** | New top-level child of **WMS** menu, label **"Help"**, low sequence so it sits last, `web_icon` "?" — visible to **all** WMS users (`group_wms_user`) | One predictable home for help; mirrors how Reports is its own section |
-| ↳ **Help Center** (article kanban) | Under WMS → Help → **"How-to guides"** | Searchable landing |
-| ↳ **Guided tours list** ("Show me how") | Under WMS → Help → **"Show me how"** → opens the dashboard/launcher | Re-launch any tour |
-| ↳ **Reset my tours** | WMS → Help → **"Reset my tours"** | Seasonal returners |
-| **Welcome / training dashboard** | The **default action** when a *beginner* opens the WMS app (client action), replacing the bare menu landing; experts land on the normal Operations menu | First thing a new helper sees is orientation, not a blank screen |
-| **"Show me how" button** | In the **header** of each scan wizard, Damage form, Audit form, and the "Where is product X?" list | Contextual relaunch right where the task is |
-| **"What this screen is for" banner** | Top of each form, **above** the existing alert banners (beginner-gated) | Consistent first-read line |
-| **Floating "Need help?" launcher** | Bottom-right OWL widget on WMS backend screens (beginner-gated; collapsible) | Always-available escape hatch, tablet-friendly |
-| **Beginner-mode toggle** | (a) the WMS dashboard header; (b) standard **Preferences** dialog (top-right user menu); (c) **Settings → Users** form for Admins; (d) the **Store Keeper roster** form | Self-service + admin control |
-| **Help article links from errors/banners** | Inline "See: …" / "Learn more" links rendered inside Beginner-Mode banners and long error dialogs | Connects the moment-of-confusion to the answer |
-| **Admin setup tour prompt** | Auto-offered on a Manager's first login after install | Drives initial warehouse setup |
-| **Command palette (Ctrl/Cmd-K)** entries | Articles registered as commands | Power-user shortcut, no menu hunting |
+| **Help & Training (root menu)** | **Top-level Odoo app menu**, `sequence=6`, `groups="base.group_user"` — sits next to WMS in the apps bar, not under it. Declared inline in `views/wms_help_article_views.xml` lines 110-125. | One predictable home for help, visible to every internal user; deliberately separate from WMS so non-warehouse users (trustees, helpers in training) can still reach it |
+| ↳ **Help & Training → Getting Started** | Article action; the four shipped guided tours (`help_tour_first_login`, `help_tour_storekeeper`, `help_tour_admin`, `help_tour_readonly`) are the headline content here | First thing a new helper opens |
+| ↳ **Help & Training → Help Center** | Kanban over `wms.help.article` recipe / how-to articles | Searchable landing |
+| **Beginner-mode toggle** | **Preferences** dialog (top-right user menu) and **Settings → Users** form for Admins, via `views/res_users_views.xml` | Self-service + admin control |
+
+### 12.2 Roadmap placement (not in this release)
+
+These were considered and may ship in later phases (see §13); they are **not** present in the live addon today:
+
+| Piece | Planned placement | Phase |
+|---|---|---|
+| Welcome / training dashboard client action | Default action when a beginner opens the WMS app | Phase 3 |
+| In-form "What this screen is for" beginner banner | Top of each WMS form, beginner-gated | Phase 2 |
+| Floating "Need help?" launcher | Bottom-right widget on WMS backend screens | Phase 3 |
+| Inline "See: …" / "Learn more" links wired into errors | Beginner-mode error dialogs | Phase 2 |
+| Auto-offer-once on first login | Manager and keeper first-login prompts | Phase 3 |
+| Command palette (Ctrl/Cmd-K) article entries | Power-user shortcut | Phase 4 |
 
 ---
 
@@ -407,7 +389,7 @@ Ship in four phases so value lands early and risk stays low on the trust's singl
 
 **Phase 1 — Help Center + tooltips live**
 - Seed the help categories and the first ~10 articles (from `docs/15`, `docs/03`, `docs/20`, `docs/12`).
-- Add the WMS → Help menu, the article kanban/reader, the empty-state placeholders, and the standardised banners (beginner-gated).
+- Add the top-level Help & Training menu, the article kanban/reader, the empty-state placeholders, and the standardised banners (beginner-gated).
 - Acceptance: a keeper can find and read "how to take stock out" in ≤ 3 taps; access tests pass (keeper read-only, manager curates).
 
 **Phase 2 — Beginner Mode + confirmations + danger-hiding**
@@ -415,8 +397,8 @@ Ship in four phases so value lands early and risk stays low on the trust's singl
 - Acceptance: `test_beginner_mode` green; manual check on a tablet that Validate asks for confirmation in beginner mode and goes straight through otherwise; no dangerous button visible to a beginner.
 
 **Phase 3 — Guided tours + welcome dashboard**
-- Ship the role/capability-gated `web_tour` tours, the "Show me how" buttons, the floating launcher, and the beginner welcome dashboard with auto-offer-once.
-- Acceptance: `test_tours.py` HttpCase runs every tour for its seeded role; on-duty pilot with 1–2 real helpers in the shed.
+- Extend the four shipped tour articles with per-capability scan tours and find-product / admin-review tours; optionally add a "Show me how" launcher widget and the beginner welcome dashboard with auto-offer-once. (If JS tours are introduced for any of these, they would be add-ons to the HTML pattern, not a replacement.)
+- Acceptance: `test_tour_links.py` resolves every tour step link for its seeded role; on-duty pilot with 1–2 real helpers in the shed.
 
 **Phase 4 — Pilot, measure, translate**
 - Two-week supervised pilot with real temporary helpers; collect "Was this helpful?" data and watch which errors still cause "ask the Admin" interruptions.
@@ -428,17 +410,17 @@ Ship in four phases so value lands early and risk stays low on the trust's singl
 ## 14. Long-Term Maintainability Strategy
 
 1. **Content is data, versioned in git.** Articles, categories, and tour definitions live in the addon (`noupdate="1"` for seeded articles so Admin edits survive upgrades). Editing copy = a normal PR, reviewed like code; no separate CMS to drift.
-2. **Single source of truth per fact.** Tooltips/`help=` describe the field; articles describe the *task*; tours *show* the task. A behaviour change in a workflow updates one tour + one article, found via a naming convention (`wms_tour_<task>` ↔ article keyword). The README's mapping table keeps these paired.
-3. **Tours are tested, so they break loudly.** Each `web_tour` is covered by an `HttpCase` in `tests/test_tours.py`. If a developer renames a button or moves a field, the tour's `trigger` selector fails in CI (the project already runs tests per `docs/10`/`docs/17`) — turning silent doc-rot into a red build. **This is the key anti-staleness mechanism.**
+2. **Single source of truth per fact.** Tooltips/`help=` describe the field; articles describe the *task*; tours *show* the task. A behaviour change in a workflow updates one tour article (xmlid pattern `help_tour_<role>`) + one recipe article, found via a naming convention. The mapping is kept in the tour article body itself, which links to the relevant screen.
+3. **Tour links are tested, so they break loudly.** `tests/test_tour_links.py` walks every `<a href="/odoo/action-PENDING-<xmlid>">` placeholder across the four tour articles and asserts that `hooks.apply_tour_action_links` resolves each xmlid to a live `ir.actions` record. If a developer renames or removes an action xmlid the tours point at, the test fails in CI (the project already runs tests per `docs/10`/`docs/17`) — turning silent doc-rot into a red build. **This is the key anti-staleness mechanism.**
 4. **Tooltip coverage is a gate.** The coverage checklist (§5.3) is part of `code-review`/CI: a new user-facing field without `help=` fails review. New capability sub-groups automatically need a matching gated tour/article (documented in `res_users._CAPABILITY_XMLIDS`'s neighbourhood + the README).
 5. **Feedback loop drives pruning.** The "Was this helpful?" counter + a simple "articles read this month" report (reuse the `wms_reports` pattern) tells Admins which help is unused (delete/merge) or unhelpful (rewrite). Errors that still trigger "ask the Admin" are candidates for a new article or a friendlier message.
-6. **Decouple from Odoo churn.** All tours/help use *public* Odoo 19 primitives (`web_tour` registry, `field help`, action `help`, `res.users` context, OWL `Dialog`/`registry`). No monkey-patching of core controllers beyond the existing benign UI patches. When upgrading Odoo, the test suite (especially tours) is the migration tripwire; selectors are the only likely fix.
+6. **Decouple from Odoo churn.** All tours/help use *public* Odoo 19 primitives (`wms.help.article` model, `ir.actions` xmlids resolved by a tiny post-install hook, `field help`, action `help`, `res.users` context). No monkey-patching of core controllers, no dependency on the JS tour-service internals. When upgrading Odoo, `test_tour_links.py` is the migration tripwire; a renamed action xmlid is the only likely fix.
 7. **Keep the docs/ and in-app help in sync deliberately.** The `docs/*.md` files remain the *engineering* source; in-app articles are their plain-language derivative. A short note in `docs/11-maintenance.md` (or a new `docs/21-training-maintenance.md`) records the mapping so future maintainers know that editing the onboarding flow means touching both. Consider a CI check that flags an article whose source doc changed since the article's last edit.
 8. **Low operational cost.** No extra services, no enterprise modules, no external SaaS — fits the trust's volunteer-run, single-PC, offline-friendly reality. Everything ships in one installable addon and is removed cleanly by uninstalling it.
 
 ---
 
 ### Appendix — Alignment notes for implementers
-- The terminology is **Rack → Compartment → Slot** (+ Zone, Floor); the older `docs/15` onboarding script still says "Levels → Dividers" and references "Repair Tech / Buyer" roles that aren't in the current two-role + capability security model. **Rewrite article copy to the current model**, not the stale script wording.
+- The terminology is **Rack → Compartment → Slot** (+ Zone, Floor); the older `docs/15` onboarding script still says "Levels → Dividers". The current security model is **three base roles** (`group_wms_user`, `group_wms_manager`, `group_repair_tech`) **plus the optional `group_buyer`**, layered with **five capability sub-groups** all in the `wms_location.*` namespace (`group_wms_can_scan_receive`, `…_scan_issue`, `…_file_damage`, `…_submit_audit`, `…_manage_catalog`) — Repair Tech and Buyer are **first-class roles**, not orphan references. **Rewrite article copy to the current model**, not the stale "Levels → Dividers" / two-role script wording.
 - Reuse, don't reinvent, the existing friendly assets: the `scan_receipt`/`scan_issue` alert banners, the rich `help=` strings, the chatter audit lines, and the `wms.keeper.warning.mixin` are the established voice — the training layer extends them consistently.
 - The Store Keeper login factory (`wms_barcode/models/wms_storekeeper.py → action_create_login`) is the natural hook to default `wms_beginner_mode = True` for new helpers; add that one line there when Phase 2 lands.

@@ -7,8 +7,18 @@ All WMS labels print on the **thermal printer** as **4×1 inch (100×25 mm) die-
 - **Label stock:** **True-Ally 100×25 mm (4×1 inch)** die-cut direct-thermal, ~1000/roll, with a **gap** between each sticker
 - **Scanner:** Helett HT20pro (reads 1D + 2D)
 
+## Who sees which source list
+Labels can be printed from several places, but **what you see in the menu depends on your role**:
+
+| Role | Can reach | Cannot reach |
+|---|---|---|
+| **Store Keeper** (`group_wms_user`) | Products list; **Operations → Slots** (and the **Print Label** button on the slot form) | Racks, Compartments, Label Settings (entire **Configuration** submenu is manager-only) |
+| **Manager** (`group_wms_manager`) | Products list; Operations → Slots; **Configuration → Racks**, **Compartments**, **Label Settings** | — |
+
+If you're a Store Keeper and can't find Racks or Compartments in the menu, that's expected — ask a manager to print rack/compartment labels for you.
+
 ## Print a label
-1. Open a list — **Products**, or **WMS → Operations → Compartments / Slots / Racks**.
+1. Open a list — **Products**, **WMS → Operations → Slots**, or **WMS → Configuration → Racks / Compartments** (manager-only).
 2. Tick the records you want.
 3. **Print** menu → **WMS Product Label (100×25mm)** or **WMS Location Label (100×25mm)**.
 4. Send the PDF to the TE244.

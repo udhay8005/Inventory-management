@@ -1,5 +1,10 @@
 # WMS Production-Blocker Remediation — Closure Report
 
+> **Note:** historical record — captures the closure of a v19.0.10-era
+> remediation sprint. Subsequent v19.0.16.x releases changed scope, scores,
+> and recommendations — for the current state read the top of
+> [`CHANGELOG.md`](../CHANGELOG.md).
+
 **Scope:** eliminate every finding from the final pre-production enterprise audit
 (Critical → High → Medium → Low), each with root-cause analysis, a fix, automated
 tests, CI validation, and backward compatibility preserved.
@@ -38,7 +43,7 @@ operator follow-ups listed at the end).
 | Damage/repair forced `ml.quantity` even when reservation failed (phantom deduction) + TOCTOU | Shared `validate_reserved_or_abort()`: product lock + abort if move not `assigned` | `34af4fc` | `test_reservation_guard.py` |
 | Daily-cap counted via fragile `origin =ilike 'Barcode FIFO%'` + UoM-blind sum | Immutable `wms_is_scan_issue` flag + `quantity_product_uom` sum + backfill migration | `8ef3147` | `test_concurrency.py` (+2) |
 | Forecast: `is_consumable` keyed off retired `product.type`; N+1 cron; unbounded history | History-based flag; batched `_prefetch_signals`; `_prune_history` retention | `8bfac87` | `test_forecast.py` |
-| Public `/wms/health` had no auth option | Optional `wms_reports.health_token` gate (open by default) | `8c293d2` | `test_health_endpoint.py` |
+| Public `/wms/health` had no auth option | /wms/health gate: behaves as open if `wms_reports.health_token` is unset (legacy/upgrade compatibility); `install-native.ps1` auto-generates and stores the 32-hex token, after which anonymous probes return HTTP 401 `{status:unauthorized}`. | `8c293d2` | `test_health_endpoint.py` |
 | `restore-drill.ps1` wiped a caller's pre-existing `PGPASSWORD` | Only clears the value it set itself | `8c293d2` | n/a (ops script) |
 | Audit triplet (handled/ordered/keeper) editable after validate, untracked | `tracking=True` on the picking triplet | `12dbaf9` | `test_audit_tracking.py` |
 | `wms_cells_json` referenced but never created → polyominoes drew as bounding box | Field persisted by generator; grid renders true cells | `18eaa3a` | `test_polyomino.py`, `test_rack_grid.py` |

@@ -60,7 +60,7 @@ Warehouse (YourCompany)
 ### In the software
 - **Product labels** (Code128 + SKU + name): list a product → ☰ *Print > WMS Product Label*.
 - **Slot labels**: as above for stock.location.
-- **Carton barcodes** (one barcode = N units): WMS → Configuration → *Carton Barcodes*.
+- **Carton barcodes** (one barcode = N units): WMS → Operations → *Carton Barcodes* (gated by `group_wms_can_manage_catalog`).
 - Any USB / wireless 2.4GHz / Bluetooth HID scanner works without driver install.
 
 ### Hardware (matches your starter list)
@@ -169,7 +169,7 @@ You can also add a cron that emails the WMS Manager every Monday with
 | **Daily** | High-value spot checks (3-5 slots randomly) | Operator |
 | **Weekly** | All fast-moving SKUs (forecast `velocity_class='fast'`) | Operator |
 | **Monthly** | One full rack rotation (rack 1 in Jan-W1, rack 2 in Jan-W2, …) | Operator + supervisor |
-| **Yearly** | Full physical count, all 2,304 slots, system frozen | Whole team |
+| **Yearly** | Full physical count, all slots (site-dependent — see WMS → Operations → Slots for the live count), system frozen | Whole team |
 
 ### Minimum bar
 - Any operator-found mismatch is logged immediately, not "fixed quietly".
@@ -181,25 +181,41 @@ You can also add a cron that emails the WMS Manager every Monday with
 ## 7. Responsibility System
 
 ### In the software
-Four built-in groups (Settings → Users & Companies → Groups, filtered by WMS):
+The role model is **two-tier**: a small set of named base roles, plus per-keeper capability sub-groups that an Admin layers on top. Find them under Settings → Users & Companies → Groups (filter "WMS").
 
-| Group | Can | Cannot |
+**Base roles (3 named + 1 optional)**
+
+| Group (technical id) | Can | Cannot |
 |---|---|---|
-| **WMS / Store Keeper** | Scan receipt, issue, internal transfer; view stock | Approve damage, edit racks |
-| **WMS / Manager** | Everything WMS User can + cancel pickings, edit racks, run cycle count, see all reports | — |
-| **WMS / Repair Tech** | Start / finish repair, scrap from repair | Manage stock outside repair |
-| **WMS / Buyer** | View forecasts, create draft POs, see vendor data | Move stock |
+| **WMS / Store Keeper** (`wms_location.group_wms_user`) | View stock, racks, slots, reports. **Read-only by default** — no scan / damage / audit / catalog actions until a capability sub-group is granted. | Anything that mutates stock or catalog without an explicit capability. |
+| **WMS / Manager** (`wms_location.group_wms_manager`) | Everything a fully-capable Store Keeper can do + cancel pickings, edit racks, run cycle count, manage users, see all reports. | — |
+| **WMS / Repair Tech** (`wms_location.group_repair_tech`) | Start / finish repair, scrap from repair. | Manage stock outside repair. |
+| **WMS / Buyer** (`wms_location.group_buyer`, optional) | View forecasts, create draft POs, see vendor data. | Move stock. |
+
+**Capability sub-groups (all in `wms_location`)** — granted per Store Keeper from the keeper form:
+
+| Capability sub-group | Unlocks |
+|---|---|
+| `group_wms_can_scan_receive` | Scan Receipt, Scan Return |
+| `group_wms_can_scan_issue` | Scan Issue (FIFO) |
+| `group_wms_can_file_damage` | Damages |
+| `group_wms_can_submit_audit` | Inventory audits, Cycle Count |
+| `group_wms_can_manage_catalog` | Carton Barcodes, Onboard Products |
+
+A bare Store Keeper sees the WMS app but cannot scan, file a damage, submit an audit, or touch the catalog until the matching capability is granted. Managers implicitly have all five.
 
 ### Assign real names
 
-| Role | Software group | Name in your org |
+| Role | Base group + capabilities | Name in your org |
 |---|---|---|
 | Inventory In-charge | WMS / Manager | _______________ |
-| Receiver | WMS / Store Keeper | _______________ |
-| Issuer / Despatcher | WMS / Store Keeper | _______________ |
+| Receiver | WMS / Store Keeper + `can_scan_receive` | _______________ |
+| Issuer / Despatcher | WMS / Store Keeper + `can_scan_issue` | _______________ |
+| Cycle-count Auditor | WMS / Store Keeper + `can_submit_audit` | _______________ |
+| Damage Reporter | WMS / Store Keeper + `can_file_damage` | _______________ |
+| Catalog Onboarder | WMS / Store Keeper + `can_manage_catalog` | _______________ |
 | Repair Tech | WMS / Repair Tech | _______________ |
 | Buyer / Procurement | WMS / Buyer | _______________ |
-| Auditor | WMS / Manager (read-only sub-group if needed) | _______________ |
 
 Print this filled-in table and stick it in the warehouse office.
 
@@ -222,14 +238,14 @@ Print this filled-in table and stick it in the warehouse office.
 Before you onboard anyone:
 
 - [ ] Write the SKU convention (one A4 page, see next doc).
-- [ ] Print and stick all 2,304 slot labels.
+- [ ] Print and stick every slot label (site-dependent count — see WMS → Operations → Slots).
 - [ ] Print product labels for every existing SKU and put them on the items.
 - [ ] Create users for at least: Receiver, Issuer, Manager.
 - [ ] Train the Receiver: complete one Scan Receipt end-to-end.
 - [ ] Train the Issuer: complete one Scan Issue end-to-end with FIFO.
 - [ ] Run one mock damage + repair cycle so the team has muscle memory.
 - [ ] Set a daily 9am calendar reminder: "Yesterday's stock moves match physical?"
-- [ ] Schedule `scripts\backup-native.ps1` in Windows Task Scheduler — 02:00 daily.
+- [ ] Run `scripts\install-backup-tasks.ps1` once (registers **WMS Daily Backup** + **WMS Weekly Restore Drill** as `NT AUTHORITY\SYSTEM`; defaults 1:00 PM daily and Sunday 3:00 AM).
 - [ ] Print the responsibility table.
 
 That's the bar. Everything beyond is optimisation.
@@ -244,8 +260,13 @@ That's the bar. Everything beyond is optimisation.
 - **Reorder rules**: each row in WMS → Forecast already shows a *Create PO*
   button — wire it to a default vendor per product, and the AI will queue
   drafts you only have to confirm.
-- **Mobile photo capture**: requires HTTPS — once you're ready, named
-  Cloudflare Tunnel gives a permanent URL. See `docs/12-mobile-access.md`.
+- **Mobile access over HTTPS**: photo capture on Scan Receipt, Scan Issue
+  and Damage already ships — the wizards expose a `photo` field that uses
+  the **standard Odoo binary/attachment widget** (it triggers the device
+  camera on phones; there's no custom in-app capture stage). The Stage 2
+  upgrade is exposing Odoo over HTTPS so operators can reach it from
+  phones in the field — named Cloudflare Tunnel gives a permanent URL.
+  See `docs/12-mobile-access.md`.
 - **Inventory valuation**: enable `stock.valuation.layer` reports (already
   installed via `stock_account`). Useful for accounting hand-off.
 - **IoT scale**: integrates with `weight` field on `stock.quant`. Useful
@@ -258,7 +279,7 @@ That's the bar. Everything beyond is optimisation.
 | Failure mode | How software helps | Process needed |
 |---|---|---|
 | Multiple names for the same item | SKU is the primary key — duplicates rejected | Discipline + SKU gatekeeper |
-| Unlabelled shelves | All 2,304 slots have a barcode | Stick the labels |
+| Unlabelled shelves | Every slot has a barcode (site-dependent count — see WMS → Operations → Slots) | Stick the labels |
 | Updating stock "later" | Scan wizards are 30-second flows; no excuse | Manager enforces same-day rule |
 | Over-engineering on day 1 | We already shipped the minimum + room to grow | Don't enable features you don't need yet |
 | No one accountable | Audit log captures every action with user | Name the person in the role table |

@@ -39,25 +39,44 @@ A weekly drill catches all three within 7 days of the bug landing.
    - Sanity probe: `SELECT count(*) FROM res_users` — every Odoo DB has it.
    - Drop the drill DB unless `-KeepDrillDb` is passed.
 8. Cleanup: temp file removed in a `finally` block, even on exception.
-9. Write a line to `.runtime\logs\restore-drill.log` and (best-effort) a
-   Windows Application Event Log entry under source `WMS_Backup_Drill`.
+9. Write a line to `.runtime\logs\restore-drill.log` (created on first drill
+   run) and (best-effort) a Windows Application Event Log entry under source
+   `WMS_Backup_Drill`.
 
 ## Scheduling
 
 ### One-time setup as admin
 
+Both the daily backup and the weekly restore drill are registered from
+source by a single idempotent script — re-running it REPLACES the tasks,
+so a rebuilt host comes up with the exact same schedule:
+
 ```powershell
 # Register the Event Log source so the drill can write entries.
 New-EventLog -LogName Application -Source 'WMS_Backup_Drill'
 
-# Register the weekly Task Scheduler entry.
-$action  = New-ScheduledTaskAction -Execute 'powershell.exe' `
-              -Argument '-NoProfile -File "D:\Udhay\projects\Inventory_mngt\scripts\restore-drill.ps1"'
-$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 3am
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd
-Register-ScheduledTask -TaskName 'WMS Restore Drill' `
-                       -Action $action -Trigger $trigger -Settings $settings `
-                       -RunLevel Highest
+# Register BOTH "WMS Daily Backup" and "WMS Weekly Restore Drill" at once.
+# Self-elevates via UAC; idempotent — safe to re-run after a host rebuild.
+scripts\install-backup-tasks.ps1
+```
+
+The installer sets `Principal=NT AUTHORITY\SYSTEM`,
+`LogonType=ServiceAccount`, `RunLevel=Highest`, with
+`-StartWhenAvailable`, `ExecutionTimeLimit=2h`, and
+`MultipleInstances=IgnoreNew`. Defaults are 1:00 PM daily for the backup
+and 3:00 AM Sunday for the drill (override with `-BackupAt` / `-DrillAt`).
+
+This pattern was introduced in v16.3 CR-1 — earlier versions used the
+Interactive principal, which silently stopped firing when the console
+session locked, leaving DR untested for weeks while the health endpoint
+still reported HEALTHY. Running as SYSTEM ensures backups and drills
+fire regardless of console state (locked, logged-off, headless box).
+
+To remove both tasks (e.g. before decommissioning a host), use the
+inverse:
+
+```powershell
+scripts\uninstall-backup-tasks.ps1
 ```
 
 ### Quarterly: run a full restore

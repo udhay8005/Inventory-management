@@ -18,7 +18,7 @@ scripts\install-native.ps1
 
 The installer:
 
-1. Installs **PostgreSQL 16**, **Python 3.12**, **wkhtmltopdf**, **Git** via winget (skips any that are already present)
+1. Installs **PostgreSQL 15/16/17** (auto-detected; winget installs 17 by default), **Python 3.12**, **wkhtmltopdf**, **Git** via winget (skips any that are already present)
 2. Creates the `odoo` Postgres role with `CREATEDB` + the password from `.env`
 3. Creates the `wms` database
 4. Clones Odoo 19.0 source into `.odoo\`
@@ -40,11 +40,12 @@ scripts\start-native.ps1
 4. `wms_repair_damage`
 5. `wms_ai_forecast`
 6. `wms_reports`
+7. `wms_training`
 
 ## First-time bring-up (Linux / macOS)
 
 ```bash
-# Install PostgreSQL 16 + Python 3.12 via your package manager first.
+# Install PostgreSQL 15/16/17 (auto-detected; winget installs 17 by default) + Python 3.12 via your package manager first.
 sudo apt-get install -y postgresql-16 postgresql-client python3.12 python3.12-venv \
                         wkhtmltopdf libldap2-dev libsasl2-dev git
 
@@ -85,17 +86,30 @@ Writes timestamped artifacts to `.\backups\`:
 
 - `wms-<timestamp>.dump.gpg` — `pg_dump` custom format, encrypted with `BACKUP_PASSPHRASE` from `.env` (the plaintext `.dump` is piped through GPG and never persisted)
 - `wms-<timestamp>-filestore.zip.gpg` — the `data_dir\filestore\wms` tree, GPG-encrypted
+- `wms-<timestamp>.dump.gpg.sha256` + `wms-<timestamp>-filestore.zip.gpg.sha256` — SHA-256 sidecars written at the same time, used to detect bit-rot and to gate restores
+
+**Hardening (canonical):**
+
+- GPG is invoked as `--symmetric --cipher-algo AES256` via `cmd /c` — the `cmd` shim is deliberate so PS 5.1 doesn't wrap gpg-agent's stderr into a `NativeCommandError` (each stderr line becomes an `ErrorRecord` and `$?` flips to `$false` even on exit 0)
+- SHA-256 sidecars are written by `backup-native.ps1` at artifact-write time; verify manually at restore time, and the weekly drill auto-verifies them before decrypt
+- `BACKUP_OFFSITE_DIR` is read from `.env` — blank = disabled; when set, each artifact (plus its `.sha256` sidecar) is mirrored to that path with the same 14-backup retention. Copy failures are logged but never abort the primary backup (failure-safe). The path must be reachable by `NT AUTHORITY\SYSTEM` (UNC paths need a machine-account ACL, not a user one)
+- `/wms/health` is gated by the `wms_reports.health_token` `ir.config_parameter` (32-hex, auto-generated at install) using `consteq` — pass as `?token=` or the `X-Health-Token` header. See [08-security.md](08-security.md) for the full gate semantics
 
 Default retention is 14 backups; pass `-Retain 30` for longer.
 
 Schedule via **Windows Task Scheduler**:
 
 ```powershell
-# One-line setup, runs nightly at 02:00:
-$action  = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-File D:\path\to\Inventory_mngt\scripts\backup-native.ps1'
-$trigger = New-ScheduledTaskTrigger -Daily -At 02:00
-Register-ScheduledTask -TaskName 'WMS nightly backup' -Action $action -Trigger $trigger
+# One-line setup — registers both scheduled tasks as NT AUTHORITY\SYSTEM:
+scripts\install-backup-tasks.ps1
 ```
+
+This registers:
+
+- **WMS Daily Backup** — runs `backup-native.ps1` daily at 1:00 PM
+- **WMS Weekly Restore Drill** — runs `restore-drill.ps1` every Sunday at 3:00 AM
+
+Both run as `NT AUTHORITY\SYSTEM` (LogonType=ServiceAccount, RunLevel=Highest, StartWhenAvailable, ExecutionTimeLimit=2h, MultipleInstances=IgnoreNew). See [docs/18-restore-drill.md](18-restore-drill.md) for the weekly drill runbook (scheduling, exit codes, troubleshooting).
 
 ### Restore
 
@@ -118,7 +132,7 @@ Then start Odoo against `wms_restore` to verify before swapping over.
 
 ### Restore drill
 
-A weekly drill verifies the latest backup is recoverable WITHOUT touching the production database. The drill decrypts the most recent `.dump.gpg`, runs `pg_restore --list` against it, and (optionally) restores into a throwaway `wms_drill_<timestamp>` database which is dropped on exit.
+A weekly drill verifies the latest backup is recoverable WITHOUT touching the production database. The drill auto-verifies the `.sha256` sidecars, decrypts the most recent `.dump.gpg`, runs `pg_restore --list` against it with a **TOC ≥ 100 entries** sanity gate (failures abort), and (optionally) restores into a throwaway `wms_drill_<timestamp>` database which is dropped on exit. Note: the TOC gate lives in `restore-drill.ps1` only — `restore-native.ps1` is for human-driven restores and does not enforce it.
 
 ```powershell
 # Cheap weekly check (TOC verification only):
@@ -128,7 +142,7 @@ scripts\restore-drill.ps1
 scripts\restore-drill.ps1 -DryRun:$false
 ```
 
-See `docs/18-restore-drill.md` for the full runbook (scheduling, exit codes, troubleshooting).
+See [docs/18-restore-drill.md](18-restore-drill.md) for the full runbook (scheduling, exit codes, troubleshooting).
 
 ## Running Odoo as a Windows service
 
@@ -137,21 +151,40 @@ crashes. Two options:
 
 ### Option A — NSSM (recommended)
 
-[NSSM](https://nssm.cc/download) wraps any executable as a Windows service:
+[NSSM](https://nssm.cc/download) wraps any executable as a Windows service. The canonical installer takes care of the wiring:
 
 ```powershell
 # After scripts\install-native.ps1 completes:
-nssm install OdooWMS `
+scripts\install-odoo-service.ps1
+```
+
+This creates the **Odoo-WMS** service:
+
+- Depends on the `postgresql-x64-*` service (auto-detected)
+- Auto-starts on boot, restarts on failure
+- Waits for `/wms/health` to return 200 before reporting healthy
+- Logs stdout/stderr to `.runtime\logs\service-out.log` and `.runtime\logs\service-err.log`
+
+If you have an AI-worker companion, install it too:
+
+```powershell
+scripts\install-ai-worker-service.ps1   # creates Odoo-WMS-AIWorker
+```
+
+**Manual fallback** (only if `install-odoo-service.ps1` is unavailable):
+
+```powershell
+nssm install Odoo-WMS `
     "D:\path\to\Inventory_mngt\.venv\Scripts\python.exe" `
     "D:\path\to\Inventory_mngt\.odoo\odoo-bin" `
     "-c" "D:\path\to\Inventory_mngt\config\odoo.native.conf" `
     "-d" "wms"
 
-nssm set OdooWMS AppDirectory "D:\path\to\Inventory_mngt"
-nssm set OdooWMS Start SERVICE_AUTO_START
-nssm set OdooWMS AppStdout "D:\path\to\Inventory_mngt\.runtime\logs\service.out.log"
-nssm set OdooWMS AppStderr "D:\path\to\Inventory_mngt\.runtime\logs\service.err.log"
-Start-Service OdooWMS
+nssm set Odoo-WMS AppDirectory "D:\path\to\Inventory_mngt"
+nssm set Odoo-WMS Start SERVICE_AUTO_START
+nssm set Odoo-WMS AppStdout "D:\path\to\Inventory_mngt\.runtime\logs\service-out.log"
+nssm set Odoo-WMS AppStderr "D:\path\to\Inventory_mngt\.runtime\logs\service-err.log"
+Start-Service Odoo-WMS
 ```
 
 ### Option B — Task Scheduler (no extra binary)

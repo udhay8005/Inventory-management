@@ -67,6 +67,8 @@ Open the wizard: **WMS → Operations → Scan Issue (FIFO)**. It opens as a pop
    - **Store Keeper on duty** — pick *your* name from the roster (the human at the desk now). You cannot create one here; if it's missing, ask the Admin.
    - **Reason / usage note** — a short free-text explanation of **why**, e.g. *"morning feed for shed B"*, *"replacing broken pump"*, *"monthly vaccination round for calves"*. This is **required** — there is no issue without an explanation.
 
+   **Optionally, also pick "Issued for"** — a separate category dropdown (Cows / Gaushala, Pooja / Temple, Maintenance / Repairs, Project / Construction, Administration / Office, Other). It defaults to **Other** and is **not required**, but setting it correctly lets the Consumption Value report break spend down by purpose (e.g. "how much did Cows cost vs Pooja last month").
+
 9. **Press "Validate".** The system reserves the planned stock, double-checks nobody else grabbed it first, removes it from the slots, records the audit details (and attaches the photo if present), and opens the resulting delivery record. The reason is also written to the delivery's note and history.
 
 > **Buttons on this form:** **Plan FIFO** (re-run the plan for whatever is in the scan box — normally the scan does this automatically), **Validate** (finish the issue; hidden when short), **Cancel** (discard).
@@ -87,7 +89,7 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 4. Scan the **Cow Calcium Bolus** barcode.
 5. Because medicine is expiry-sensitive, the system uses **FEFO**. The plan shows it pulling from the **December-2026 (BATCH-B)** slot first — say `R01 / SH04 / C01 / SL01` — *not* the June-2027 batch. The **Expires** cell on that row is red (within 90 days). Feedback: *"FEFO: planned 5 × Cow Calcium Bolus — earliest expiry first."* **Short qty = 0**, so the **Validate** button is showing.
 6. Calcium boluses are counted in **units**, so **no photo is required** (the "* required" marker is absent). (Contrast: if this were 5 litres of ghee, the photo would be mandatory.)
-7. AUDIT TRAIL: **Taken by = "Dr Rao"**; **Ordered by = "Farm lead"**; **Store Keeper on duty = Suresh** (your roster name); **Reason = "monthly vaccination round for calves"**.
+7. AUDIT TRAIL: **Taken by = "Dr Rao"**; **Ordered by = "Farm lead"**; **Store Keeper on duty = Suresh** (your roster name); **Reason = "monthly vaccination round for calves"**. Optional **Issued for = "Cows / Gaushala"** so the Consumption Value report attributes this spend to the herd.
 8. **Validate.** Five bottles leave the December batch; the delivery opens showing the move and your audit note.
 9. You hand Dr Rao exactly the five bottles the plan named — from the December slot, not whichever was nearest.
 
@@ -165,7 +167,7 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 
 **[1:45]** "Calcium is counted in units, so no photo is required — there's no 'required' marker on Item photo. If this were litres of ghee or kilos of feed, a photo would be mandatory, and on a phone the camera would open right here."
 
-**[2:05]** "Now the audit trail, and all four are required. Taken by — Doctor Rao. Ordered by — the farm lead. Store Keeper on duty — that's me, I pick my name from the roster. And the Reason — 'monthly vaccination round for calves'. No issue goes through without that explanation."
+**[2:05]** "Now the audit trail, and all four are required. Taken by — Doctor Rao. Ordered by — the farm lead. Store Keeper on duty — that's me, I pick my name from the roster. And the Reason — 'monthly vaccination round for calves'. No issue goes through without that explanation. I'll also pick 'Issued for — Cows / Gaushala' from the optional category dropdown so the Consumption Value report attributes this to the herd."
 
 **[2:35]** "I press Validate. The five bottles leave the December batch, the delivery record opens, and my audit note is saved. I hand over exactly the five bottles the plan named — from the December slot, not whichever was nearest."
 
@@ -183,7 +185,7 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 6. On the plan table, point to **Slot**, **In Date**, the red **Expires** cell, **Available**, and **Take**; read the **FEFO** feedback line.
 7. Show **Short qty = 0** and that the **Validate** button is present.
 8. Note the **Item photo** label has **no "* required"** marker (counted item).
-9. Fill **Taken by**, **Ordered by**, **Store Keeper on duty** (roster name), and the **Reason / usage note**.
+9. Fill **Taken by**, **Ordered by**, **Store Keeper on duty** (roster name), and the **Reason / usage note**. Optionally set **Issued for** (e.g. *Cows / Gaushala*) so the Consumption Value report can break spend down by purpose.
 10. Click **Validate**.
 11. Show the resulting **delivery form** with the move and the audit note in its history.
 12. (Optional contrast shot) Scan a measured item (e.g. ghee in litres) to show the **"* required"** photo marker appearing; or attempt an over-quantity to show the **Validate** button vanishing with a STOCK OUT message.
