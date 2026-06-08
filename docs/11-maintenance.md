@@ -18,7 +18,7 @@
    - `stock.location` removal-strategy hooks
    - `mail.thread` decoration
 2. Clone the new Odoo version alongside (`git clone -b 20.0 https://github.com/odoo/odoo .odoo-v20`), create a parallel venv, install deps. Restore a copy of the DB into `wms_v20_test` via `pg_restore`.
-3. Run each module's tests: `.venv\Scripts\python .odoo-v20\odoo-bin -d wms_v20_test -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports --test-enable --stop-after-init`.
+3. Run each module's tests: `.venv\Scripts\python .odoo-v20\odoo-bin -d wms_v20_test -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training --test-enable --stop-after-init`.
 4. Fix what breaks in a feature branch, never on prod.
 5. Cut over: `scripts\stop-native.ps1`, point `config\odoo.native.conf`'s `addons_path` at the new `.odoo-v20`, `scripts\start-native.ps1`.
 
@@ -48,7 +48,7 @@ re-runs, so re-installing `wms_fifo` will never duplicate the index.
 ## Memory pressure on small boxes
 
 - Drop `workers` in `config/odoo.native.conf` from 2 → 1 (or stay at 0 for threaded single-process, the default after FPAT — `workers = 0`).
-- Enable the `ai_worker` profile so statsmodels doesn't live in Odoo's RAM.
+- Run the AI worker as a separate native process so statsmodels doesn't live in Odoo's RAM — dev: `scripts\start-ai-worker.ps1`; prod: the `Odoo-WMS-AIWorker` NSSM service installed via `scripts\install-ai-worker-service.ps1`.
 - Cap `limit_memory_hard` lower; Odoo recycles the worker.
 
 ## Optional safety toggles (System Parameters)
@@ -93,7 +93,7 @@ Photos: Scan Receipt, Scan Issue, and Damage all accept an optional photo
 |---|---|
 | Scan does nothing | Cursor focus on barcode field? scanner emits ENTER? |
 | Slot shows wrong qty | `stock.quant` for that slot; check pending pickings reserving stock |
-| Forecast empty | `statsmodels` installed in container? `pip show statsmodels` |
+| Forecast empty | `statsmodels` installed in the venv? `.\.venv\Scripts\pip show statsmodels` |
 | PO suggestion missing | velocity_class = dead → suppressed by design |
 | Damage flow stuck | Confirm Damage location exists for that warehouse |
 

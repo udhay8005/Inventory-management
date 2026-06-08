@@ -5,6 +5,148 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.16.5.0] — 2026-06-08 — Documentation & Training certification
+
+Doc-only patch release on top of v16.4. No code, schema, scripts, addons, or
+manifests changed. 26 docs edited + 1 new (`docs/19-disaster-recovery.md`);
++668 lines, −300 lines.
+
+Sprint outcome: **CERTIFIED_GOLD** for handover (handover-readiness 9.5/10).
+
+### Blockers closed (4)
+- `docs/INSTALLATION-GUIDE.md` Phase 4 health probe rewritten to use the live
+  v16.4 token gate (`?token=` or `X-Health-Token` header; full 401/200/503
+  response matrix documented; `odoo.tools.consteq` named).
+- `docs/INSTALLATION-GUIDE.md` Phase 13 — new **Step 0** for
+  `BACKUP_OFFSITE_DIR` with the **NT AUTHORITY\SYSTEM** principal-reachability
+  caveat (user-only OneDrive paths warned against).
+- `docs/18-restore-drill.md` — manual `Register-ScheduledTask` snippet replaced
+  with `scripts\install-backup-tasks.ps1`; the CR-1 locked-console DR failure
+  cannot re-emerge from copy-pasting the doc.
+- `docs/07-deployment.md` — rewritten to canonical 7-module install,
+  `Odoo-WMS` service name, `install-odoo-service.ps1` /
+  `install-backup-tasks.ps1` / `install-ai-worker-service.ps1`, and
+  `PostgreSQL 15/16/17 (auto-detected; winget installs 17 by default)`.
+
+### Disaster-recovery runbook (new)
+- `docs/19-disaster-recovery.md` — 10-section "PC died, rebuild on a new box"
+  end-to-end runbook. Targets ~85-minute round-trip from clean Windows to
+  smoke-passed restore. Explicitly grounds:
+  - `scripts\restore-native.ps1 -Force` is **mandatory** on a fresh-box
+    rebuild (`install-native.ps1` pre-seeds the `wms` DB).
+  - The `pg_restore --list ≥ 100 TOC` sanity gate lives in
+    `restore-drill.ps1` only — not the production restore path. Operators
+    wanting a pre-flight TOC check run the drill first.
+  - SHA-256 sidecars are written by `backup-native.ps1` at backup time and
+    verified by the operator (§3.3 `Get-FileHash`) at restore time;
+    `restore-native.ps1` does not auto-verify.
+  - `$psql` auto-detection block (§3.4) defined before first use; all later
+    references use the call operator (`& $psql ...`).
+  - Troubleshooting covers the `-Force` trap, BACKUP_PASSPHRASE failures,
+    SYSTEM-unreachable `BACKUP_OFFSITE_DIR`, `service-err.log` inspection.
+
+### CHANGELOG history repaired
+- `v19.0.16.2.0` section inserted (closure-sprint hotfix: `gpg` via `cmd /c`).
+- `v19.0.16.3.0` section inserted (closure-sprint: CR-3 health-token doc
+  clarification + companion commits; CR-1, CR-2, CR-4, CR-5 left
+  un-enumerated where commit subjects don't name them, with a pointer to PR #41).
+
+### Security documentation completeness
+- New "Shipped security controls" section in `SECURITY.md` and
+  `docs/08-security.md` enumerating the 8 controls in play: DB manager UI
+  lockdown (`list_db=False`, `db_listing=False`, `/web/database/*` redirect),
+  roles + 5 capability sub-groups (all in the `wms_location` namespace),
+  `/wms/health` `consteq` gate, backup envelope (GPG `--symmetric
+  --cipher-algo AES256` via `cmd /c`), SHA-256 integrity + `pg_restore --list`
+  ≥ 100 TOC gate (drill-only), `BACKUP_OFFSITE_DIR` semantics, scheduled
+  tasks under `NT AUTHORITY\SYSTEM`, placeholder password deny-list.
+- `README.md` role table expanded from 2 to canonical 3 base roles
+  (Store Keeper, Manager, Repair Tech) + optional Buyer + 5 capability
+  sub-groups, with cross-link to `docs/08-security.md`.
+
+### Menu-path & vocabulary sweep
+- `WMS → Products → Onboard Product` → `WMS → Configuration → Onboard Products`
+  (no such submenu existed; Onboard Products lives under Configuration).
+- `Label Config` → `Label Settings` (the displayed view name) — 4 sites.
+- `OdooWMS` → `Odoo-WMS` (canonical hyphenated service name) — 5 sites in
+  `docs/07-deployment.md`.
+- `odoo-native.log` → `odoo.log` — 2 sites; matches the live file written by
+  `install-native.ps1`.
+- `Damages → New` removed everywhere — Damages is a single leaf, with a
+  New button on the list view.
+- `Levels / Dividers / Slots` and `L-3/D-2/S-1` slot codes purged from
+  `docs/15-onboarding-script.md`; replaced with `Rack / Compartment / Slot`
+  and `R01-SH01-C01-SL01`-style codes.
+- `wms.return` (no such model) → `wms.scan.receipt` (return mode) in
+  `docs/02-data-model.md` and `docs/06-reports.md` after grep-confirming the
+  live model.
+- Help & Training surfaced as a **top-level Odoo app** (not a WMS submenu) in
+  `STOREKEEPER-QUICK-START.md`, `ADMIN-QUICK-START.md`,
+  `21-training-system.md`, `INSTALLATION-GUIDE.md`.
+
+### Stale operational instructions removed
+- `docs/04-barcode-flow.md` "The container generates a PDF" → "Odoo".
+- `docs/05-ai-prediction.md` "Optional ai_worker container" → native
+  `scripts/start-ai-worker.ps1` / `Odoo-WMS-AIWorker` NSSM service.
+- `docs/08-security.md` L128 "never in compose or in git" → "never in
+  checked-in config or in git".
+- `docs/11-maintenance.md` L51 "ai_worker profile so statsmodels doesn't
+  live in Odoo's RAM" → native process phrasing; L96 "statsmodels installed
+  in container?" → ".venv\Scripts\pip show statsmodels".
+- `docs/INSTALLATION-GUIDE.md` L324 `Get-RandomBytes 16` (not a PS 5.1
+  cmdlet) → `RandomNumberGenerator::Create().GetBytes()` for the health-token
+  rotation snippet.
+- `docs/08-security.md` L194 bash `&&` chaining → PS-5.1-valid
+  `cmd1; if ($?) { cmd2 }`.
+
+### 21-training-system.md realigned to the live addon
+- Fictional directory tree replaced with the actual addon shape
+  (3 view XMLs, 3 data XMLs; no JS, no assets bundle, no client widgets, no
+  `menus.xml` file, no `static/description/icon.png`).
+- Tours described accurately as HTML articles with `action-PENDING-*`
+  placeholders rewritten by `hooks.apply_tour_action_links` at install
+  (4 tours; 4 / 5 / 6 / 5 steps). They are not Odoo JS tour-service tours.
+- "Show me how" / "Reset my tours" surfaces marked as planned-not-in-this-release.
+
+### Other corrections
+- `docs/01-architecture.md` module-layering diagram now includes `wms_training`
+  at the top of the stack with its true `depends` set.
+- `docs/09-roadmap.md` Phase 7 items ticked with their shipped-in-vX
+  annotations (restore drill, capability ACLs, training docs, load test).
+- `docs/REMEDIATION-CLOSURE.md` carries a historical-record banner.
+- `docs/PRODUCTION-READINESS-v19.0.5.md` historical callout updated to point
+  at the current CHANGELOG head.
+- `docs/13-operations-playbook.md` role section updated to the 3 + 5
+  two-tier model; hard-coded "2,304 slots" replaced with site-dependent
+  pointer.
+- `docs/training/sop/03-fifo-issue.md` mandatory-audit-fields list aligned
+  with the live `wms_barcode/wizards/scan_issue.py` (4 mandatory + optional
+  `Issued for` category).
+- `docs/LABEL-PRINTING.md` adds a role-visibility callout (Store Keeper
+  sources vs Manager-only Configuration sources).
+- `.github/pull_request_template.md` adds `wms_training` to the module
+  checkbox list.
+- All Docker-era historical mentions kept (`README`, `01-architecture`,
+  `INSTALLATION-GUIDE`, `07-deployment`, `09-roadmap`, `17-ci-cd`, `CHANGELOG`)
+  — only stale operational instructions were rewritten.
+
+### Sprint methodology
+Five-workflow agent arc: ground-truth verification → per-file edits →
+verify + 3 persona simulations (Storekeeper / Admin / DR) + Help & Training
+audit → Critical/High fixup pass → polish pass. ~115 specialised agents,
+~5.7M agent tokens.
+
+### Out of scope (tracked, not blocking)
+- `scripts/install-native.ps1` end-of-install hint still lists only 6
+  modules (not 7) — this is code, not docs, and a code-touching change is
+  deferred to a future patch.
+- `docs/17-ci-cd.md` L65 still uses `postgresql-x64-16` as the local-dev
+  analogy. CI does pin 16 (parity with the Windows install) so this isn't a
+  contradiction — just minor phrasing drift from the new canonical PG line.
+- `docs/09-roadmap.md` Phase 7 load-test bullet annotated via a doc
+  cross-link instead of a literal `shipped in v19.0.X.0.0` tag like its
+  siblings.
+
 ## [v19.0.16.4.0] — 2026-06-08 — Final cleanup sprint
 
 The final pre-handover sprint. No new features. Repository tidied, prod
@@ -62,6 +204,54 @@ hardened, docs refreshed, security policy added.
 - 0 Critical, 0 High open findings.
 - All 7 modules at the v16.3 manifest versions; this is a config/docs/cleanup
   release with no module manifest bumps.
+
+## [v19.0.16.3.0] — 2026-06-07 — Closure-sprint: 5 Highs discharged (CR-1..CR-5)
+
+Docs-and-hardening release on top of v16.2. No module manifest bumps. Five
+closure-review High findings (CR-1..CR-5) discharged; only **CR-3** is named
+in a commit subject in this repo — the rest are referenced by PR #41's
+description, not by per-commit subjects.
+
+- **CR-3 — health-token doc clarification** (commit `e2714d6`,
+  "docs(install): clarify auto-generated health_token"). `docs/INSTALLATION-GUIDE.md`
+  §6.4 rewritten to document the install-time auto-generated **32-hex**
+  `wms_reports.health_token` System Parameter, the `odoo.tools.consteq`
+  comparison gate, and both accepted forms — `?token=<value>` query string
+  **or** `X-Health-Token: <value>` request header. Missing/wrong returns
+  HTTP 401 `{"status":"unauthorized"}`.
+- **CR-1 — scheduled-task principal hardening (docs + verification)** —
+  documented and verified the `NT AUTHORITY\SYSTEM` principal registration
+  for `WMS Daily Backup` / `WMS Weekly Restore Drill` in
+  `scripts/install-backup-tasks.ps1` (`LogonType=ServiceAccount`,
+  `RunLevel=Highest`, `-StartWhenAvailable`, `ExecutionTimeLimit=2h`,
+  `MultipleInstances=IgnoreNew`) so DR survives a locked console / reboot.
+  The underlying SYSTEM-principal switch first shipped in **v19.0.16.0.0**
+  (FX-1 Critical batch); v16.3 CR-1 is the formal docs + commit
+  consolidation of that change.
+- **README cosmetic expansion** (commit `93be697`, "docs(readme): surface
+  issued-for + alert-hardening in 'What's in the box'") — surfaces the v15
+  Issued-for classification and alert-delivery hardening in the top-level
+  feature list. Closure-cosmetic only.
+- **CR-2, CR-4, CR-5** — not enumerated in commit subjects in this repo;
+  see PR #41 description for full per-finding mapping.
+
+Tagged at merge `f1e0c6c` (PR #41).
+
+## [v19.0.16.2.0] — 2026-06-07 — Closure-sprint hotfix: gpg via cmd /c
+
+Scripts-only release. No addon manifest bumps. Fixes the v16.1 regression
+where `& $gpg ... 2>$errFile` running under PowerShell 5.1 with
+`$ErrorActionPreference = 'Stop'` wrapped gpg-agent's harmless startup
+stderr as a fatal `NativeCommandError`, breaking unattended backup and
+restore-drill runs.
+
+- **Fix:** invoke `gpg` via `cmd /c` so PowerShell never wraps the native
+  stderr stream. `gpg --symmetric --cipher-algo AES256` is now executed
+  through `cmd /c "<gpg.exe> ... --passphrase-file <tempfile> ..."`,
+  matching the existing short-lived `--passphrase-file` convention.
+- **Touches** `scripts/backup-native.ps1`, `scripts/restore-native.ps1`,
+  `scripts/restore-drill.ps1`. Commit `426f21f`; tagged at merge `d39c9c9`
+  (PR #40).
 
 ## [v19.0.16.1.0] — 2026-06-07 — Closure-sprint hotfix
 

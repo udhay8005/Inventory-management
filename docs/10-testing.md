@@ -54,7 +54,7 @@ GitHub Actions native runner (Ubuntu + Postgres service + venv) — see
     $HOME/venv/bin/python $HOME/odoo/odoo-bin --test-enable --stop-after-init \
         -d ci_test --db_host=localhost --db_user=odoo --db_password=odoo_ci_password \
         --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
-        -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
+        -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training \
         --without-demo=all --test-tags wms --log-level=test
 ```
 

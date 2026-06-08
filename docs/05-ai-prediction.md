@@ -61,8 +61,11 @@ output "monitor only — no prediction".
 - Cron retrains daily (`wms_ai_forecast/data/cron.xml`: interval 1 day, no
   fixed clock time — runs on the scheduler's daily tick).
 - Manual "Retrain now" button on `wms.forecast` form for ops.
-- Optional `ai_worker` container can call `run_all_forecasts()` over XML-RPC
-  to offload from Odoo container.
+- Optional native `ai_worker` process (`scripts/start-ai-worker.ps1`) can call
+  `run_all_forecasts()` over XML-RPC to offload from the Odoo service.
+  Production deployments use `scripts/install-ai-worker-service.ps1`, which
+  installs it as the `Odoo-WMS-AIWorker` service (NSSM, DEMAND_START, depends
+  on `Odoo-WMS`).
 
 ## Determinism
 

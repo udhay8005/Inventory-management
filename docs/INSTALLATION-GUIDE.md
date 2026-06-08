@@ -132,26 +132,40 @@ The installer already created the database; this phase is **verification** and
 understanding what exists.
 
 **What the installer set up**
-- A PostgreSQL **Windows service** (`postgresql-x64-16/17`) that auto-starts on boot.
+- A PostgreSQL **Windows service** (`postgresql-x64-15/16/17`) that auto-starts on boot.
 - A database login role **`odoo`** (password = your `.env` `DB_PASSWORD`).
 - A database named **`wms`**, owned by `odoo`.
 - Connection details written into `config\odoo.native.conf` (`db_host`,
   `db_port`, `db_user`, `db_password`).
 
 ### Verify the connection
+The installer pins **PostgreSQL 15/16/17 (auto-detected; winget installs 17 by
+default)**, so don't hard-code a version in your `psql` path. Discover the
+installed copy at runtime:
+
 ```powershell
 # Read the real port + user from the config:
 Select-String config\odoo.native.conf -Pattern '^db_(host|port|user|name)\s*='
 
+# Auto-detect the installed PostgreSQL bin directory:
+$pgInstall = Get-ItemProperty "HKLM:\SOFTWARE\PostgreSQL\Installations\*" -ErrorAction SilentlyContinue |
+    Sort-Object PSChildName -Descending | Select-Object -First 1
+$psql = if ($pgInstall) { Join-Path $pgInstall.'Base Directory' 'bin\psql.exe' } else {
+    # Fallback: ask the running service where it lives.
+    $svc = Get-CimInstance Win32_Service -Filter "Name LIKE 'postgresql-x64-%'" | Select-Object -First 1
+    $exe = ($svc.PathName -replace '^"','' -split '" ')[0]
+    Join-Path (Split-Path (Split-Path $exe)) 'bin\psql.exe'
+}
+
 # Connect (replace 1088 with YOUR db_port from above; default is 5432):
 $env:PGPASSWORD = (Select-String config\odoo.native.conf -Pattern '^db_password\s*=\s*(.+)$').Matches.Groups[1].Value.Trim()
-& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U odoo -h localhost -p 1088 -d wms -c "SELECT current_database(), version();"
+& $psql -U odoo -h localhost -p 1088 -d wms -c "SELECT current_database(), version();"
 ```
 **Expected output:** one row showing `wms` and the PostgreSQL version banner.
 
 ```powershell
 # Confirm the WMS tables exist (after you install the addons in Phase 7):
-& "C:\Program Files\PostgreSQL\17\bin\psql.exe" -U odoo -h localhost -p 1088 -d wms -c "\dt wms_*" | Select-Object -First 15
+& $psql -U odoo -h localhost -p 1088 -d wms -c "\dt wms_*" | Select-Object -First 15
 ```
 `✅ CHECKPOINT` — `psql` connects and `SELECT` returns a row.
 `📸 CAPTURE` — the successful `psql` connection.
@@ -179,16 +193,32 @@ Get-NetTCPConnection -LocalPort 8069 -State Listen   # OwningProcess = python
 
 ### Step 3 — Verify the logs
 ```powershell
-Get-Content .runtime\logs\odoo-native.log -Tail 30   # no CRITICAL/ERROR lines
+Get-Content .runtime\logs\odoo.log -Tail 30   # no CRITICAL/ERROR lines
 ```
 
 ### Step 4 — Verify the health endpoint
+`/wms/health` is `auth='public'` but **gated by a shared-secret token** —
+`install-native.ps1` auto-generated a 32-char hex value and stored it in the
+**`wms_reports.health_token`** System Parameter. The controller compares with
+`odoo.tools.consteq` (constant-time). Without/with-wrong token => HTTP **401**
+body `{"status":"unauthorized"}`.
+
+Pull the token and probe it:
 ```powershell
-(Invoke-WebRequest http://localhost:8069/wms/health -UseBasicParsing).Content
+# Read the token from PostgreSQL (replace 1088 with YOUR db_port; default 5432):
+$env:PGPASSWORD = (Select-String config\odoo.native.conf -Pattern '^db_password\s*=\s*(.+)$').Matches.Groups[1].Value.Trim()
+$token = (& psql -U odoo -h localhost -p 1088 -d wms -tAc "SELECT value FROM ir_config_parameter WHERE key='wms_reports.health_token'").Trim()
+
+# Probe — either form works:
+(Invoke-WebRequest "http://localhost:8069/wms/health?token=$token" -UseBasicParsing).Content
+(Invoke-WebRequest http://localhost:8069/wms/health -Headers @{ "X-Health-Token" = $token } -UseBasicParsing).Content
 ```
-**Expected:** `{"status":"HEALTHY","db_reachable":true, ...}` (before backups are
-scheduled you may see `DEGRADED`/warnings about backup age — that's normal until
-Phase 13).
+**Expected (200):**
+`{"status":"HEALTHY","db_reachable":true,"backup_file_present":...,"last_backup_age_hours":...,"last_drill_age_days":...,"warnings":[...]}`.
+Before Phase 13 you may see `DEGRADED`/`CRITICAL` with backup-age warnings —
+that's normal until backups are scheduled. `CRITICAL` returns HTTP **503** with
+the same body; an internal exception returns **503** body
+`{"status":"CRITICAL","detail":"health check failed"}`.
 
 ### Step 5 — Open the browser & first login
 1. Browse to **<http://localhost:8069>**.
@@ -276,17 +306,42 @@ Select-String config\odoo.native.conf -Pattern '^list_db'   # list_db = False
 ### 4 — Health endpoint token (auto-generated at install)
 `scripts/install-native.ps1` auto-generates a 32-character hex token at install
 time and writes it to **Settings → Technical → System Parameters →
-`wms_reports.health_token`**. The endpoint is reachable with NO credentials
-*only* when the token is sent — either header `X-Health-Token: <secret>` or
-query string `?token=<secret>`. Without it, anonymous probes get a safe
-non-leaking minimal response.
+`wms_reports.health_token`**. The route is declared `auth='public'` but **gated
+in the controller**: the supplied token is compared with the stored value via
+`odoo.tools.consteq` (constant-time, side-channel resistant), accepted either as
+header `X-Health-Token: <secret>` or query string `?token=<secret>`.
 
-To **rotate** the token, generate a new 32-char hex string (e.g.
-`[Convert]::ToHexString((Get-RandomBytes 16))`), update the System Parameter,
-and re-configure every external monitor with the new value in lock-step. To
-**disable the gate** (open access, for an isolated monitoring LAN only), clear
-the parameter — the controller's `consteq` guard falls through and serves the
-snapshot to any caller.
+**Response matrix**
+- Missing / wrong token => HTTP **401**, body `{"status":"unauthorized"}`.
+- Healthy => HTTP **200**, body
+  `{status, db_reachable, backup_file_present, last_backup_age_hours, last_drill_age_days, warnings}`.
+- `CRITICAL` (e.g. DB unreachable, backup very stale) => HTTP **503**, **same**
+  body shape as the 200.
+- Internal exception while building the snapshot => HTTP **503**, body
+  `{"status":"CRITICAL","detail":"health check failed"}`.
+
+To **rotate** the token, generate a new 32-char hex string with the
+PowerShell 5.1-compatible snippet below, write it into the System Parameter
+via `psql`, and re-configure every external monitor with the new value in
+lock-step:
+```powershell
+# 1. Generate a cryptographically secure 32-hex-char token (PS 5.1 compatible)
+$bytes = New-Object byte[] 16
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$token = -join ($bytes | ForEach-Object { '{0:x2}' -f $_ })
+
+# 2. Store it in ir_config_parameter (replace creds/db to match your install)
+$env:PGPASSWORD = '<db-password>'
+& psql -h localhost -p 5432 -U odoo -d odoo -c @"
+UPDATE ir_config_parameter SET value='$token', write_date=NOW()
+ WHERE key='wms_reports.health_token'
+"@
+$env:PGPASSWORD = $null
+Write-Host "New health token: $token"   # record for monitors, then clear screen
+```
+To **disable the gate** (open access, for an isolated monitoring LAN only),
+clear the parameter — the controller's `consteq` guard falls through and
+serves the snapshot to any caller.
 
 `📸 CAPTURE` — the System Parameter row with the token name visible (mask the value).
 
@@ -367,12 +422,23 @@ on duty" field.
 | Role | Group to assign | Can do |
 |---|---|---|
 | **Admin / Manager** | `WMS / Manager` | Everything — build racks, products, labels, manage roster, run/scrap repairs, all reports. |
-| **Store Keeper** | `WMS / Store Keeper` **+** the capability groups they need: `Scan Receipt + Scan Return`, `Scan Issue`, `File damage`, `Submit audits` | Scan in/out, file damage, create repair orders, view reports. Cannot edit racks/products or run repairs. |
+| **Store Keeper** | `WMS / Store Keeper` **+** the capability groups they need: `WMS / Capability: Scan Receipt + Scan Return`, `WMS / Capability: Scan Issue (outbound)`, `WMS / Capability: File damage events`, `WMS / Capability: Submit inventory audits`, `WMS / Capability: Manage carton aliases + labels` | Scan in/out, file damage, create repair orders, view reports. Cannot edit racks/products or run repairs. |
 | **Read-only** | `WMS / Store Keeper` with **no** capability groups | View reports + warehouse map only (no stock-moving actions). |
 
 > **Why capabilities matter:** the scan/damage/audit actions are enforced at the
-> data layer by these capability groups — a keeper without "Scan Issue" cannot
-> issue stock even via the API. Assign exactly what each person needs.
+> data layer by these capability groups — a keeper without "Scan Issue
+> (outbound)" cannot issue stock even via the API. Assign exactly what each
+> person needs.
+
+**Capability sub-groups (all in the `wms_location` namespace)**
+
+| XML id | Display name | What it grants |
+|---|---|---|
+| `group_wms_can_scan_receive` | WMS / Capability: Scan Receipt + Scan Return | Can scan inbound receipts and customer returns. |
+| `group_wms_can_scan_issue` | WMS / Capability: Scan Issue (outbound) | Can scan stock out (issue / dispatch). |
+| `group_wms_can_file_damage` | WMS / Capability: File damage events | Can file damage events against on-hand stock. |
+| `group_wms_can_submit_audit` | WMS / Capability: Submit inventory audits | Can submit cycle-count / inventory audits. |
+| `group_wms_can_manage_catalog` | WMS / Capability: Manage carton aliases + labels | Can manage carton aliases + onboard products + label settings (the catalog edit surface). |
 
 A common setup is **one shared `storekeeper` login per shift**; each keeper picks
 their own name from the roster, so the audit trail still records the individual.
@@ -390,7 +456,7 @@ SKU / inline barcode, gap-sensor aware.
 
 1. **Install the printer** in Windows (vendor driver). Set the stock to
    **100 mm × 25 mm, gap media**. Print a Windows test page first.
-2. **Confirm the label layout:** **WMS → Configuration → Label Config** — the
+2. **Confirm the label layout:** **WMS → Configuration → Label Settings** — the
    layout is admin-configurable (logo width vs content split). Defaults suit
    True-Ally 100×25 stock.
 3. **Calibrate the gap sensor** on the printer (e.g. TSC TE244: run auto-
@@ -410,7 +476,7 @@ ticket (no drift).
 
 # 10. Training Guide
 
-The system trains its own users — **WMS → Help & Training**.
+The system trains its own users — **Help & Training** (top-level Odoo app).
 
 - **Help Center / Training Library** — searchable SOP articles for every
   workflow (receive, issue, return, damage, repair, audit, reports), with
@@ -439,7 +505,7 @@ The system trains its own users — **WMS → Help & Training**.
 
 Use the guided wizard so every product gets a SKU, barcode, and label in one go.
 
-1. **WMS → Products → Onboard Product** (the `wms.product.onboard` wizard).
+1. **WMS → Configuration → Onboard Products** (the `wms.product.onboard` wizard).
 2. Enter **name**, **Kind** (Raw / Packaging / Fluid / Finished Good / WIP /
    Consumable / Tool / Spare — this drives returnability), **unit of measure**,
    and (for perishables like medicine/feed/ghee) the **expiry date**.
@@ -494,12 +560,44 @@ and the move records the full audit triplet.
 
 # 13. Backup & Recovery Guide
 
+### Step 0 — Configure the off-site backup target (optional but recommended)
+Local-only backups die with the disk (fire / theft / ransomware). Set
+**`BACKUP_OFFSITE_DIR`** in `.env` to a second destination — a USB drive
+(`E:\wms-backups`), a UNC share (`\\nas\wms-backups`), or a cloud-sync folder
+(OneDrive / Drive). On every successful local backup, `backup-native.ps1`:
+
+1. Creates the directory if missing.
+2. Copies the already-encrypted `.gpg` artifacts to it.
+3. **Re-verifies SHA-256** of the destination against the local hash (corrupt
+   copy => fail).
+4. Mirrors the retention policy (`-Retain`, default **14** files).
+
+**Failure-safe:** if any of those steps fails, the local backup is still
+considered successful — an off-site hiccup writes a warning + audit row but
+never fails the daily task.
+
+- **Blank / unset** => off-site disabled, local `.\backups\` continues normally.
+- **Set** => off-site copy runs as described above.
+
+> **CRITICAL — SYSTEM-principal caveat.** `install-backup-tasks.ps1` registers
+> both tasks under **`NT AUTHORITY\SYSTEM`** (LogonType `ServiceAccount`,
+> RunLevel `Highest`, `-StartWhenAvailable`, `ExecutionTimeLimit=2h`,
+> `MultipleInstances=IgnoreNew`) so the daily backup fires even when nobody is
+> logged in. That means **`BACKUP_OFFSITE_DIR` must be reachable by SYSTEM**.
+> User-only OneDrive mounts under `C:\Users\<you>\OneDrive` are NOT visible to
+> SYSTEM and silently fail the off-site step. Verify either by running the
+> backup manually as SYSTEM (`psexec -s -i powershell.exe`, then
+> `scripts\backup-native.ps1`) or by triggering the daily task from Task
+> Scheduler and inspecting **Last Run Result** + the audit table.
+
 ### 1 — Install the scheduled backup tasks
 ```powershell
 # Admin PowerShell. Approve UAC.
 scripts\install-backup-tasks.ps1
 ```
-Registers two Windows Scheduled Tasks:
+Registers two Windows Scheduled Tasks (principal `NT AUTHORITY\SYSTEM`,
+`LogonType=ServiceAccount`, `RunLevel=Highest`, `-StartWhenAvailable`,
+`ExecutionTimeLimit=2h`, `MultipleInstances=IgnoreNew`):
 - **WMS Daily Backup** — every day 13:00 → encrypted DB dump + filestore zip into
   `.\backups\`, with retention.
 - **WMS Weekly Restore Drill** — Sundays 03:00 → decrypts + structurally verifies
@@ -583,14 +681,14 @@ When every box is ticked, the system is **production-ready**.
 |---|---|
 | Labels print blank / shifted | Printer not calibrated to the 100×25 gap → run the printer's gap auto-calibration; confirm media = 100×25 mm gap. |
 | Two labels per ticket / drift | Wrong stock size in the driver → set exactly 100 mm × 25 mm; re-calibrate. |
-| Barcode won't scan | Print density too low or label too small → raise darkness; verify the barcode value in **Label Config**. |
+| Barcode won't scan | Print density too low or label too small → raise darkness; verify the barcode value in **Label Settings**. |
 
 ### Permissions
 | Symptom | Fix |
 |---|---|
-| Keeper can't scan issue/receipt | Missing capability group → add `Scan Issue` / `Scan Receipt + Scan Return` to their user. |
+| Keeper can't scan issue/receipt | Missing capability group → add `WMS / Capability: Scan Issue (outbound)` / `WMS / Capability: Scan Receipt + Scan Return` to their user. |
 | Keeper sees raw Inventory app | They were given a stock group directly → keep them on `WMS / Store Keeper` only. |
-| "Access Error" creating audit/damage | Missing `Submit audits` / `File damage` capability → grant it. |
+| "Access Error" creating audit/damage | Missing `WMS / Capability: Submit inventory audits` / `WMS / Capability: File damage events` capability → grant it. |
 
 ### Backup / Recovery
 | Symptom | Fix |
@@ -601,7 +699,7 @@ When every box is ticked, the system is **production-ready**.
 | Can't restore (no passphrase) | The `BACKUP_PASSPHRASE` used to create the dump is required — recover it from your password manager. |
 
 ### Where to look
-- **Logs:** `.runtime\logs\odoo-native.log`, `.runtime\logs\service-*.log`.
+- **Logs:** `.runtime\logs\odoo.log`, `.runtime\logs\service-out.log`, `.runtime\logs\service-err.log`.
 - **Health:** `http://localhost:8069/wms/health`.
 - **Deeper runbooks:** `docs/07-deployment.md`, `docs/11-maintenance.md`,
   `docs/13-operations-playbook.md`, `docs/18-restore-drill.md`.

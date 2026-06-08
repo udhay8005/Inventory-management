@@ -8,7 +8,7 @@ All dashboards are read-only SQL views (`_auto = False`) on top of `stock.quant`
 | # | Name | Source | Key filters |
 |---|---|---|---|
 | 1 | Current Stock by Product | `stock.quant` | active products, qty > 0 |
-| 2 | Current Stock by Slot | `stock.quant` (location.type=slot) | rack, divider |
+| 2 | Current Stock by Slot | `stock.quant` (location.type=slot) | rack, compartment |
 | 3 | Oldest Stock First (FIFO) | `stock.quant` ordered by `in_date` | aging buckets |
 | 4 | Stock Movement History | `stock.move` | date range, type |
 | 5 | Low Stock Alerts | `wms.forecast` JOIN `stock.quant` | `on_hand < reorder_point` |
@@ -16,7 +16,7 @@ All dashboards are read-only SQL views (`_auto = False`) on top of `stock.quant`
 | 7 | Monthly Consumption | `stock.move` | by product/category, month |
 | 8 | Damaged Items | `wms.damage` | open/closed |
 | 9 | Repair Pipeline | `wms.repair.order` | state |
-| 10 | Return History | `stock.picking` (returns) + `wms.return` | date |
+| 10 | Return History | `stock.picking` (returns) + `wms.scan.receipt` (return mode) | date |
 | 11 | Location Occupancy | `stock.quant` GROUP BY location | % capacity |
 | 12 | Barcode Labels Printed | `wms.label.print.log` | by user, date |
 | 13 | Dead / Slow Stock | `wms.forecast.velocity_class IN (slow, dead)` | days idle |

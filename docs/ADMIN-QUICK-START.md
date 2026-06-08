@@ -27,12 +27,12 @@ scripts\set-user-passwords.ps1 -Users "admin,storekeeper"   # copy the printed p
 
 ## 2. Create the warehouse
 **WMS → Configuration**:
-- **Zone Generator** → make a zone (e.g. `East`).
-- **Rack Generator** → code `R01`, set shelves × columns × slots → builds rack +
+- **Generate Zone** → make a zone (e.g. `East`).
+- **Create Rack** → code `R01`, set shelves × columns × slots → builds rack +
   compartments + slots + barcodes automatically.
-- **Floor Zone Generator** → flat areas `F-01…` (for pallets/sacks).
+- **Generate Floor Zones** → flat areas `F-01…` (for pallets/sacks).
 
-Check **WMS → Warehouse Map**.
+Check **WMS → Reports → Warehouse Map**.
 
 ## 3. Create users
 - **WMS → Configuration → Store Keepers** → add the human names (Ramesh, Lakshmi…).
@@ -43,7 +43,7 @@ Check **WMS → Warehouse Map**.
   - Read-only → **WMS / Store Keeper** with **no** capability groups.
 
 ## 4. Create products
-**WMS → Products → Onboard Product** — enter name, **Kind**, UoM, expiry (for
+**WMS → Configuration → Onboard Products** — enter name, **Kind**, UoM, expiry (for
 perishables). Optional columns for SKU, barcode, Category, UoM, and unit
 cost let a paste-from-Excel batch carry existing labels and feed the value
 reports. The wizard **pre-validates the whole batch** (duplicate SKU /
@@ -54,10 +54,10 @@ prints the
 **4×1 in thermal label**. Calibrate the printer's gap sensor first.
 
 ## 5. Receive inventory
-**WMS → Scan Receipt** — pick the on-duty keeper + audit fields → scan product →
+**WMS → Operations → Scan Receipt** — pick the on-duty keeper + audit fields → scan product →
 quantity → scan destination slot → **Validate**. Confirm via
-**Operations → Find / Where is it?** (smart search page) or
-**Reports → Where is product X?** (drill-down).
+**WMS → Operations → Find / Where is it?** (smart search page) or
+**WMS → Reports → Where is product X?** (drill-down).
 
 ## 6. Backup
 1. In `.env`, set `BACKUP_OFFSITE_DIR=<path>` (USB drive, UNC share, OneDrive/Dropbox sync folder — all just paths). Encrypted copies of every successful backup land there, SHA-256-verified against the source, so a fire or disk failure on this PC doesn't destroy the inventory record. Leave blank to disable.

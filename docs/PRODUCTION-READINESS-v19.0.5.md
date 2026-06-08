@@ -3,8 +3,8 @@
 > **Note:** this file is preserved as the **v19.0.5 production-readiness
 > record**. It is *not* current. The trust has since shipped v19.0.6 →
 > v19.0.16 with the Maturity Sprint, Maturity Round 2, and the FPAT
-> remediation. For the **current state**, read the `## [v19.0.16.0.0]` and
-> `## [v19.0.11..v19.0.15]` sections of [`CHANGELOG.md`](../CHANGELOG.md).
+> remediation. For the **current state**, read the top of
+> [`CHANGELOG.md`](../CHANGELOG.md) (live release v19.0.16.4.0).
 
 **System:** WMS — Dakshin Vrindavan cow-care trust (internal warehouse management)
 **Date:** 2026-06-02

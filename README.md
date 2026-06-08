@@ -13,7 +13,7 @@ Runs **natively on Windows** — no Docker required.
 - 🏗 **Visual rack builder** — Rack → Compartment → Slot, plus open Floor Zones, with a per-rack flexible grid (4-way D-pad merging)
 - 📦 **Scan-driven workflows** — Scan Receipt / Scan Return / Scan Issue (FIFO across slots) / Scan-Validate
 - 🧾 **Audit trail invariant** — every stock-moving action records `wms_taken_by` / `wms_ordered_by` / `wms_storekeeper_id` on the resulting `stock.picking` plus a chatter message
-- 👥 **Two-role security** — WMS Manager (Admin) vs WMS Store Keeper, with an admin-maintained roster of human keepers
+- 👥 **Tiered role security** — 3 base roles (Manager / Store Keeper / Repair Tech) + optional Buyer, layered with 5 capability sub-groups (scan-receive / scan-issue / file-damage / submit-audit / manage-catalog), plus an admin-maintained roster of human keepers
 - 🔧 **Damage / Repair workflow** — smart recommendation engine (urgent buy / repair / note only) + one-click Create Repair Order, full state machine (draft → in_repair → done / scrapped / cancelled) with chatter audit on every transition
 - 🏷 **Thermal labels** — customisable 4×1 inch (100×25 mm) die-cut layout (logo / title / SKU / barcode), inline barcode, printer gap-sensor aware
 - 🔁 **Returnability classification** — product Kind (Raw / Packaging / Fluid / Finished Good / WIP / Consumable / Tool / Spare) drives whether Scan Return accepts it
@@ -32,7 +32,7 @@ Runs **natively on Windows** — no Docker required.
 
 ## Quickstart (Windows)
 
-One-shot installer — installs PostgreSQL 16/17 (auto-detected), Python 3.12, wkhtmltopdf, Git
+One-shot installer — installs PostgreSQL 15/16/17 (auto-detected; winget installs 17 by default), Python 3.12, wkhtmltopdf, Git
 via `winget`, clones Odoo 19 source, sets up a Python venv, and initialises
 the database. Takes ~10 minutes the first time.
 
@@ -72,17 +72,25 @@ a Store Keeper:
 
 ## Roles at a glance
 
-| Action | Manager (Admin) | Store Keeper |
-|---|---|---|
-| Add / edit / delete racks, slots, floor zones, products | ✅ | ❌ |
-| Maintain the Store Keeper roster | ✅ | ❌ (view only) |
-| Configure thermal label layout | ✅ | ❌ |
-| Scan Receipt / Scan Return / Scan Issue | ✅ | ✅ |
-| File a Damage event | ✅ | ✅ |
-| Create Repair Order from a damage | ✅ | ✅ |
-| Start / Mark Done / Scrap / Cancel a repair | ✅ | ❌ (view only) |
-| View all reports | ✅ | ✅ |
-| Browse raw Odoo Inventory app | ✅ | ❌ (hidden — WMS workflows are the only path) |
+Two-tier role model: pick a base role, then layer capability sub-groups on top
+of Store Keeper as needed.
+
+**Three base roles + an optional Buyer role:**
+
+- **WMS / Manager** (`group_wms_manager`) — full admin: racks, slots, products, roster, label layout, repair lifecycle, all reports
+- **WMS / Store Keeper** (`group_wms_user`) — runs the desk; capability sub-groups gate which scan / damage / audit / catalog wizards they can open
+- **WMS / Repair Tech** (`group_repair_tech`) — handles in-repair items (start / mark done / scrap / cancel); no scan wizards, no catalog edits
+- **WMS / Buyer** (`group_buyer`, optional) — reads reorder summary + buying recommendations; does not move stock
+
+**Then layer capabilities (all sub-groups of Store Keeper, namespace `wms_location.*`):**
+
+- `group_wms_can_scan_receive` — Scan Receipt / Scan Return
+- `group_wms_can_scan_issue` — Scan Issue (FIFO across slots)
+- `group_wms_can_file_damage` — file a Damage event, create Repair Order from it
+- `group_wms_can_submit_audit` — submit cycle-count audits
+- `group_wms_can_manage_catalog` — barcode aliases, storekeeper roster entries
+
+Full role model + ACL detail in [08-security.md](docs/08-security.md).
 
 ## Audit-trail invariant
 
@@ -121,8 +129,9 @@ scripts\start-tunnel.ps1                       # Quick Cloudflare HTTPS tunnel
 scripts\start-tunnel.ps1 -Mode Named           # Permanent tunnel (needs CLOUDFLARE_TUNNEL_TOKEN in .env)
 ```
 
-PostgreSQL runs as a Windows service (`postgresql-x64-15/16/17` — auto-detected)
-and auto-starts on boot, so the database is always there waiting.
+PostgreSQL 15/16/17 (auto-detected; winget installs 17 by default) runs as a Windows
+service (`postgresql-x64-15/16/17`) and auto-starts on boot, so the database is
+always there waiting.
 
 ## Project layout
 
@@ -161,6 +170,7 @@ Inventory_mngt/
 - 📜 [Historical v19.0.5 sign-off](docs/PRODUCTION-READINESS-v19.0.5.md) — preserved as the v19.0.5 production-readiness record; see CHANGELOG for the current release
 - 💾 [Backup & Recovery Guide](docs/18-restore-drill.md) — encrypted backups + weekly restore drill
 - 🎓 [Training Guide](docs/21-training-system.md) — the in-app Help & Training academy
+- 🔐 [Security Policy](SECURITY.md) — supported versions + how to report a vulnerability
 
 Architecture, design notes, and operational guides:
 
@@ -184,7 +194,7 @@ Architecture, design notes, and operational guides:
 - [`docs/20-end-to-end-flow.md`](docs/20-end-to-end-flow.md) — full lifecycle ASCII diagram
 - [`docs/PRODUCTION-READINESS-v19.0.5.md`](docs/PRODUCTION-READINESS-v19.0.5.md) — historical sign-off record (v19.0.5)
 - [`docs/RUN-AS-SERVICE.md`](docs/RUN-AS-SERVICE.md) — run Odoo as an auto-starting Windows service
-- [`docs/LABEL-PRINTING.md`](docs/LABEL-PRINTING.md) — thermal 4×2 labels + printer gap calibration
+- [`docs/LABEL-PRINTING.md`](docs/LABEL-PRINTING.md) — thermal 4×1 labels + printer gap calibration
 
 ## Mobile access (phones / tablets / off-site)
 
@@ -215,7 +225,7 @@ configurable so other label sizes work too. See [docs/LABEL-PRINTING.md](docs/LA
 ```powershell
 .venv\Scripts\activate
 python .odoo\odoo-bin -c config\odoo.native.conf -d wms_test --test-enable --stop-after-init `
-    -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports `
+    -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training `
     --without-demo=all --test-tags wms
 ```
 
