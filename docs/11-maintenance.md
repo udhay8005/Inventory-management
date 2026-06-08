@@ -47,7 +47,7 @@ re-runs, so re-installing `wms_fifo` will never duplicate the index.
 
 ## Memory pressure on small boxes
 
-- Drop `workers` in `odoo.conf` from 2 → 1.
+- Drop `workers` in `config/odoo.native.conf` from 2 → 1 (or stay at 0 for threaded single-process, the default after FPAT — `workers = 0`).
 - Enable the `ai_worker` profile so statsmodels doesn't live in Odoo's RAM.
 - Cap `limit_memory_hard` lower; Odoo recycles the worker.
 

@@ -5,6 +5,64 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.16.4.0] — 2026-06-08 — Final cleanup sprint
+
+The final pre-handover sprint. No new features. Repository tidied, prod
+hardened, docs refreshed, security policy added.
+
+### Prod hardening (live + verified)
+- `/wms/health` token gate **active** on prod. Anonymous probes now return
+  `{"status":"unauthorized"}` HTTP 401; the auto-generated 32-char hex token
+  (stored in `wms_reports.health_token` System Parameter) is required via
+  `?token=` query string or `X-Health-Token:` header. Closes the live HIGH
+  security gap surfaced by the v16.1 closure verification.
+- `config/odoo.native.conf` (live) + `scripts/install-native.ps1` template:
+  - `db_listing = False` — defence in depth alongside the existing `list_db = False`.
+  - `without_demo = True` — a fresh `-i` install of any module on prod cannot
+    silently load demo data into the live `wms` DB.
+
+### Documentation refresh
+- `docs/08-security.md` — stale Docker-subnet `pg_hba` ref rewritten; closure
+  state of `list_db`/`db_listing`/`/wms/health` token gate documented.
+- `docs/10-testing.md` — "Docker compose smoke" replaced with the native
+  PowerShell test invocation that CI actually runs.
+- `docs/11-maintenance.md` — `odoo.conf` references renamed to
+  `config/odoo.native.conf`; `workers` default corrected to 0.
+- `docs/18-restore-drill.md` — off-site backup section now leads with the
+  built-in `BACKUP_OFFSITE_DIR` mechanism; rclone/robocopy demoted to
+  optional second-tier redundancy.
+- `docs/ADMIN-QUICK-START.md` — Backup section opens with `BACKUP_OFFSITE_DIR`;
+  health-token reference under System Parameters added.
+- `README.md` — PostgreSQL version detection language aligned with installer
+  (16/17 auto-detected).
+- `SECURITY.md` — **new** community-profile file (security-report contact
+  `office.dakshinvrindavan@gmail.com`, in/out-of-scope, latest-tag-only
+  support policy).
+
+### Repository cleanup
+- **Files archived** (moved to `docs/training/archive/`): `STEP7-VISUAL-ACADEMY-REPORT.md`,
+  `TRAINING-COVERAGE-REPORT.md`, `VISUAL-COVERAGE-REPORT.md` — historical
+  phase-completion reports superseded by the FPAT/closure docs.
+- **Files removed (committed)**: `docs/INSTALLATION-GUIDE.pdf` (stale snapshot
+  of the .md), `addons/wms_barcode/data/wms_barcode_data.xml` (stub with no
+  records, manifest line removed alongside).
+- **Files removed (gitignored, no git impact)**: 7 audit-helper Python scripts
+  under `.runtime/`, 5 stale runtime logs, `.runtime/screenshots/`,
+  `.runtime/odoo-requirements-win.txt`, `.runtime/sample-4x1-labels.pdf`,
+  `.runtime/.master-passwd-temp`, `.runtime/test-data/` (~63 MB scratch DB
+  data dir). **~68 MB reclaimed.**
+- **Local branches pruned**: 10 fully-merged `feat/*` branches deleted
+  non-destructively (still present in `reflog` if recovery is ever needed);
+  2 ahead-of-main `feat/buying-recommendations` + `feat/thermal-labels`
+  branches deleted per owner decision (work not planned for re-merge).
+
+### Final state
+- Production-readiness **8/10** (unchanged from v16.3 baseline; the live
+  security gap that would have docked it is now closed).
+- 0 Critical, 0 High open findings.
+- All 7 modules at the v16.3 manifest versions; this is a config/docs/cleanup
+  release with no module manifest bumps.
+
 ## [v19.0.16.1.0] — 2026-06-07 — Closure-sprint hotfix
 
 Single security-relevant patch identified by the v16 re-FPAT pass.

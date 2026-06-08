@@ -60,12 +60,14 @@ quantity → scan destination slot → **Validate**. Confirm via
 **Reports → Where is product X?** (drill-down).
 
 ## 6. Backup
-```powershell
-scripts\install-backup-tasks.ps1   # daily backup + weekly restore drill (scheduled)
-scripts\backup-native.ps1          # take one now
-scripts\restore-drill.ps1          # prove the latest backup is recoverable
-```
-Verify: **<http://localhost:8069/wms/health>** → `HEALTHY` with a recent backup.
+1. In `.env`, set `BACKUP_OFFSITE_DIR=<path>` (USB drive, UNC share, OneDrive/Dropbox sync folder — all just paths). Encrypted copies of every successful backup land there, SHA-256-verified against the source, so a fire or disk failure on this PC doesn't destroy the inventory record. Leave blank to disable.
+2. Run:
+   ```powershell
+   scripts\install-backup-tasks.ps1   # daily backup + weekly restore drill (scheduled as SYSTEM)
+   scripts\backup-native.ps1          # take one now (also copies off-site if configured)
+   scripts\restore-drill.ps1          # prove the latest backup is recoverable
+   ```
+3. Verify: **<http://localhost:8069/wms/health?token=…>** → `HEALTHY` with a recent backup. (The token is auto-generated at install time; find it under **Settings → Technical → System Parameters → `wms_reports.health_token`**.)
 
 ---
 

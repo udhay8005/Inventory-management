@@ -478,7 +478,9 @@ limit_time_cpu = 600
 limit_time_real = 1200
 
 proxy_mode = False
-without_demo = False
+; Closure-sprint: a fresh `-i` install of any module on prod must NEVER load
+; demo data into the live DB. The trust runs internal stock - no demo.
+without_demo = True
 
 log_level = info
 log_handler = :INFO

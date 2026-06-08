@@ -32,7 +32,7 @@ Runs **natively on Windows** — no Docker required.
 
 ## Quickstart (Windows)
 
-One-shot installer — installs PostgreSQL 16, Python 3.12, wkhtmltopdf, Git
+One-shot installer — installs PostgreSQL 16/17 (auto-detected), Python 3.12, wkhtmltopdf, Git
 via `winget`, clones Odoo 19 source, sets up a Python venv, and initialises
 the database. Takes ~10 minutes the first time.
 
