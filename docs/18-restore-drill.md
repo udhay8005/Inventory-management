@@ -119,7 +119,23 @@ source is not registered; it still writes to the file log.
 ## Off-site backup
 
 Drill verifies the LOCAL backup is recoverable. For real DR, the encrypted
-`.dump.gpg` and `.zip.gpg` files must also live off-host. Recommended:
+`.dump.gpg` and `.zip.gpg` files must also live off-host.
+
+**Built-in (recommended):** set `BACKUP_OFFSITE_DIR` in `.env` to any reachable
+path — a USB drive, a UNC network share, or a OneDrive/Dropbox sync folder.
+`scripts/backup-native.ps1` will automatically copy every encrypted artifact
+there after the local backup completes, SHA-256-verify the copy against the
+source, and record a `backup_offsite` audit row. No extra scheduler entry, no
+extra credentials.
+
+```ini
+# .env
+BACKUP_OFFSITE_DIR=C:\Users\<you>\OneDrive\wms-backups-offsite
+# or: BACKUP_OFFSITE_DIR=\\nas\wms-backups
+# or: BACKUP_OFFSITE_DIR=E:\wms-backups   # USB drive letter
+```
+
+**Optional second-tier** (a redundant copy reaches a completely separate sync window):
 
 - `rclone copy backups\ b2:wms-backups\` daily.
 - OR `robocopy backups\ \\nas\wms-backups\ /MIR` daily.

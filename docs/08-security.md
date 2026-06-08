@@ -133,8 +133,9 @@ fans out a Discuss notification to every member of `WMS / Manager` via
 
 - [ ] Change all defaults in `.env`.
 - [ ] Set `proxy_mode=True` only when behind a real TLS terminator.
-- [ ] Disable the database manager in prod: `list_db = False` in `config/odoo.conf`.
-- [ ] Restrict `pg_hba` to the Docker subnet.
+- [x] Disable the database manager in prod: `list_db = False` AND `db_listing = False` in `config/odoo.native.conf` (shipped + verified live).
+- [ ] Restrict `pg_hba` so only the local Odoo service (127.0.0.1, system user) can reach PostgreSQL on port 1088.
+- [x] Token-gate `/wms/health`: install-native auto-generates a 32-char hex `wms_reports.health_token` parameter (verified live: anonymous probes return `{"status":"unauthorized"}` with HTTP 401).
 - [ ] Branch protection on `main`: require PR + green CI before merge.
 - [ ] Run `cd .odoo && git pull origin 19.0 && cd .. && .venv\Scripts\pip install -r .odoo\requirements.txt --upgrade` monthly for Odoo CE security patches; then restart with `scripts\start-native.ps1`.
 - [ ] Schedule `pg_dump` backups + restore drill quarterly.
