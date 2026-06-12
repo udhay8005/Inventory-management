@@ -557,14 +557,16 @@ if (Test-Path -LiteralPath $EnvPath) {
 # below for the monitor configuration. Re-running the installer skips this
 # step if a token already exists.
 Write-Host "    Setting up /wms/health shared-secret token..."
+# Must match the role created in step 2 and db_user in odoo.native.conf.
+$DbUser = 'odoo'
 $env:PGPASSWORD = $DbPassword
 $existing = & psql -h localhost -p $DbPort -U $DbUser -d $DbName -tAc `
     "SELECT value FROM ir_config_parameter WHERE key='wms_reports.health_token'" 2>$null
 $existing = ($existing | Out-String).Trim()
 if ([string]::IsNullOrWhiteSpace($existing)) {
-    $bytes = New-Object byte[] 16
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    $token = -join ($bytes | ForEach-Object { $_.ToString('x2') })
+    # RandomNumberGenerator::Fill is .NET Core-only and fails on Windows
+    # PowerShell 5.1; New-SecurePassword uses Create()/GetBytes instead.
+    $token = New-SecurePassword
     $sql = @"
 INSERT INTO ir_config_parameter (key, value, create_uid, create_date, write_uid, write_date)
 VALUES ('wms_reports.health_token', '$token', 1, NOW(), 1, NOW())
