@@ -12,10 +12,7 @@ workflow-cloud-backup-now) need nothing here: new records are created on
 module upgrade even inside a noupdate="1" block.
 """
 from odoo import SUPERUSER_ID, api
-from odoo.addons.wms_training.hooks import (
-    apply_cloud_backup_training,
-    apply_tour_action_links,
-)
+from odoo.addons.wms_training.hooks import apply_cloud_backup_training, apply_tour_action_links
 
 
 def migrate(cr, version):
