@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ==============================================================
+             Backup Now wizard (P6) — plain language, one big button.
+             Menu parented to the WMS ROOT (not Configuration: keepers
+             can't see Configuration) and gated by the capability group.
+             ============================================================== -->
+        <record id="view_wms_gdrive_backup_now_form" model="ir.ui.view">
+            <field name="name">wms.gdrive.backup.now.form</field>
+            <field name="model">wms.gdrive.backup.now</field>
+            <field name="arch" type="xml">
+                <form string="Back Up Now">
+                    <header>
+                        <field name="state" widget="badge"
+                               decoration-success="state == 'done'"
+                               decoration-warning="state == 'running'"
+                               decoration-danger="state == 'failed'"/>
+                    </header>
+                    <sheet>
+                        <div class="alert alert-info" role="status"
+                             invisible="state != 'ready'">
+                            Makes a safe copy of all WMS data right now and
+                            sends it to Google Drive. Nothing is deleted or
+                            changed — you can keep working while it runs.
+                        </div>
+                        <field name="result_html" nolabel="1"/>
+                        <field name="requested_at" invisible="1"/>
+                    </sheet>
+                    <footer>
+                        <button name="action_backup_now" string="Back Up Now"
+                                type="object" class="btn-primary"
+                                invisible="state not in ('ready', 'failed')"/>
+                        <button name="action_refresh" string="Refresh"
+                                type="object" class="btn-primary"
+                                invisible="state != 'running'"/>
+                        <button string="Close" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_gdrive_backup_now" model="ir.actions.act_window">
+            <field name="name">Back Up Now</field>
+            <field name="res_model">wms.gdrive.backup.now</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="view_id" ref="view_wms_gdrive_backup_now_form"/>
+        </record>
+
+        <menuitem id="menu_wms_gdrive_backup_now"
+                  name="Back Up Now"
+                  parent="wms_location.menu_wms_root"
+                  action="action_wms_gdrive_backup_now"
+                  groups="wms_reports.group_wms_backup_now"
+                  sequence="85"/>
+
+        <!-- ==============================================================
+             Restore browser (P7/P8) — read-only catalog of the Drive
+             backup sets, grouped Year > Month > Day like the Drive
+             folder tree. Execution stays CLI-only (house policy): the
+             form shows a copy-paste gdrive-restore.ps1 command instead
+             of any restore button. Manager-only everywhere.
+             ============================================================== -->
+        <record id="view_wms_gdrive_backup_list" model="ir.ui.view">
+            <field name="name">wms.gdrive.backup.list</field>
+            <field name="model">wms.gdrive.backup</field>
+            <field name="arch" type="xml">
+                <list string="Google Drive Backups"
+                      create="0" edit="0" delete="0"
+                      decoration-warning="not uploaded"
+                      decoration-info="backup_type != 'auto'">
+                    <field name="backup_time"/>
+                    <field name="name"/>
+                    <field name="backup_type"/>
+                    <field name="size_mb" sum="Total MB"/>
+                    <field name="wms_version" optional="show"/>
+                    <field name="checksum" optional="show"/>
+                    <field name="creator" optional="show"/>
+                    <field name="uploaded"/>
+                    <field name="upload_time" optional="hide"/>
+                    <field name="set_stamp" optional="hide"/>
+                    <field name="drive_name" optional="hide"/>
+                    <field name="restored_count" optional="hide"/>
+                    <field name="year" column_invisible="1"/>
+                    <field name="month_label" column_invisible="1"/>
+                    <field name="day" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_gdrive_backup_form" model="ir.ui.view">
+            <field name="name">wms.gdrive.backup.form</field>
+            <field name="model">wms.gdrive.backup</field>
+            <field name="arch" type="xml">
+                <form string="Google Drive Backup Set" create="0" edit="0" delete="0">
+                    <sheet>
+                        <div class="oe_title">
+                            <h1><field name="name" readonly="1"/></h1>
+                        </div>
+                        <group>
+                            <group string="Backup set">
+                                <field name="set_stamp"/>
+                                <field name="db_name"/>
+                                <field name="backup_type"/>
+                                <field name="backup_time"/>
+                                <field name="creator"/>
+                                <field name="wms_version"/>
+                            </group>
+                            <group string="Artifact (P8 pre-restore facts)">
+                                <field name="size_mb"/>
+                                <field name="checksum"/>
+                                <field name="encrypted"/>
+                                <field name="restored_count"/>
+                            </group>
+                            <group string="Google Drive">
+                                <field name="uploaded"/>
+                                <field name="upload_time"/>
+                                <field name="drive_name"/>
+                                <field name="drive_folder"/>
+                                <field name="drive_file_id"/>
+                                <field name="filestore_drive_id"/>
+                            </group>
+                        </group>
+                        <group string="Restore this set (PowerShell, on the WMS server)">
+                            <field name="restore_command" nolabel="1" readonly="1"
+                                   widget="CopyClipboardChar"/>
+                        </group>
+                        <div class="alert alert-warning" role="status">
+                            <p><b>Restore is deliberately a command-line operation</b>
+                            — it can never be triggered from this screen
+                            (a misclick must not be able to wipe the live database).</p>
+                            <p>Steps: open PowerShell on the WMS server, go to the
+                            project folder, and run the command above. It downloads
+                            the set from Google Drive, triple-verifies the checksums
+                            (SHA256.txt vs backup-info.json vs fresh hashes), renames
+                            the files back to the local convention, and prints the
+                            exact <code>restore-native.ps1</code> command to run next.
+                            Add <code>-AutoRestore -TargetDb &lt;name&gt;</code> to go
+                            further: an <b>emergency backup of the current database is
+                            taken FIRST</b>, and restoring into the live database
+                            additionally requires <code>-Force</code> plus
+                            <code>-ConfirmTarget</code>. See
+                            <code>docs/22-gdrive-backup.md</code>.</p>
+                        </div>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_gdrive_backup_search" model="ir.ui.view">
+            <field name="name">wms.gdrive.backup.search</field>
+            <field name="model">wms.gdrive.backup</field>
+            <field name="arch" type="xml">
+                <search string="Google Drive Backups">
+                    <field name="name"/>
+                    <field name="set_stamp"/>
+                    <field name="creator"/>
+                    <field name="year"/>
+                    <filter name="uploaded" string="Uploaded"
+                            domain="[('uploaded', '=', True)]"/>
+                    <filter name="pending" string="Pending upload"
+                            domain="[('uploaded', '=', False)]"/>
+                    <separator/>
+                    <filter name="type_auto" string="Automatic"
+                            domain="[('backup_type', '=', 'auto')]"/>
+                    <filter name="type_manual" string="Manual"
+                            domain="[('backup_type', '=', 'manual')]"/>
+                    <filter name="type_emergency" string="Pre-restore emergency"
+                            domain="[('backup_type', '=', 'emergency')]"/>
+                    <separator/>
+                    <filter name="group_year" string="Year"
+                            context="{'group_by': 'year'}"/>
+                    <filter name="group_month" string="Month"
+                            context="{'group_by': 'month_label'}"/>
+                    <filter name="group_day" string="Day"
+                            context="{'group_by': 'day'}"/>
+                    <filter name="group_type" string="Type"
+                            context="{'group_by': 'backup_type'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_gdrive_restore_browser" model="ir.actions.act_window">
+            <field name="name">Google Drive Backups</field>
+            <field name="res_model">wms.gdrive.backup</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_wms_gdrive_backup_search"/>
+            <field name="context">{'group_by': ['year', 'month_label', 'day']}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No Drive backups catalogued yet.</p>
+                <p>Rows here are written automatically by
+                   <code>scripts/backup-native.ps1</code> (Stage 5) after each
+                   Google Drive upload. Run
+                   <code>scripts\setup-gdrive-auth.ps1</code> once to enable
+                   the Drive stage.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_gdrive_restore"
+                  name="Google Drive Backups"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_gdrive_restore_browser"
+                  groups="wms_location.group_wms_manager"
+                  sequence="82"/>
+
+        <!-- ==============================================================
+             Settings wizard (P12) — fronts the wms_gdrive.* parameters
+             (D9) + Test Connection / Test Upload / Apply Schedule.
+             Manager-only.
+             ============================================================== -->
+        <record id="view_wms_gdrive_settings_form" model="ir.ui.view">
+            <field name="name">wms.gdrive.settings.form</field>
+            <field name="model">wms.gdrive.settings</field>
+            <field name="arch" type="xml">
+                <form string="Google Drive Backup Settings">
+                    <sheet>
+                        <field name="health_html" nolabel="1"/>
+                        <group>
+                            <group string="Google Drive upload">
+                                <field name="enabled"/>
+                                <field name="manual_enabled"/>
+                                <field name="folder_name"/>
+                                <field name="backup_time" placeholder="16:30"/>
+                            </group>
+                            <group string="Manager notifications">
+                                <field name="notify_success"/>
+                                <field name="notify_failure"/>
+                            </group>
+                            <group string="Drive retention tiers">
+                                <field name="retention_daily_days"/>
+                                <field name="retention_weekly_months"/>
+                                <field name="retention_monthly_years"/>
+                                <field name="delete_manual"/>
+                            </group>
+                        </group>
+                        <div class="alert alert-info" role="status">
+                            Local encrypted backups always run and are kept
+                            regardless of these settings — Google Drive is the
+                            off-site tier on top. One-time connection setup:
+                            <code>scripts\setup-gdrive-auth.ps1</code>.
+                        </div>
+                        <field name="result_html" nolabel="1"/>
+                    </sheet>
+                    <footer>
+                        <button name="action_save" string="Save"
+                                type="object" class="btn-primary"/>
+                        <button name="action_test_connection" string="Test Connection"
+                                type="object" class="btn-secondary"/>
+                        <button name="action_test_upload" string="Test Upload"
+                                type="object" class="btn-secondary"/>
+                        <button name="action_apply_schedule" string="Apply Schedule"
+                                type="object" class="btn-secondary"/>
+                        <button string="Close" class="btn-secondary" special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_gdrive_settings" model="ir.actions.act_window">
+            <field name="name">Google Drive Backup Settings</field>
+            <field name="res_model">wms.gdrive.settings</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="view_id" ref="view_wms_gdrive_settings_form"/>
+        </record>
+
+        <menuitem id="menu_wms_gdrive_settings"
+                  name="Google Drive Backup"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_gdrive_settings"
+                  groups="wms_location.group_wms_manager"
+                  sequence="83"/>
+
+    </data>
+</odoo>

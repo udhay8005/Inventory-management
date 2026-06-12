@@ -3,6 +3,7 @@ from . import (
     wms_backup_audit,
     wms_cycle_count,
     wms_expiry_alert,
+    wms_gdrive_backup,
     wms_notify,
     wms_occupancy_report,
     wms_oldest_stock_report,

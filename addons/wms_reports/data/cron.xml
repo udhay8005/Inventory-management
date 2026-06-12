@@ -109,5 +109,48 @@
             <field name="nextcall"
                    eval="(DateTime.now() + timedelta(hours=4)).replace(minute=20, second=0)"/>
         </record>
+
+        <!--
+            Daily 08:05 Google Drive upload freshness check (right after
+            the 08:00 local check). A stale Drive upload (> 26h) becomes
+            one staleness_warning row (name=gdrive-freshness-check) + a
+            Discuss notice to WMS Managers, deduped to one per ~20h.
+            DEGRADED tier only — a cloud problem must never page like
+            local-backup loss. Quiet while the Drive stage is disabled
+            or was never set up.
+        -->
+        <record id="cron_wms_gdrive_freshness" model="ir.cron">
+            <field name="name">WMS — Google Drive freshness check</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_gdrive_freshness()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=5, second=0)"/>
+        </record>
+
+        <!--
+            Hourly :25 Google Drive event notifier (P5/P14). The backup /
+            restore scripts write backup_gdrive / restore_gdrive rows via
+            psql (they never speak HTTP); this cron turns un-notified rows
+            from the last 24h into manager Discuss notices, honoring the
+            wms_gdrive.notify_success / notify_failure switches, then sets
+            notified=True (dedupe).
+        -->
+        <record id="cron_wms_gdrive_events" model="ir.cron">
+            <field name="name">WMS — Google Drive event notifications</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_notify_gdrive_events()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=1)).replace(minute=25, second=0)"/>
+        </record>
     </data>
 </odoo>

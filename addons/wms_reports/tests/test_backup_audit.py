@@ -3,6 +3,9 @@
 the wms.backup.audit model, its _health_snapshot() logic, the staleness
 cron, and the /wms/health endpoint.
 """
+import os
+import tempfile
+import uuid
 from datetime import timedelta
 
 from odoo import fields
@@ -15,6 +18,17 @@ class TestBackupAuditModel(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.Audit = cls.env["wms.backup.audit"]
+        # Point the disk probes at a guaranteed-absent directory so the
+        # file-presence / free-space checks stay neutral on any machine.
+        # Without this the suite is environment-sensitive: the repo root
+        # has a real backups/ dir on the dev box (live backup target), so
+        # _health_snapshot() would flag the seeded fake filenames as
+        # "missing from disk" (CRITICAL). CI passes only because the
+        # runner has no backups/ dir at all.
+        cls.env["ir.config_parameter"].sudo().set_param(
+            "wms_reports.backup_dir",
+            os.path.join(tempfile.gettempdir(), "wms_audit_absent_%s" % uuid.uuid4().hex),
+        )
 
     def _mk(self, audit_type, success, ago_hours, **extra):
         vals = {

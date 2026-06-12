@@ -1,12 +1,14 @@
 {
     "name": "WMS — Reports & Dashboards",
-    "version": "19.0.2.17.0",
+    "version": "19.0.3.0.0",
     "summary": "Live SQL-view dashboards + backup/DR observability (health endpoint, backup audit).",
     "depends": ["wms_location", "wms_ai_forecast", "wms_repair_damage", "stock"],
     "author": "WMS",
     "license": "LGPL-3",
     "category": "Inventory/Warehouse",
     "data": [
+        # Groups first: the ACL csv below references group_wms_backup_now.
+        "security/gdrive_security.xml",
         "security/ir.model.access.csv",
         # View files first (they define the actions referenced by menus.xml).
         "views/wms_oldest_stock_views.xml",
@@ -36,6 +38,13 @@
         "views/wms_value_reports_views.xml",
         # Menu parented to wms_location.menu_wms_operations (a dependency).
         "views/find_template.xml",
+        # Google Drive backup surfaces: Backup Now wizard (menu under the
+        # WMS root, gated by group_wms_backup_now), restore browser +
+        # settings wizard (manager-only, under wms_location.menu_wms_config).
+        # Self-contained actions/menus -> only needs the security groups.
+        "views/wms_gdrive_views.xml",
+        # Seeded wms_gdrive.* configuration parameters (noupdate).
+        "data/gdrive_params.xml",
         "data/cron.xml",
     ],
     "installable": True,
