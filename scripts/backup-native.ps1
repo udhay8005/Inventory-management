@@ -32,6 +32,17 @@
     a plain string at the call site with
         ConvertTo-SecureString 'mypass' -AsPlainText -Force
 
+.PARAMETER Source
+    Attribution recorded in the audit rows and the Google Drive catalog:
+    'auto' (scheduled task), 'manual' (WMS Backup Now / schtasks run) or
+    'emergency' (pre-restore safety backup). Default: auto.
+
+.PARAMETER FilePrefix
+    Optional artifact filename prefix (e.g. 'emergency-'). Prefixed files
+    never match the "$DbName-*" retention globs, so they are structurally
+    exempt from local + off-site retention. Default: '' (current naming;
+    all existing consumers unaffected).
+
 .EXAMPLE
     scripts\backup-native.ps1
 
@@ -49,7 +60,10 @@ param(
     [SecureString]$Passphrase,
     [string]$DbHost,
     [int]$DbPort,
-    [string]$DbUser
+    [string]$DbUser,
+    [ValidateSet('auto', 'manual', 'emergency')]
+    [string]$Source = 'auto',
+    [string]$FilePrefix = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -300,7 +314,7 @@ trap {
 }
 
 # --- 1. Database dump (encrypted) ---------------------------------------
-$DumpPath    = Join-Path $BackupDir "$DbName-$Stamp.dump"
+$DumpPath    = Join-Path $BackupDir "$FilePrefix$DbName-$Stamp.dump"
 $DumpEncPath = "$DumpPath.gpg"
 Write-Host "Dumping database '$DbName' (then encrypting)" -ForegroundColor Cyan
 Write-Host "    -> $DumpEncPath" -ForegroundColor DarkGray
@@ -332,7 +346,7 @@ try {
         -FileName (Split-Path -Leaf $DumpEncPath) -SizeMb $dbSizeMb `
         -TocEntries $tocLines -Verified $true `
         -DurationSeconds ((Get-Date) - $BackupStart).TotalSeconds `
-        -Checksum $dbHash -Message "OK"
+        -Checksum $dbHash -Message "OK (source=$Source)"
 } finally {
     # Always shred the plaintext dump - it's on disk for milliseconds.
     Remove-Item $DumpPath -Force -ErrorAction SilentlyContinue
@@ -341,7 +355,7 @@ try {
 # --- 2. Filestore zip (encrypted) ---------------------------------------
 $Filestore = Join-Path $DataDir "filestore\$DbName"
 if (Test-Path $Filestore) {
-    $ZipPath    = Join-Path $BackupDir "$DbName-$Stamp-filestore.zip"
+    $ZipPath    = Join-Path $BackupDir "$FilePrefix$DbName-$Stamp-filestore.zip"
     $ZipEncPath = "$ZipPath.gpg"
     Write-Host "Zipping filestore (then encrypting)" -ForegroundColor Cyan
     Write-Host "    -> $ZipEncPath" -ForegroundColor DarkGray
@@ -430,6 +444,422 @@ if ($OffsiteDir) {
     }
 } else {
     Write-Host "Off-site copy: disabled (set BACKUP_OFFSITE_DIR in .env to enable)" -ForegroundColor DarkGray
+}
+
+# --- 5. Google Drive upload (optional; disabled until setup-gdrive-auth.ps1 has run) ---
+# Failure-safe by position AND construction: the local backup already
+# succeeded ($script:ObsBackupOk above), so every Drive problem degrades to a
+# '[warn] ... (LOCAL backup is intact)' line, a /fail heartbeat, a failed
+# backup_gdrive audit row plus a pending catalog row for the next run's retry
+# sweep - it NEVER throws outward. Artifacts leave the box only as GPG AES256
+# envelopes; the passphrase never does.
+$GdriveHb = ''
+if (Test-Path $EnvPath) {
+    $gh = (Select-String -Path $EnvPath -Pattern '^HEALTHCHECK_GDRIVE_URL=(.+)$' | Select-Object -First 1)
+    if ($gh) { $GdriveHb = $gh.Matches.Groups[1].Value.Trim() }
+}
+$GdLib     = Join-Path $PSScriptRoot 'gdrive-lib.ps1'
+$TokenPath = Join-Path $ProjectRoot 'config\gdrive-token.json.dpapi'
+$GdReady   = $false
+try {
+    if (Test-Path $GdLib) {
+        . $GdLib
+        $GdReady = Test-GDriveReady -EnvPath $EnvPath -TokenPath $TokenPath `
+            -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+    }
+} catch {
+    # A missing/broken library must never fail the backup - skip the stage.
+    Write-Host "    [warn] Google Drive stage unavailable (gdrive-lib.ps1 not loaded): $($_.Exception.Message)" -ForegroundColor DarkGray
+    $GdReady = $false
+}
+
+function ConvertTo-GDrivePositiveInt {
+    # Failure-safe int parse for retention params - a mistyped setting must
+    # degrade to the default, never fail the stage.
+    param([string]$Value, [int]$Default)
+    $n = 0
+    if ([int]::TryParse($Value, [ref]$n) -and $n -gt 0) { return $n }
+    return $Default
+}
+
+function Set-WmsGdriveParam {
+    # UPSERT one ir_config_parameter row via psql (key has a UNIQUE
+    # constraint, so ON CONFLICT is safe). Failure-safe: a down DB degrades
+    # to a DarkGray note - same contract as Write-BackupAudit.
+    param([string]$Key, [string]$Value)
+    try {
+        $k = ($Key   -replace "'", "''")
+        $v = ($Value -replace "'", "''")
+        $sql = "INSERT INTO ir_config_parameter (key, value, create_uid, create_date, write_uid, write_date) VALUES ('$k', '$v', 1, NOW(), 1, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, write_uid = 1, write_date = NOW();"
+        $sql | & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -v ON_ERROR_STOP=1 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "    [warn] ir.config_parameter '$Key' not written (ignored)" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "    [warn] ir.config_parameter '$Key' write failed (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
+}
+
+function Send-GDriveBackupSet {
+    # Upload one complete backup set (db .gpg [+ filestore .gpg] + SHA256.txt
+    # + backup-info.json) into its Drive day folder, verify every transfer via
+    # the Drive-side sha256Checksum (inside Send-GDriveFile), then UPSERT the
+    # catalog row. Local names stay untouched; Drive display names keep the
+    # .dump.gpg/.zip.gpg discriminators (D8). Used by both today's upload and
+    # the pending-retry sweep. Throws on failure - the CALLER owns
+    # failure-safety.
+    param(
+        [Parameter(Mandatory)] [string]$SetStamp,
+        [Parameter(Mandatory)] [string]$DbFilePath,
+        [Parameter(Mandatory)] [string]$DbFileHash,
+        [string]$FsFilePath = '',
+        [string]$FsFileHash = '',
+        [Parameter(Mandatory)] [string]$BackupType,
+        [Parameter(Mandatory)] [string]$Creator,
+        [string]$WmsVersion = 'unknown',
+        [int]$TocEntries = 0,
+        [Parameter(Mandatory)] [object]$EnvConfig,
+        [Parameter(Mandatory)] [string]$AccessToken
+    )
+    $setDate     = [datetime]::ParseExact($SetStamp, 'yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture)
+    $driveStamp  = $setDate.ToString('yyyy-MM-dd_HH-mm-ss')
+    $driveDbName = "WMS_DB_$driveStamp.dump.gpg"
+    $driveFsName = "WMS_FILESTORE_$driveStamp.zip.gpg"
+    $hasFs       = [bool]($FsFilePath -and (Test-Path -LiteralPath $FsFilePath))
+
+    $folderName = Get-WmsConfigParam -Key 'wms_gdrive.folder_name' -Default 'Inventory_Backups' `
+        -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+    if (-not $folderName) { $folderName = 'Inventory_Backups' }
+    $dayId = Resolve-GDriveBackupFolder -Date $setDate -EnvConfig $EnvConfig `
+        -AccessToken $AccessToken -FolderName $folderName
+    $monthLabel = '{0:00}-{1}' -f $setDate.Month,
+        [System.Globalization.CultureInfo]::InvariantCulture.DateTimeFormat.GetMonthName($setDate.Month)
+    $folderPath = '{0}/{1}/{2}/{3}' -f $folderName, $setDate.ToString('yyyy'), $monthLabel, $setDate.ToString('yyyy-MM-dd')
+
+    # files[] for backup-info.json; the filestore entry is omitted when the
+    # filestore stage was skipped. Plain hashtables: the lib's Get-GDriveProp
+    # reads [hashtable] keys (an [ordered] dictionary would read as empty).
+    $dbLeaf = Split-Path -Leaf $DbFilePath
+    $files = @()
+    $files += @{
+        role       = 'db'
+        local_name = $dbLeaf
+        drive_name = $driveDbName
+        size_bytes = (Get-Item -LiteralPath $DbFilePath).Length
+        sha256     = $DbFileHash.ToLowerInvariant()
+    }
+    if ($hasFs) {
+        $files += @{
+            role       = 'filestore'
+            local_name = (Split-Path -Leaf $FsFilePath)
+            drive_name = $driveFsName
+            size_bytes = (Get-Item -LiteralPath $FsFilePath).Length
+            sha256     = $FsFileHash.ToLowerInvariant()
+        }
+    }
+
+    # SHA256.txt covers the .gpg artifacts BY DRIVE NAME (sha256sum format).
+    $shaLines = @('{0}  {1}' -f $DbFileHash.ToLowerInvariant(), $driveDbName)
+    if ($hasFs) { $shaLines += ('{0}  {1}' -f $FsFileHash.ToLowerInvariant(), $driveFsName) }
+    $shaText = ($shaLines -join "`n") + "`n"
+
+    # P4: the FIRST set of a day owns the bare SHA256.txt/backup-info.json
+    # names; later sets the same day get _<HH-MM-SS> suffixes. A leftover from
+    # OUR OWN earlier attempt (same set_id) keeps the bare name so the
+    # collision pre-flight in Send-GDriveFile can skip/replace it in place.
+    $shaName  = 'SHA256.txt'
+    $infoName = 'backup-info.json'
+    $suffix   = $setDate.ToString('HH-mm-ss')
+    try {
+        $sameDay = @(Get-GDriveBackupSets -AccessToken $AccessToken -ExtraQ (" and '{0}' in parents" -f $dayId))
+        foreach ($f in $sameDay) {
+            # Re-scope on parents: the mock seam ignores non-appProperties
+            # ExtraQ clauses, so other days' sidecars come back too.
+            $parents = @(Get-GDriveProp $f 'parents' @())
+            if ($parents.Count -gt 0 -and $parents -notcontains $dayId) { continue }
+            $sid = [string](Get-GDriveProp (Get-GDriveProp $f 'appProperties' $null) 'set_id' '')
+            if ($sid -eq $SetStamp) { continue }
+            $fname = [string](Get-GDriveProp $f 'name' '')
+            if ($fname -eq 'SHA256.txt')       { $shaName  = "SHA256_$suffix.txt" }
+            if ($fname -eq 'backup-info.json') { $infoName = "backup-info_$suffix.json" }
+        }
+    } catch {
+        # Listing failed: suffixed names cannot clobber another set's sidecars.
+        Write-Host "    [warn] day-folder listing failed; using suffixed sidecar names: $($_.Exception.Message)" -ForegroundColor DarkGray
+        $shaName  = "SHA256_$suffix.txt"
+        $infoName = "backup-info_$suffix.json"
+    }
+
+    $tmpSha  = Join-Path $env:TEMP "wms-gdrive-$SetStamp-SHA256.txt"
+    $tmpInfo = Join-Path $env:TEMP "wms-gdrive-$SetStamp-backup-info.json"
+    $fsRemoteId = ''
+    $infoJson = ''
+    try {
+        [System.IO.File]::WriteAllText($tmpSha, $shaText)
+        # Canonical schema lives in the lib (gdrive-restore.ps1 verifies
+        # against the same implementation); -OutPath writes UTF-8 no BOM.
+        $infoJson = New-BackupInfoJson -SetStamp $SetStamp -DbName $DbName -BackupType $BackupType `
+            -Creator $Creator -WmsVersion $WmsVersion -TocEntries $TocEntries -Files $files `
+            -OutPath $tmpInfo
+
+        $dbRemote = Send-GDriveFile -LocalPath $DbFilePath -RemoteName $driveDbName -ParentId $dayId `
+            -AppProperties (New-GDriveAppProperties -SetStamp $SetStamp -Role 'db' -BackupType $BackupType -DbName $DbName) `
+            -ExpectedSha256 $DbFileHash -AccessToken $AccessToken
+        Write-Host "    uploaded + verified $driveDbName" -ForegroundColor Green
+
+        if ($hasFs) {
+            $fsRemote = Send-GDriveFile -LocalPath $FsFilePath -RemoteName $driveFsName -ParentId $dayId `
+                -AppProperties (New-GDriveAppProperties -SetStamp $SetStamp -Role 'filestore' -BackupType $BackupType -DbName $DbName) `
+                -ExpectedSha256 $FsFileHash -AccessToken $AccessToken
+            $fsRemoteId = [string](Get-GDriveProp $fsRemote 'id' '')
+            Write-Host "    uploaded + verified $driveFsName" -ForegroundColor Green
+        }
+
+        Send-GDriveFile -LocalPath $tmpSha -RemoteName $shaName -ParentId $dayId `
+            -AppProperties (New-GDriveAppProperties -SetStamp $SetStamp -Role 'sha256' -BackupType $BackupType -DbName $DbName) `
+            -AccessToken $AccessToken | Out-Null
+
+        Send-GDriveFile -LocalPath $tmpInfo -RemoteName $infoName -ParentId $dayId `
+            -AppProperties (New-GDriveAppProperties -SetStamp $SetStamp -Role 'info' -BackupType $BackupType -DbName $DbName) `
+            -AccessToken $AccessToken | Out-Null
+    } finally {
+        # Sidecars carry only hashes + metadata (no secrets); plain delete.
+        Remove-Item -LiteralPath $tmpSha, $tmpInfo -Force -ErrorAction SilentlyContinue
+    }
+
+    # Catalog row (UPSERT keyed on name; failure-safe inside the lib).
+    # Datetimes go in as UTC because Odoo renders naive timestamps as UTC.
+    Write-GDriveCatalogRow -Row @{
+        name               = $dbLeaf
+        set_stamp          = $SetStamp
+        db_name            = $DbName
+        backup_type        = $BackupType
+        backup_time        = $setDate.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss')
+        year               = $setDate.ToString('yyyy')
+        month_label        = $monthLabel
+        day                = $setDate.ToString('yyyy-MM-dd')
+        drive_name         = $driveDbName
+        drive_file_id      = [string](Get-GDriveProp $dbRemote 'id' '')
+        drive_folder       = $folderPath
+        filestore_drive_id = $fsRemoteId
+        size_mb            = [math]::Round((Get-Item -LiteralPath $DbFilePath).Length / 1MB, 2)
+        checksum           = $DbFileHash
+        uploaded           = $true
+        upload_time        = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss')
+        creator            = $Creator
+        encrypted          = $true
+        wms_version        = $WmsVersion
+        info_json          = $infoJson
+    } -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+
+    return [pscustomobject]@{
+        DriveName  = $driveDbName
+        FileId     = [string](Get-GDriveProp $dbRemote 'id' '')
+        FolderPath = $folderPath
+    }
+}
+
+if ($GdReady) {
+    Write-Host "Google Drive upload" -ForegroundColor Cyan
+    # Pre-resolved so the catch block can reference them even when the throw
+    # happens before they are computed.
+    $GdCreator    = 'system (scheduled)'
+    $GdWmsVersion = 'unknown'
+    try {
+        # PS 5.1 defaults to TLS 1.0; Google endpoints require 1.2+ (the lib
+        # sets this too - kept here so the stage never depends on lib internals).
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $cfg = Get-GDriveEnvConfig -EnvPath $EnvPath
+        $tok = Get-GDriveAccessToken -TokenPath $TokenPath -EnvConfig $cfg
+
+        # wms_version for backup-info.json (failure-safe; DB may be down).
+        try {
+            $vOut = & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -t -A -v ON_ERROR_STOP=1 `
+                -c "SELECT latest_version FROM ir_module_module WHERE name='wms_reports';" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $vOut) {
+                $v0 = (@($vOut) | Where-Object { $_ } | Select-Object -First 1)
+                if ($v0) { $GdWmsVersion = ([string]$v0).Trim() }
+            }
+        } catch {}
+
+        # Creator attribution (D5): a manual run may carry an Odoo-login
+        # handshake in wms_gdrive.last_manual_requester ('login|iso-ts',
+        # honored only while fresh: < 10 minutes old).
+        if ($Source -eq 'manual') {
+            $GdCreator = 'manual (console)'
+            $req = Get-WmsConfigParam -Key 'wms_gdrive.last_manual_requester' -Default '' `
+                -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+            if ($req -and $req.Contains('|')) {
+                $reqLogin = $req.Substring(0, $req.IndexOf('|'))
+                $reqIso   = $req.Substring($req.IndexOf('|') + 1)
+                try {
+                    $styles  = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor `
+                               [System.Globalization.DateTimeStyles]::AdjustToUniversal
+                    $reqTime = [datetime]::Parse($reqIso, [System.Globalization.CultureInfo]::InvariantCulture, $styles)
+                    if ($reqLogin -and (((Get-Date).ToUniversalTime() - $reqTime).TotalMinutes -lt 10)) {
+                        $GdCreator = $reqLogin
+                    }
+                } catch {}
+            }
+        } elseif ($Source -eq 'emergency') {
+            $GdCreator = "$env:COMPUTERNAME\$env:USERNAME"
+        }
+
+        # 5a. Pending sweep (P14 'retry later'): local sets < 7 days old with
+        # no uploaded=true catalog row are re-uploaded oldest-first, max 3 per
+        # run (bounds the 2 h task limit). Each set is individually
+        # failure-safe so one bad set cannot block today's upload.
+        $sweepOk = 0
+        $sweepTried = 0
+        try {
+            $uploadedNames = @{}
+            $catReadable = $false
+            $rows = & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -t -A -v ON_ERROR_STOP=1 `
+                -c "SELECT name FROM wms_gdrive_backup WHERE uploaded = true;" 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $catReadable = $true
+                foreach ($r in @($rows)) { if ($r) { $uploadedNames[([string]$r).Trim()] = $true } }
+            }
+            # Catalog unreadable (wms_reports < 3.0.0 or DB down): skip the
+            # sweep rather than blindly re-uploading history.
+            if ($catReadable) {
+                $stampRx = '^(emergency-)?' + [regex]::Escape($DbName) + '-(\d{8}-\d{6})\.dump\.gpg$'
+                $cutoff  = (Get-Date).AddDays(-7)
+                $pendingSets = @(Get-ChildItem $BackupDir -Filter '*.dump.gpg' -ErrorAction SilentlyContinue |
+                    ForEach-Object {
+                        if ($_.Name -match $stampRx) {
+                            $ps = $Matches[2]
+                            $pd = $null
+                            try { $pd = [datetime]::ParseExact($ps, 'yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture) } catch {}
+                            if ($pd -and $ps -ne $Stamp -and $pd -ge $cutoff -and -not $uploadedNames.ContainsKey($_.Name)) {
+                                [pscustomobject]@{ File = $_; SetStamp = $ps; IsEmergency = [bool]$Matches[1] }
+                            }
+                        }
+                    } | Sort-Object SetStamp | Select-Object -First 3)
+                foreach ($p in $pendingSets) {
+                    $sweepTried++
+                    try {
+                        Write-Host "    retrying pending set $($p.SetStamp)" -ForegroundColor DarkGray
+                        # Old sets: the run-time hashes are gone - re-hash here.
+                        $pDbHash = (Get-FileHash -LiteralPath $p.File.FullName -Algorithm SHA256).Hash
+                        $pFsPath = $p.File.FullName -replace '\.dump\.gpg$', '-filestore.zip.gpg'
+                        $pFsHash = ''
+                        if (Test-Path -LiteralPath $pFsPath) {
+                            $pFsHash = (Get-FileHash -LiteralPath $pFsPath -Algorithm SHA256).Hash
+                        } else {
+                            $pFsPath = ''
+                        }
+                        $pType = 'auto'
+                        if ($p.IsEmergency) { $pType = 'emergency' }
+                        Send-GDriveBackupSet -SetStamp $p.SetStamp -DbFilePath $p.File.FullName `
+                            -DbFileHash $pDbHash -FsFilePath $pFsPath -FsFileHash $pFsHash `
+                            -BackupType $pType -Creator 'system (pending sweep)' `
+                            -WmsVersion $GdWmsVersion -EnvConfig $cfg -AccessToken $tok | Out-Null
+                        $sweepOk++
+                    } catch {
+                        Write-Host "    [warn] pending set $($p.SetStamp) retry failed (will retry next run): $($_.Exception.Message)" -ForegroundColor Yellow
+                    }
+                }
+            }
+        } catch {
+            Write-Host "    [warn] pending sweep skipped: $($_.Exception.Message)" -ForegroundColor DarkGray
+        }
+
+        # 5b. Today's set - reuse the in-scope artifact hashes (no re-hash).
+        $GdFsPath = ''
+        $GdFsHash = ''
+        if ((Test-Path Variable:\ZipEncPath) -and $ZipEncPath -and (Test-Path -LiteralPath $ZipEncPath)) {
+            $GdFsPath = $ZipEncPath
+            $GdFsHash = $fsHash
+        }
+        $today = Send-GDriveBackupSet -SetStamp $Stamp -DbFilePath $DumpEncPath -DbFileHash $dbHash `
+            -FsFilePath $GdFsPath -FsFileHash $GdFsHash -BackupType $Source -Creator $GdCreator `
+            -WmsVersion $GdWmsVersion -TocEntries $tocLines -EnvConfig $cfg -AccessToken $tok
+
+        # 5d. Drive-side tiered retention. Runs only after a successful
+        # upload; its own failure must not mark the (already verified) upload
+        # failed, so it gets an inner catch.
+        $retSummary = 'skipped'
+        try {
+            $tiers = @{
+                daily_days    = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.retention_daily_days'    -Default '30' -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 30
+                weekly_months = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.retention_weekly_months' -Default '6'  -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 6
+                monthly_years = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.retention_monthly_years' -Default '2'  -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 2
+            }
+            $delManual = ((Get-WmsConfigParam -Key 'wms_gdrive.delete_manual' -Default '0' `
+                -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) -eq '1')
+            $retSummary = Invoke-GDriveRetention -AccessToken $tok -Tiers $tiers -DeleteManual $delManual
+        } catch {
+            Write-Host "    [warn] Drive retention sweep failed (uploads unaffected): $($_.Exception.Message)" -ForegroundColor Yellow
+            $retSummary = "FAILED: $($_.Exception.Message)"
+        }
+
+        # 5e. Quota snapshot -> wms_gdrive.last_about cache (health page +
+        # settings wizard read it; failure-safe).
+        try {
+            $about   = Get-GDriveAbout -AccessToken $tok
+            $quota   = Get-GDriveProp $about 'storageQuota' $null
+            $aboutUsr = Get-GDriveProp $about 'user' $null
+            $usedMb  = 0.0
+            $limitMb = 0.0
+            $usedRaw  = Get-GDriveProp $quota 'usage' ''
+            $limitRaw = Get-GDriveProp $quota 'limit' ''
+            if ($usedRaw)  { $usedMb  = [math]::Round([double]$usedRaw / 1MB, 1) }
+            if ($limitRaw) { $limitMb = [math]::Round([double]$limitRaw / 1MB, 1) }
+            $aboutJson = [ordered]@{
+                used_mb     = $usedMb
+                limit_mb    = $limitMb
+                checked_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                email       = [string](Get-GDriveProp $aboutUsr 'emailAddress' '')
+            } | ConvertTo-Json -Compress
+            Set-WmsGdriveParam -Key 'wms_gdrive.last_about' -Value $aboutJson
+        } catch {
+            Write-Host "    [warn] Drive quota check failed (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray
+        }
+
+        $sweepNote = ''
+        if ($sweepTried -gt 0) { $sweepNote = "; pending sweep: $sweepOk/$sweepTried retried" }
+        Send-Heartbeat -Url $GdriveHb
+        Write-BackupAudit -AuditType 'backup_gdrive' -Success $true `
+            -FileName (Split-Path -Leaf $DumpEncPath) -SizeMb $dbSizeMb -Verified $true `
+            -Checksum $dbHash `
+            -Message "Drive upload verified (set $Stamp, source=$Source) -> $($today.DriveName) id=$($today.FileId); retention: $retSummary$sweepNote"
+        Write-Host "    Drive upload complete + verified." -ForegroundColor Green
+    } catch {
+        Write-Host "    [warn] Drive upload failed (LOCAL backup is intact): $($_.Exception.Message)" -ForegroundColor Yellow
+        Send-Heartbeat -Url $GdriveHb -Fail
+        Write-BackupAudit -AuditType 'backup_gdrive' -Success $false `
+            -FileName (Split-Path -Leaf $DumpEncPath) `
+            -Message "Drive upload FAILED (source=$Source): $($_.Exception.Message)"
+        # Pending catalog row so the next run's sweep retries this set.
+        # Write-GDriveCatalogRow is failure-safe itself; the re-guard covers a
+        # partially-loaded lib.
+        try {
+            $failDate  = [datetime]::ParseExact($Stamp, 'yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture)
+            $failMonth = '{0:00}-{1}' -f $failDate.Month,
+                [System.Globalization.CultureInfo]::InvariantCulture.DateTimeFormat.GetMonthName($failDate.Month)
+            Write-GDriveCatalogRow -Row @{
+                name        = (Split-Path -Leaf $DumpEncPath)
+                set_stamp   = $Stamp
+                db_name     = $DbName
+                backup_type = $Source
+                backup_time = $failDate.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss')
+                year        = $failDate.ToString('yyyy')
+                month_label = $failMonth
+                day         = $failDate.ToString('yyyy-MM-dd')
+                size_mb     = $dbSizeMb
+                checksum    = $dbHash
+                uploaded    = $false
+                creator     = $GdCreator
+                encrypted   = $true
+                wms_version = $GdWmsVersion
+            } -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+        } catch {
+            Write-Host "    [warn] pending catalog row not written (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray
+        }
+    }
+} else {
+    Write-Host "Google Drive upload: disabled (run scripts\setup-gdrive-auth.ps1 to enable)" -ForegroundColor DarkGray
 }
 
 Write-Host ""
