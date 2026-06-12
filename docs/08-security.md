@@ -170,8 +170,10 @@ not aspirational. Each maps to a concrete file or runtime artefact.
    copied, SHA-256 is **re-verified at the destination**, and retention is
    mirrored (`-Retain`, default 14). Any off-site failure is swallowed so it
    never fails the local backup.
-7. **Scheduled tasks run as SYSTEM.** Both `WMS Daily Backup` and
-   `WMS Weekly Restore Drill` are registered with principal
+7. **Scheduled tasks run as SYSTEM.** All three of `WMS Daily Backup`
+   (4:30 PM daily), `WMS Weekly Restore Drill` (3:00 AM Sunday), and
+   `WMS Manual Backup` (trigger-less; run on demand by the Backup Now
+   wizard via `schtasks /Run`) are registered with principal
    `NT AUTHORITY\SYSTEM`, `LogonType=ServiceAccount`, `RunLevel=Highest`,
    `-StartWhenAvailable`, `ExecutionTimeLimit=2h`,
    `MultipleInstances=IgnoreNew`. Because they run as SYSTEM, any
@@ -181,6 +183,29 @@ not aspirational. Each maps to a concrete file or runtime artefact.
    placeholder strings (`changeme*`, `admin`, and similar) before bringing
    the service up — first-install operators cannot ship the trust with the
    sample password still in `.env`.
+9. **Google Drive uploads use the minimal `drive.file` scope.** The optional
+   Drive integration requests exactly one OAuth scope, `drive.file` — the
+   app can see and touch only files it created (the `Inventory_Backups`
+   tree), never the rest of the Drive or the Google account. There is no
+   drive-wide read scope anywhere in the pipeline, and the uploaded
+   artefacts remain GPG AES256 ciphertext (the passphrase never leaves the
+   box).
+10. **The Drive refresh token is DPAPI machine-scope.** The OAuth refresh
+    token lives at `config\gdrive-token.json.dpapi`, encrypted with DPAPI
+    LocalMachine scope so the `NT AUTHORITY\SYSTEM` scheduled tasks can read
+    it while an exfiltrated copy is useless off-box. The file is gitignored;
+    rotation = re-run `scripts\setup-gdrive-auth.ps1` (one browser consent).
+11. **Drive uploads are checksum-verified without re-download.** After every
+    upload, the Drive-side `sha256Checksum` must equal the SHA-256 already
+    computed locally for the artefact; a mismatch deletes the remote file
+    and counts the upload as failed. The Drive stage is failure-safe — any
+    Drive error is logged and audited but never fails the local backup.
+12. **Drive restore into production is double-gated.** `gdrive-restore.ps1`
+    refuses to restore into the live `wms` database unless BOTH `-Force` AND
+    the literal `-ConfirmTarget wms` are passed — otherwise it exits 5
+    (PROD_GUARD) before any side effect. Storekeepers have no restore
+    surface at all: the restore browser, catalog, and settings are
+    manager-only menus and ACLs.
 
 ## Hardening checklist
 

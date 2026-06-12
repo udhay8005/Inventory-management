@@ -52,7 +52,7 @@
                     <li><b>Stock flow: FIFO / FEFO</b> — how the system decides what leaves first.</li>
                     <li><b>Audit trail &amp; roster</b> — who did what, and why audits lock.</li>
                     <li><b>Reports</b> — occupancy, movement history, oldest stock, expiry alerts, forecasts.</li>
-                    <li><b>Backups &amp; restore drill</b>, then <b>Observability / health</b> — keeping the data safe and the system green.</li>
+                    <li><b>Backups &amp; restore drill</b> — including the <b>cloud backup to Google Drive</b> and the <b>Back Up Now</b> button — then <b>Observability / health</b> — keeping the data safe and the system green.</li>
                     <li><b>Damage &amp; repair oversight</b> and <b>Troubleshooting</b>.</li>
                 </ol>
 

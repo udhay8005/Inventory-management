@@ -89,6 +89,16 @@ back to the shelf. Pick your name, scan the item, scan the slot, **Validate**. (
 3. **Submit** for a manager to review and accept — accepting fixes the books to
    match reality (it keeps any receipts/issues that happened while you counted).
 
+## 8. Backup Now (only if you've been given it)
+Some keepers are granted the **WMS / Can Run Backup Now** permission. If you
+have it, a **Back Up Now** entry appears in the WMS menu.
+1. Open **WMS → Back Up Now** and tap the big **Back Up Now** button.
+2. It takes a few minutes — tap **Refresh** to check on it.
+3. When it's done, the screen shows the backup's **filename**, its **size**,
+   and the **upload time**. That's your confirmation it worked.
+> No Back Up Now menu? You don't have the permission — that's normal. The
+> system still backs itself up automatically every day.
+
 ---
 
 ## Everyday tips

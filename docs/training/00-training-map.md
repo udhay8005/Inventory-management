@@ -538,9 +538,12 @@ See §9. **Who:** all readers; acting on them (buying) is Admin.
 - **Download encrypted backup** (Configuration → Download encrypted backup): runs `pg_dump` and GPG-encrypts (AES-256) the database, streaming a `.dump.gpg` file straight to the Admin's browser. Same format the scheduled PowerShell backup script produces.
 - **Restore from backup…** (Configuration → Restore from backup…): deliberately **not** a one-click web action — it opens an instructions page with the exact PowerShell command, because a bad restore would wipe live data. Restore is CLI-only (`scripts\restore-native.ps1 ... -Force`).
 - **Backup & DR Audit** (Reports → Backup & DR Audit): an append-only log of every backup, restore drill, and staleness warning, written by the backup/restore scripts.
-- **Health check** (`/wms/health`): a public JSON endpoint returning HEALTHY / DEGRADED / CRITICAL based on how fresh the last backup and last restore drill are (CRITICAL if no backup has ever been recorded; DEGRADED if the backup is over ~24h old or no recent restore drill). A daily job warns Managers when health slips.
+- **Health check** (`/wms/health`): a public JSON endpoint returning HEALTHY / DEGRADED / CRITICAL based on how fresh the last backup and last restore drill are (CRITICAL if no backup has ever been recorded; DEGRADED if the backup is over ~24h old or no recent restore drill). A daily job warns Managers when health slips. It also reports the Google Drive tier (`gdrive_enabled`, `drive_connected`, last upload age, storage used/limit, next backup time) — Drive problems are DEGRADED at most, never CRITICAL.
+- **Back Up Now** (WMS root menu): a one-button wizard that sends a fresh encrypted copy to **Google Drive** immediately; the success screen shows the filename, size, and upload time. Gated by the capability group **"WMS / Can Run Backup Now"** (granted per keeper; Managers always have it).
+- **Google Drive Backup** settings (Configuration, Manager-only): schedule (default 16:30), notifications, retention tiers, plus **Test Connection** / **Test Upload** / **Apply Schedule** buttons.
+- **Google Drive Backups** restore browser (Configuration, Manager-only): a read-only catalog of the Drive sets grouped Year → Month → Day, with a copy-paste `gdrive-restore.ps1` command per set — execution stays CLI-only.
 
-**Who Uses It.** **Admin / Manager only** for download, restore info, and the DR audit dashboard. The `/wms/health` endpoint is public (for an external uptime monitor) but exposes only ages and status — no secrets, filenames, or data.
+**Who Uses It.** **Admin / Manager only** for download, restore info, settings, the Drive catalog, and the DR audit dashboard. A **Store Keeper** with the **"WMS / Can Run Backup Now"** capability can use Back Up Now — and nothing else of the backup surface (keepers see no restore screens at all). The `/wms/health` endpoint is public (for an external uptime monitor) but exposes only ages and status — no secrets, filenames, or data.
 
 **Prerequisites.**
 - `pg_dump` and `gpg` installed on the server (the download page tells you if either is missing).
@@ -558,7 +561,7 @@ See §9. **Who:** all readers; acting on them (buying) is Admin.
 - Point an external monitor at `/wms/health` and alert on non-200 responses.
 - Periodically open the Backup & DR Audit dashboard to confirm backups are landing and verified.
 
-**Related Workflows.** Backup & DR Audit dashboard (§10-style report); the PowerShell scripts under `scripts/`; the Health Check help article in the Help Center.
+**Related Workflows.** Backup & DR Audit dashboard (§10-style report); the PowerShell scripts under `scripts/`; the Health Check and Cloud backup help articles in the Help Center; the cloud-backup SOP (`docs/training/sop/13-cloud-backup.md`) and the canonical Drive guide (`docs/22-gdrive-backup.md`).
 
 ---
 
@@ -633,6 +636,7 @@ See §9. **Who:** all readers; acting on them (buying) is Admin.
 | Reports | Yes | Read (most) | Read (most) |
 | Store Keeper Activity report | Yes | No (Manager-only) | No |
 | Backup / Restore / DR audit | Yes | No | No |
+| Back Up Now (Google Drive) | Yes | Yes (Can Run Backup Now) | No |
 | User roster & logins | Yes | No | No |
 | Help Center | Read + edit articles | Read | Read |
 | Beginner Mode (own toggle) | Yes | Yes | Yes |

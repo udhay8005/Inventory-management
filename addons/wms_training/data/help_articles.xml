@@ -399,7 +399,7 @@
                     <p><b>A backup is a complete, encrypted copy of the warehouse system's data</b>, saved so everything can be recovered if the main computer fails, is lost, or gets corrupted.</p>
                     <p>Backups are written as encrypted files (<code>.dump.gpg</code>) on a schedule, and each one's size, checksum, and result are recorded in the <b>Backup &amp; DR Audit</b> dashboard. No passwords or secrets are ever stored in that record — only filenames, sizes, and status.</p>
                     <p><b>Why it matters</b> All the trust's stock history — every receipt, issue, audit, and the location map — lives in one database. If that's lost without a backup, years of records vanish. Backups are the safety net.</p>
-                    <p><b>Real trust example</b> The store-room PC's drive dies one morning. Because an encrypted backup ran the night before, an Admin restores it onto a new machine and the trust is back to within a day of where it was — all the medicine and feed history intact.</p>
+                    <p><b>Real trust example</b> The store-room PC's drive dies one morning. Because an encrypted backup ran the previous afternoon, an Admin restores it onto a new machine and the trust is back to within a day of where it was — all the medicine and feed history intact.</p>
                     <p><b>Important</b> A backup is only trustworthy if it has been <b>proven to restore</b> — which is exactly why we run a weekly <b>Restore drill</b> (see that article). The system also raises a warning if no successful backup has been recorded in the last 24 hours.</p>
             </div></field>
         </record>
@@ -435,7 +435,7 @@
                     <li><b>CRITICAL</b> — no successful backup has ever been recorded, or the system can't be reached. Act now.</li>
                     </ul>
                     <p><b>Why it matters</b> Problems with backups are invisible until you need them. The health check turns "are we protected?" into a single glance, and a monitoring tool can poll it automatically and alert someone the moment status drops.</p>
-                    <p><b>Real trust example</b> A monitoring service checks <code>/wms/health</code> every few minutes. Last night's backup didn't run, so the status turns <b>DEGRADED</b> and an alert goes out. The Admin fixes the backup the same morning — long before anyone needs to restore.</p>
+                    <p><b>Real trust example</b> A monitoring service checks <code>/wms/health</code> every few minutes. Yesterday's 4:30 PM backup didn't run, so the status turns <b>DEGRADED</b> and an alert goes out. The Admin fixes the backup the same morning — long before anyone needs to restore.</p>
                     <p><b>Safe to expose</b> The health report deliberately contains no sensitive data — only statuses and how old the last backup/drill are — so it's safe for a monitor to read without a password.</p>
             </div></field>
         </record>
@@ -591,7 +591,7 @@
             <field name="body" type="html"><div>
                     <p><b>You will learn:</b> how the trust's data is protected and why a backup is only real once it has been restored.</p>
                     <p>The system makes <b>encrypted backups</b> (an encrypted <code>.dump.gpg</code> file) on a schedule. But a backup that has never been restored is not a backup — so a <b>restore drill</b> runs <b>weekly</b> to prove the latest backup can actually be recovered, <i>without ever touching the live database</i>.</p>
-                    <p><b>Steps to keep this healthy:</b> 1. Make sure a <b>daily backup</b> task is scheduled (Windows Task Scheduler, around 2am). 2. Set a <b>real backup passphrase</b> in the <code>.env</code> file — the drill refuses to run while it is still the placeholder. 3. Let the <b>weekly drill</b> run (Sunday early morning). It checks the backup is complete and decryptable. <b>Once a quarter</b>, run a <b>full restore</b> drill so the database actually rebuilds into a throwaway copy. 4. Keep an <b>off-site copy</b> of the encrypted backups (a NAS or cloud) and drill against it at least monthly.</p>
+                    <p><b>Steps to keep this healthy:</b> 1. Make sure a <b>daily backup</b> task is scheduled (Windows Task Scheduler, every afternoon at 4:30 PM). 2. Set a <b>real backup passphrase</b> in the <code>.env</code> file — the drill refuses to run while it is still the placeholder. 3. Let the <b>weekly drill</b> run (Sunday early morning). It checks the backup is complete and decryptable. <b>Once a quarter</b>, run a <b>full restore</b> drill so the database actually rebuilds into a throwaway copy. 4. Keep an <b>off-site copy</b> of the encrypted backups (a NAS or cloud) and drill against it at least monthly.</p>
                     <p><b>Why it matters:</b> Three silent failures — a half-written backup, a schema change that breaks restore, and a rotated-but-untested passphrase — are caught only by an end-to-end restore. The weekly drill catches all three within seven days.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
@@ -1241,7 +1241,7 @@
                     <li>The health page shows ages and status only, never secrets, so it is safe for a monitor to poll.</li>
                     </ul>
                     <p><b>Best practice</b> Make the weekly backup check part of the same routine as the weekly inventory audit. If status is not HEALTHY, read the Restore drill guide and the deployment doc.</p>
-                    <p><b>Trust example</b> Every Monday the Admin opens the Backup &amp; DR Audit dashboard, sees last night's database backup ticked green and Sunday's restore drill verified, opens /wms/health to confirm HEALTHY, and moves on.</p>
+                    <p><b>Trust example</b> Every Monday the Admin opens the Backup &amp; DR Audit dashboard, sees yesterday afternoon's database backup ticked green and Sunday's restore drill verified, opens /wms/health to confirm HEALTHY, and moves on.</p>
             </div></field>
         </record>
 
@@ -1264,7 +1264,7 @@
                     <li>Do not delete the backups folder.</li>
                     </ul>
                     <p><b>Best practice</b> Leave the automatic weekly task running, and once a quarter run a full restore by hand to be extra sure. Each drill writes a line to the Backup &amp; DR Audit dashboard so you have a record.</p>
-                    <p><b>Trust example</b> On the first Sunday of the quarter the Admin runs the full drill. The script restores last night's backup into a temporary wms_drill database, confirms it is complete, drops it, and logs a green verified row. The trust now knows its data is genuinely safe.</p>
+                    <p><b>Trust example</b> On the first Sunday of the quarter the Admin runs the full drill. The script restores the newest backup into a temporary wms_drill database, confirms it is complete, drops it, and logs a green verified row. The trust now knows its data is genuinely safe.</p>
             </div></field>
         </record>
 
@@ -1835,6 +1835,50 @@
                     <p>The clip is stored inside the system and is included in every backup. It plays right inside the article — <b>no internet needed</b>, which is ideal for a tablet in the shed.</p>
                     <p><b>Other way — paste a YouTube or Vimeo link:</b> if the video is already online, paste its link into <b>Video link</b> instead of uploading. It shows inside the article, but this one <b>needs internet</b> to play. (If you fill both, the uploaded clip wins.)</p>
                     <p><b>Tip:</b> keep videos short and focused. Five 1-minute clips beat one 5-minute clip — people find the part they need faster.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_cloud_backup" model="wms.help.article">
+            <field name="slug">what-is-cloud-backup</field>
+            <field name="name">Cloud backup (Google Drive)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">129</field>
+            <field name="keywords">cloud backup google drive off-site offsite upload encrypted copy inventory_backups second copy fire theft</field>
+            <field name="body" type="html"><div>
+                    <p><b>The cloud backup is a second copy of every encrypted backup, kept in the trust's Google Drive</b> — off the store-room computer, so a fire, theft, or dead disk in the building cannot take the data and its backups together.</p>
+                    <p>It happens automatically: after the daily backup finishes (every afternoon at 4:30 PM), the same encrypted files are uploaded to a Drive folder called <b>Inventory_Backups</b>, organised by year, month, and day. The files are <b>encrypted before they leave the computer</b>, so even someone who got into the Drive account could not read the trust's data.</p>
+                    <p><b>Why it matters</b> Keeping the only backups next to the live computer protects against a software fault but not against the building. The Drive copy is the "out of the building" safety net.</p>
+                    <p><b>Real trust example</b> The store-room PC is stolen over a weekend. On a replacement machine, the Admin signs the system back into Google Drive, downloads the newest backup set, and restores it — the trust loses at most one day of records.</p>
+                    <p><b>Good to know</b></p>
+                    <ul>
+                    <li>If the internet is down, <b>the local backup is still made and kept</b> — the Drive upload simply retries on the next run.</li>
+                    <li>A keeper with the <b>Back Up Now</b> permission can send an extra copy any time (see "How to back up to Google Drive now").</li>
+                    <li>Old copies are tidied automatically: daily copies are kept about a month, weekly ones about six months, monthly ones about two years. Manual copies are kept until a Manager decides otherwise.</li>
+                    <li><b>Never move, rename, or delete anything inside the Inventory_Backups folder in Google Drive.</b> The system can only see the files it created itself; tidying the folder by hand makes backups invisible to it.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_cloud_backup_now" model="wms.help.article">
+            <field name="slug">workflow-cloud-backup-now</field>
+            <field name="name">How to back up to Google Drive now</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">266</field>
+            <field name="keywords">back up now backup now google drive manual extra copy cloud upload safe copy button refresh</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Sending a safe copy of all WMS data to Google Drive <i>right now</i>, without waiting for the daily 4:30 PM backup — for example after a big receiving day, before a stormy night, or whenever a Manager asks for one. It needs no technical knowledge: one button.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Back Up Now</b>. (The menu only appears if you have the <i>Can Run Backup Now</i> permission — Managers always have it; ask the Admin if you need it.) 2. Read the note: nothing is deleted or changed, and you can keep working while it runs. 3. Click <b>Back Up Now</b>. 4. The screen says the backup has started. It takes a few minutes — click <b>Refresh</b> to check, or close the window and come back later. 5. When it finishes, the success screen shows the <b>backup filename</b>, its <b>size in MB</b>, and the <b>time it was uploaded to Google Drive</b>.</p>
+                    <p><b>If it says "Drive upload pending"</b> The safe copy was made on the server but the internet or Google Drive was not reachable. Nothing is lost — the upload is retried automatically on the next backup run.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Double-clicking the button is harmless — the backup never runs twice at once.</li>
+                    <li>Do not go into Google Drive and "tidy" the <b>Inventory_Backups</b> folder. Moving or renaming files there hides them from the system.</li>
+                    <li>This screen only <i>makes</i> backups. Bringing data <i>back</i> is a separate, Manager-only job — if something is wrong with the system, tell a Manager rather than trying to fix it yourself.</li>
+                    </ul>
+                    <p><b>Best practice</b> Run a Back Up Now before anything unusual — a bulk correction, a planned power cut, a machine move — so the newest possible copy is already off the building.</p>
+                    <p><b>Trust example</b> A festival week ends with hundreds of receipts and issues entered by evening. The keeper clicks Back Up Now before locking up; two minutes later the success screen shows the file, its size, and the Drive upload time. The day's work is safe even if the PC fails overnight.</p>
             </div></field>
         </record>
     </data>

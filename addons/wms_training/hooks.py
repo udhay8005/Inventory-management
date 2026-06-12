@@ -166,6 +166,69 @@ _BLOCK_STARTS = (
     "&lt;hr&gt;&lt;div " + MARKER,
 )
 
+# --- Google Drive backup training updates (19.0.1.8.0) ----------------------
+# help_articles.xml / guided_tours.xml are noupdate="1": fresh installs get
+# these changes from the edited XML, existing databases get them from the
+# migration that calls apply_cloud_backup_training() below.
+
+# Idempotency marker: present once the admin-tour cloud step has been added.
+CLOUD_TOUR_MARKER = "Cloud safety net"
+
+# Must mirror the step added to help_tour_admin in data/guided_tours.xml.
+# Carries an action-PENDING placeholder: call apply_tour_action_links()
+# AFTER inserting so the link resolves on the target database.
+CLOUD_TOUR_STEP = (
+    '<p style="text-align:center">'
+    '<img src="/wms_training/static/img/diagrams/cloud-backup.svg" '
+    'alt="Cloud backup: encrypted copy to Google Drive and the restore path back" '
+    'style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;'
+    'border-radius:8px;padding:6px"/></p>'
+    '<ol start="7">'
+    "<li><b>Cloud safety net</b> &#8212; every daily backup also lands in the "
+    "trust's Google Drive, already encrypted. Run an extra one any time with "
+    "<b>Back Up Now</b>; the schedule and tests live under "
+    "<b>Configuration &#8594; Google Drive Backup</b>.<br/>"
+    '<a href="/odoo/action-PENDING-wms_reports.action_wms_gdrive_backup_now" '
+    'class="btn btn-primary btn-sm" target="_self">Open this screen &#8594;</a></li>'
+    "</ol>"
+)
+
+# slug -> [(old text, new text)] — the daily backup moved from "nightly /
+# around 2am" to 4:30 PM when the Google Drive stage landed. Pure-text
+# replacements (no tags), so the Html sanitizer cannot have altered them.
+TIME_WORDING_FIXES = {
+    "what-is-a-backup": [
+        (
+            "Because an encrypted backup ran the night before",
+            "Because an encrypted backup ran the previous afternoon",
+        )
+    ],
+    "what-is-a-health-check": [
+        (
+            "Last night's backup didn't run",
+            "Yesterday's 4:30 PM backup didn't run",
+        )
+    ],
+    "admin-path-backups-and-restore-drill": [
+        (
+            "Windows Task Scheduler, around 2am",
+            "Windows Task Scheduler, every afternoon at 4:30 PM",
+        )
+    ],
+    "workflow-backup-verification": [
+        (
+            "sees last night's database backup ticked green",
+            "sees yesterday afternoon's database backup ticked green",
+        )
+    ],
+    "workflow-restore-drill": [
+        (
+            "restores last night's backup",
+            "restores the newest backup",
+        )
+    ],
+}
+
 
 def _strip_prior(body):
     """Return the article body with any earlier visual block removed."""
@@ -243,6 +306,60 @@ def apply_tour_action_links(env):
             fixed += 1
     _logger.info("Critical #6: resolved guided-tour action links on %s article(s)", fixed)
     return fixed
+
+
+def apply_cloud_backup_training(env):
+    """Apply the Google Drive training edits to an EXISTING database.
+
+    Fresh installs already carry them in the (noupdate="1") XML; this brings
+    upgraded databases to the same state:
+
+    1. Re-word the stale backup-time mentions (the daily backup default
+       moved from "nightly / around 2am" to 4:30 PM).
+    2. Insert admin-tour step 7 "Cloud safety net" (Back Up Now) after the
+       step-6 list.
+
+    Idempotent: each replacement no-ops once applied; the tour step is
+    skipped when its marker is already present. Call
+    apply_tour_action_links() afterwards so the step's action-PENDING
+    placeholder resolves. (The NEW cloud-backup help articles need no
+    handling here — new records load on upgrade even under noupdate="1".)
+    """
+    Article = env["wms.help.article"]
+    reworded = 0
+    for slug, fixes in TIME_WORDING_FIXES.items():
+        art = Article.search([("slug", "=", slug)], limit=1)
+        if not art:
+            continue
+        body = str(art.body or "")
+        new_body = body
+        for old, new in fixes:
+            new_body = new_body.replace(old, new)
+        if new_body != body:
+            art.body = new_body
+            reworded += 1
+
+    inserted = False
+    tour = Article.search([("slug", "=", "tour-admin")], limit=1)
+    if tour and CLOUD_TOUR_MARKER not in str(tour.body or ""):
+        body = str(tour.body or "")
+        anchor = body.find('<ol start="6"')
+        close = body.find("</ol>", anchor) if anchor != -1 else -1
+        if close != -1:
+            pos = close + len("</ol>")
+            tour.body = body[:pos] + CLOUD_TOUR_STEP + body[pos:]
+            inserted = True
+        else:
+            _logger.warning(
+                "cloud-backup training: admin tour found but no step-6 list "
+                "anchor - tour step NOT inserted"
+            )
+    _logger.info(
+        "cloud-backup training: %s article(s) re-worded, tour step inserted: %s",
+        reworded,
+        inserted,
+    )
+    return reworded
 
 
 def post_init_hook(env):

@@ -100,16 +100,26 @@ Default retention is 14 backups; pass `-Retain 30` for longer.
 Schedule via **Windows Task Scheduler**:
 
 ```powershell
-# One-line setup — registers both scheduled tasks as NT AUTHORITY\SYSTEM:
+# One-line setup — registers all three scheduled tasks as NT AUTHORITY\SYSTEM:
 scripts\install-backup-tasks.ps1
 ```
 
 This registers:
 
-- **WMS Daily Backup** — runs `backup-native.ps1` daily at 1:00 PM
+- **WMS Daily Backup** — runs `backup-native.ps1` daily at 4:30 PM (override with `-BackupAt`)
 - **WMS Weekly Restore Drill** — runs `restore-drill.ps1` every Sunday at 3:00 AM
+- **WMS Manual Backup** — no trigger; run on demand by the in-app **Backup Now** wizard (via `schtasks /Run`), same pipeline as the daily task
 
-Both run as `NT AUTHORITY\SYSTEM` (LogonType=ServiceAccount, RunLevel=Highest, StartWhenAvailable, ExecutionTimeLimit=2h, MultipleInstances=IgnoreNew). See [docs/18-restore-drill.md](18-restore-drill.md) for the weekly drill runbook (scheduling, exit codes, troubleshooting).
+All three run as `NT AUTHORITY\SYSTEM` (LogonType=ServiceAccount, RunLevel=Highest, StartWhenAvailable, ExecutionTimeLimit=2h, MultipleInstances=IgnoreNew). See [docs/18-restore-drill.md](18-restore-drill.md) for the weekly drill runbook (scheduling, exit codes, troubleshooting).
+
+**Google Drive off-site (optional):** with the Drive integration configured
+(one-time `scripts\setup-gdrive-auth.ps1` consent), `backup-native.ps1` uploads
+each encrypted set to `Inventory_Backups/YYYY/MM-MonthName/YYYY-MM-DD/` on
+Google Drive after the local backup, verifies the upload via Drive's
+`sha256Checksum`, and applies tiered Drive retention (daily 30 d / weekly 6 mo /
+monthly 2 y; local retention unchanged). The stage is failure-safe — a Drive
+error never fails the local backup. Setup, Backup Now, restore browser, and the
+`gdrive-restore.ps1` runbook: [22-gdrive-backup.md](22-gdrive-backup.md).
 
 ### Restore
 

@@ -126,6 +126,11 @@
                     <li><b>Check backups &amp; health</b> — the safety net. Confirm a recent backup ran and the weekly restore drill is passing.<br/>
                         <a href="/odoo/action-PENDING-wms_reports.action_wms_backup_audit" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
                     </ol>
+                    <p style="text-align:center"><img src="/wms_training/static/img/diagrams/cloud-backup.svg" alt="Cloud backup: encrypted copy to Google Drive and the restore path back" style="width:100%;max-width:340px;height:auto;border:1px solid #e5e7eb;border-radius:8px;padding:6px"/></p>
+                    <ol start="7">
+                    <li><b>Cloud safety net</b> — every daily backup also lands in the trust's Google Drive, already encrypted. Run an extra one any time with <b>Back Up Now</b>; the schedule and tests live under <b>Configuration → Google Drive Backup</b>.<br/>
+                        <a href="/odoo/action-PENDING-wms_reports.action_wms_gdrive_backup_now" class="btn btn-primary btn-sm" target="_self">Open this screen →</a></li>
+                    </ol>
                     <hr/>
                     <p><b>That's the whole job — build and run.</b> For the reasoning behind each part, read:</p>
                     <ul>

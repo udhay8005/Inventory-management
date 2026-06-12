@@ -81,6 +81,7 @@ Record these in priority order (top = most useful to a new hire). "Article slug"
 | 17 | Restore drill | 3–4 m | `sop/11-backup-restore-health.md` | `workflow-restore-drill` |
 | 18 | Monitoring / health | 2–3 m | `sop/11-backup-restore-health.md` (§ health) | `admin-path-observability-health` |
 | 19 | User management & roster | 3 m | `sop/12-user-management.md` | `admin-path-users-and-permissions` |
+| 23 | Cloud backup (Backup Now + settings) | 3 m | `sop/13-cloud-backup.md` | `workflow-cloud-backup-now` |
 
 ### Read-only viewer
 | # | Video | Length | SOP script | Article slug |

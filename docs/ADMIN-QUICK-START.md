@@ -61,13 +61,17 @@ quantity → scan destination slot → **Validate**. Confirm via
 
 ## 6. Backup
 1. In `.env`, set `BACKUP_OFFSITE_DIR=<path>` (USB drive, UNC share, OneDrive/Dropbox sync folder — all just paths). Encrypted copies of every successful backup land there, SHA-256-verified against the source, so a fire or disk failure on this PC doesn't destroy the inventory record. Leave blank to disable.
-2. Run:
+2. Optional cloud tier — Google Drive: put `GDRIVE_CLIENT_ID` / `GDRIVE_CLIENT_SECRET`
+   in `.env` (one-time GCP OAuth Desktop client), then run `scripts\setup-gdrive-auth.ps1`
+   once (browser consent). Every backup then also uploads to Drive, checksum-verified.
+   Full setup + restore runbook: **[22-gdrive-backup.md](22-gdrive-backup.md)**.
+3. Run:
    ```powershell
-   scripts\install-backup-tasks.ps1   # daily backup + weekly restore drill (scheduled as SYSTEM)
+   scripts\install-backup-tasks.ps1   # daily backup + weekly drill + on-demand manual task (as SYSTEM)
    scripts\backup-native.ps1          # take one now (also copies off-site if configured)
    scripts\restore-drill.ps1          # prove the latest backup is recoverable
    ```
-3. Verify: **<http://localhost:8069/wms/health?token=…>** → `HEALTHY` with a recent backup. (The token is auto-generated at install time; find it under **Settings → Technical → System Parameters → `wms_reports.health_token`**.)
+4. Verify: **<http://localhost:8069/wms/health?token=…>** → `HEALTHY` with a recent backup. (The token is auto-generated at install time; find it under **Settings → Technical → System Parameters → `wms_reports.health_token`**.)
 
 ---
 

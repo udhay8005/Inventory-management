@@ -86,6 +86,9 @@ A backup that has never been restored is not a backup. This SOP ties the three s
 2. Read the columns: **Event Time**, **Audit Type** (Database backup / Filestore backup / Restore drill / Staleness warning), **Name** (the filename or drill label), **Success** (green/red toggle), **Verified**, and **Size Mb** (with a total). Rows are red when `Success = false`, green when true.
 3. Use the search filters: **Failures only**, **Backups**, **Restore drills**, **Staleness warnings**, and group by Type or Outcome. The screen is append-only — you cannot create, edit, or delete rows here. As the screen's own note says: *"Rows here are written automatically by scripts/backup-native.ps1 and scripts/restore-drill.ps1 after each run."*
 
+### F. The cloud copy on Google Drive (see SOP 13)
+Once the one-time Drive connection is made, every backup above also gets a second, still-encrypted copy uploaded to the trust's Google Drive (`Inventory_Backups`, organised Year → Month → Day). Drive failures never fail the local backup — the upload is simply retried — and Drive problems can only make health DEGRADED, never CRITICAL. A keeper with the **"WMS / Can Run Backup Now"** capability can send an extra copy any time with one button. The whole cloud tier — Back Up Now, Drive health, the settings test buttons — is covered in SOP 13 (`13-cloud-backup.md`); the technical reference is `docs/22-gdrive-backup.md`.
+
 ## Worked Example
 A fresh install has never been backed up.
 
@@ -116,9 +119,9 @@ A fresh install has never been backed up.
 - **I want event-log alerts on Windows.** Register the source once as admin: `New-EventLog -LogName Application -Source 'WMS_Backup_Drill'`. Without it, the drill still writes its file log.
 
 ## Best Practices
-- **Automate both.** Schedule `backup-native.ps1` (e.g. nightly) and `restore-drill.ps1` (weekly) in Task Scheduler. The 24h / 7-day health thresholds assume that cadence.
+- **Automate both.** Schedule `backup-native.ps1` (e.g. daily at 4:30 PM — `scripts\install-backup-tasks.ps1` registers exactly that) and `restore-drill.ps1` (weekly) in Task Scheduler. The 24h / 7-day health thresholds assume that cadence.
 - **Store the passphrase off the server.** The `.gpg` files are useless without it; the server and the passphrase must not be lost together.
-- **Keep backups off-host too.** Copy `.gpg` artifacts to separate storage so a single drive failure doesn't take the backups with the server.
+- **Keep backups off-host too.** The built-in Google Drive tier does this automatically once connected (SOP 13); independent extra copies of the `.gpg` artifacts never hurt.
 - **Watch the Backup & DR Audit screen weekly.** Use the **Failures only** filter — any red row means a backup or drill failed and needs attention.
 - **Poll `/wms/health` from a monitor.** Turn "are we protected?" into an automatic alert rather than a thing someone has to remember.
 - **Do a full restore drill periodically** (`-DryRun:$false`), not just the TOC check, so you've proven an end-to-end recovery — and never against production.
@@ -128,8 +131,10 @@ A fresh install has never been backed up.
 - `what-is-a-backup`
 - `what-is-a-restore-drill`
 - `what-is-a-health-check`
+- `what-is-cloud-backup`
 - `workflow-backup-verification`
 - `workflow-restore-drill`
+- `workflow-cloud-backup-now`
 - `admin-path-backups-and-restore-drill`
 - `admin-path-observability-health`
 

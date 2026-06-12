@@ -580,7 +580,7 @@ never fails the daily task.
 - **Set** => off-site copy runs as described above.
 
 > **CRITICAL — SYSTEM-principal caveat.** `install-backup-tasks.ps1` registers
-> both tasks under **`NT AUTHORITY\SYSTEM`** (LogonType `ServiceAccount`,
+> all three tasks under **`NT AUTHORITY\SYSTEM`** (LogonType `ServiceAccount`,
 > RunLevel `Highest`, `-StartWhenAvailable`, `ExecutionTimeLimit=2h`,
 > `MultipleInstances=IgnoreNew`) so the daily backup fires even when nobody is
 > logged in. That means **`BACKUP_OFFSITE_DIR` must be reachable by SYSTEM**.
@@ -590,18 +590,29 @@ never fails the daily task.
 > `scripts\backup-native.ps1`) or by triggering the daily task from Task
 > Scheduler and inspecting **Last Run Result** + the audit table.
 
+### Step 0.5 — Optional: Google Drive off-site (cloud tier)
+Beyond `BACKUP_OFFSITE_DIR`, the WMS can upload every encrypted backup set to
+Google Drive (`drive.file` minimal scope, upload verified via Drive's
+`sha256Checksum`, tiered retention). One-time setup: create the GCP OAuth
+Desktop client, put `GDRIVE_CLIENT_ID` / `GDRIVE_CLIENT_SECRET` in `.env`, then
+run `scripts\setup-gdrive-auth.ps1` once (browser consent). Like the off-site
+copy, the Drive stage is failure-safe — a Drive error never fails the local
+backup. Full walkthrough: [22-gdrive-backup.md](22-gdrive-backup.md).
+
 ### 1 — Install the scheduled backup tasks
 ```powershell
 # Admin PowerShell. Approve UAC.
 scripts\install-backup-tasks.ps1
 ```
-Registers two Windows Scheduled Tasks (principal `NT AUTHORITY\SYSTEM`,
+Registers three Windows Scheduled Tasks (principal `NT AUTHORITY\SYSTEM`,
 `LogonType=ServiceAccount`, `RunLevel=Highest`, `-StartWhenAvailable`,
 `ExecutionTimeLimit=2h`, `MultipleInstances=IgnoreNew`):
-- **WMS Daily Backup** — every day 13:00 → encrypted DB dump + filestore zip into
-  `.\backups\`, with retention.
+- **WMS Daily Backup** — every day 16:30 (4:30 PM; override with `-BackupAt`) →
+  encrypted DB dump + filestore zip into `.\backups\`, with retention.
 - **WMS Weekly Restore Drill** — Sundays 03:00 → decrypts + structurally verifies
   the latest backup **without touching production**.
+- **WMS Manual Backup** — no schedule; run on demand by the in-app **Backup Now**
+  wizard (via `schtasks /Run`). Same pipeline as the daily task.
 
 ### 2 — Verify backups
 ```powershell
