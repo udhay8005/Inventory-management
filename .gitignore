@@ -17,3 +17,6 @@ backups/
 .venv/
 .runtime/
 config/odoo.native.conf
+
+# Google Drive OAuth token blob (created by scripts/setup-gdrive-auth.ps1)
+config/gdrive-token.json.dpapi

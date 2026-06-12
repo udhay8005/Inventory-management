@@ -98,6 +98,19 @@ jobs:
           done
           echo "✔ All XML files parse cleanly."
 
+      - name: PowerShell syntax check (scripts/*.ps1)
+        # PowerShell 7 (pwsh, preinstalled on ubuntu runners) parses the
+        # PS 5.1-compatible scripts fine for syntax purposes.
+        shell: pwsh
+        run: |
+          $bad = @()
+          Get-ChildItem scripts -Filter *.ps1 | ForEach-Object {
+            $t=$null;$e=$null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$t,[ref]$e)|Out-Null
+            if ($e) { $bad += "$($_.Name): $($e[0].Message)" } }
+          if ($bad) { $bad | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
+          Write-Host "All PowerShell scripts in scripts/ parse cleanly."
+
   # -------------------------------------------------------------------------
   # 2) Security scan — bandit (Python) + pip-audit (deps).
   # -------------------------------------------------------------------------
