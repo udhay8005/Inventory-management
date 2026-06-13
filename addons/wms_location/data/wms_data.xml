@@ -52,5 +52,22 @@
         -->
         <function model="ir.config_parameter" name="set_param"
                   eval="['auth_signup.invitation_scope', 'b2b']"/>
+
+        <!--
+            Global fallback for the F4 "min re-request interval" guard.
+            When a product leaves wms_min_life_days at 0 (its default for
+            most kinds), Scan Issue falls back to this System Parameter to
+            decide whether the SAME department asked for the SAME product
+            too soon. 0 (the seeded default) means the guard is OFF
+            globally — a manager raises it (e.g. to 3) in Settings ->
+            Technical -> System Parameters when they want a trust-wide
+            floor without touching every product. Read with
+            env['ir.config_parameter'].sudo().get_param(
+                'wms_location.default_min_life_days', '0').
+            Seeded via set_param (idempotent upsert) so a re-install never
+            clobbers a manager's tuned value.
+        -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="['wms_location.default_min_life_days', '0']"/>
     </data>
 </odoo>

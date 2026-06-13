@@ -15,6 +15,7 @@ from . import (
     test_low_stock_alert,
     test_quantity_integrity,
     test_rack_grid,
+    test_returns_due,
     test_self_diagnostics,
     test_value_dimensions,
     test_value_reports,

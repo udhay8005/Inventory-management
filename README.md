@@ -22,7 +22,9 @@ Runs **natively on Windows** — no Docker required.
 - 🖥 **Executive Dashboard** at `/wms/dashboard` — one manager-only screen: health, stock totals, attention badges, today's activity
 - 🔎 **Smart Find** at `/wms/find` — type a name / SKU / barcode → slot + qty, or tap a chip ("low stock", "expiring", "dead stock", "damaged", "under repair")
 - 💰 **Cost / value reports** — Stock Value, Consumption Value (broken down by purpose: Cows / Pooja / Maintenance / …), Product Lifecycle, plus value-at-risk on Expiry / Damage / Dead Stock
-- 🎯 **Issued-for classification** — every Scan Issue tags purpose (Cows / Pooja / Maintenance / Project / Administration / Other), driving consumption-by-purpose pivots
+- 🎯 **Issue dimensions** — every Scan Issue captures a configurable **Department** (Gaushala / Veterinary / Dairy / Fodder / …), an optional **Purpose** and **Animal/cow**, driving consumption-by-department pivots (the legacy *Issued for* tag is auto-derived for back-compat)
+- 🔒 **Issue approvals** — a min-life re-request guard (same department, same product, too soon) and a configurable high-value threshold route an issue to a manager-only **Approvals** queue; the keeper types a reason but cannot self-approve, and approval re-checks stock before issuing
+- ↩️ **Returnable items** — tools / spares can be marked returnable with an expected-return period; a daily alert + **Returns-due report** surface overdue items, and Scan Return clears them
 - 🔔 **Alert hardening** — low-stock / expiry / backup-stale / restore-fail / health-CRITICAL alerts delivered to every WMS Manager's Discuss Inbox (via `message_notify`), with optional email via `wms_reports.alert_email`
 - ↩️ **One-click Undo** within a configurable window (default 15 min) — compensating internal transfer, no deletes
 - 🧪 **One-button Self-Diagnostics** — DB / backup-file / disk / duplicate-SKU / orphan-slot / negative-stock probes in one screen
@@ -197,6 +199,10 @@ Architecture, design notes, and operational guides:
 - [`docs/PRODUCTION-READINESS-v19.0.5.md`](docs/PRODUCTION-READINESS-v19.0.5.md) — historical sign-off record (v19.0.5)
 - [`docs/RUN-AS-SERVICE.md`](docs/RUN-AS-SERVICE.md) — run Odoo as an auto-starting Windows service
 - [`docs/LABEL-PRINTING.md`](docs/LABEL-PRINTING.md) — thermal 4×1 labels + printer gap calibration
+- [`docs/ISSUE-DIMENSIONS.md`](docs/ISSUE-DIMENSIONS.md) — Department / Purpose / Animal on every Scan Issue + consumption-by-department
+- [`docs/UOM-BY-KIND.md`](docs/UOM-BY-KIND.md) — product Kind sets the base unit at onboarding (fluid → Litre, feed → kg, else Units)
+- [`docs/RETURNABLE-ITEMS.md`](docs/RETURNABLE-ITEMS.md) — returnable items, expected-return SLA, overdue alert + Returns-due report
+- [`docs/ISSUE-APPROVALS.md`](docs/ISSUE-APPROVALS.md) — min-life re-request guard + high-value threshold → manager-only Approvals queue
 
 ## Mobile access (phones / tablets / off-site)
 

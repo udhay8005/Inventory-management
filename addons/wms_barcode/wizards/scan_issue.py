@@ -1,4 +1,4 @@
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -112,11 +112,50 @@ class WmsScanIssue(models.TransientModel):
         WMS_ISSUED_FOR_SELECTION,
         string="Issued for",
         default="other",
-        help="Which part of the trust is consuming this stock. The free-text "
-        "note above says WHY; this structured choice lets the Consumption "
-        "Value report total spend by purpose (Cows, Pooja, Maintenance, ...). "
-        "Defaults to Other so existing flows are never blocked.",
+        help="Legacy structured purpose. Now derived from the Department on "
+        "validate (department.legacy_issued_for) so old reports/searches keep "
+        "working; the Department field below is the primary capture. Hidden in "
+        "the form, kept on the model for the derivation fallback.",
     )
+
+    # ---- Issue dimensions (F1) -------------------------------------------
+    # Structured Department / Purpose / Animal. Department is required (the
+    # seeded 'Other' department is the default so the wizard is never
+    # blocked — mirrors the old issued_for='other' default); Purpose and
+    # Animal are optional. Copied onto the resulting picking at validate.
+    department_id = fields.Many2one(
+        "wms.department",
+        string="Department",
+        required=True,
+        default=lambda s: s._default_department_id(),
+        help="Which department / cost centre is consuming this stock "
+        "(Gaushala, Veterinary, Dairy, ...). Defaults to 'Other' so an issue "
+        "is never blocked. Drives the Consumption Value report breakdown and "
+        "the legacy 'Issued for' column.",
+    )
+    purpose_id = fields.Many2one(
+        "wms.purpose",
+        string="Purpose / reason",
+        help="The structured reason for this issue (routine feed, treatment, "
+        "repair, ...). Optional — the free-text note above always captures the "
+        "detail.",
+    )
+    animal_id = fields.Many2one(
+        "wms.animal",
+        string="Animal / cow",
+        help="The specific animal this issue is for, when it applies "
+        "(e.g. a treatment for a named cow). Optional.",
+    )
+
+    @api.model
+    def _default_department_id(self):
+        """Default to the seeded 'Other' department so the wizard is never
+        blocked (mirrors the legacy ``issued_for`` default of ``'other'``).
+
+        Returns an empty recordset if the WMS data file hasn't loaded yet
+        (e.g. mid-install); the operator then picks a department manually.
+        """
+        return self.env.ref("wms_location.dept_other", raise_if_not_found=False)
 
     # Photo capture. Binary + widget="image" gives mobile browsers an
     # <input type="file" accept="image/*" capture="environment"> which
@@ -132,18 +171,60 @@ class WmsScanIssue(models.TransientModel):
         help="Shown when the planned product is measured by weight or volume (liters, kg, m³, etc.) — a photo is required before the issue can be validated.",
     )
 
+    # ---- Manager-approval gate (F4 + F5) ---------------------------------
+    # When a planned issue is high-value (F5) or re-requests a product the
+    # same department took too recently (F4), it can't go through inline —
+    # the keeper must type a justification and it routes to a Manager. The
+    # reason box is hidden until ``needs_approval`` is True (a lightweight
+    # pre-check run when the plan is built); the HARD gate re-checks inside
+    # the per-product lock in action_validate.
+    keeper_reason = fields.Text(
+        string="Reason for the Manager",
+        help="Only needed when this issue is held for approval (high value, "
+        "or the same department requested this item too recently). Explain "
+        "why it should still go through; a Manager reviews it before any "
+        "stock moves.",
+    )
+    needs_approval = fields.Boolean(
+        compute="_compute_needs_approval",
+        help="True when the current plan would be held for a Manager's "
+        "approval (high value or requested too soon). Drives whether the "
+        "reason box is shown.",
+    )
+
+    @api.depends(
+        "plan_line_ids.product_id",
+        "plan_line_ids.take",
+        "department_id",
+    )
+    def _compute_needs_approval(self):
+        """Lightweight, NON-locking pre-check so the reason box appears
+        proactively. The authoritative gate still runs inside the
+        per-product FOR UPDATE lock in action_validate."""
+        for wiz in self:
+            if not wiz._approval_gate_enabled():
+                wiz.needs_approval = False
+                continue
+            wiz.needs_approval = bool(wiz._check_high_value() or wiz._check_min_life()[0])
+
     @api.depends("plan_line_ids.product_id")
     def _compute_photo_required(self):
-        # UoM whose category != 'Units' (i.e. measured, not counted).
-        unit_cat = self.env.ref("uom.product_uom_categ_unit", raise_if_not_found=False)
+        # A product is "measured" (issued by weight / volume / length, e.g.
+        # Litre / kg / Metre) when its UoM is NOT the Units UoM. Counted
+        # Units items stay photo-free.
+        #
+        # Why not category_id != Units category? Odoo 19 CE dropped UoM
+        # categories — ``uom.product_uom_categ_unit`` resolves to None — so
+        # the old category test was always falsy and the photo gate was
+        # INERT (no measured product ever required a photo). Comparing the
+        # UoM record directly against ``uom.product_uom_unit`` restores the
+        # gate: a Litre / kg / Metre product requires a photo again, while a
+        # Units product does not.
+        units_uom = self.env.ref("uom.product_uom_unit", raise_if_not_found=False)
         for wiz in self:
             wiz.photo_required = (
-                any(
-                    ln.product_id.uom_id.category_id != unit_cat
-                    for ln in wiz.plan_line_ids
-                    if ln.product_id
-                )
-                if unit_cat
+                any(ln.product_id.uom_id != units_uom for ln in wiz.plan_line_ids if ln.product_id)
+                if units_uom
                 else False
             )
 
@@ -254,6 +335,201 @@ class WmsScanIssue(models.TransientModel):
                             cap_daily,
                         )
                     )
+
+    # ---- Returnable items (F3) ----------------------------------------------
+    def _expected_return_date(self):
+        """Compute the expected-return date for this issue, or False.
+
+        Returnable items are expected back within an SLA: today + the
+        product's ``expected_return_days``, falling back to the global
+        System Parameter ``wms_reports.default_return_days`` when the
+        product leaves it at 0. When more than one returnable product is
+        planned we take the LONGEST per-product window so the alert never
+        fires early on the slowest item.
+
+        Returns a ``date`` when at least one planned product is
+        returnable, or False otherwise (a non-returnable issue carries no
+        expected-return date). Advisory only — never blocks the issue.
+        """
+        self.ensure_one()
+        returnable = self.plan_line_ids.filtered(
+            lambda ln: ln.product_id and ln.product_id.wms_is_returnable
+        )
+        if not returnable:
+            return False
+        try:
+            fallback = int(
+                self.env["ir.config_parameter"]
+                .sudo()
+                .get_param("wms_reports.default_return_days", "7")
+                or 0
+            )
+        except (TypeError, ValueError):
+            fallback = 7
+        days = max((ln.product_id.expected_return_days or fallback) for ln in returnable)
+        if days <= 0:
+            return False
+        from datetime import timedelta
+
+        return fields.Date.context_today(self) + timedelta(days=days)
+
+    # ---- Manager-approval gate (F4 + F5) ---------------------------------
+    def _approval_gate_enabled(self):
+        """Master switch. ``wms_barcode.issue_approval_enabled`` != '1'
+        bypasses the whole gate (issues validate inline as before) — a cheap
+        early-exit, like ``wms_location.enforce_capacity``."""
+        return (
+            self.env["ir.config_parameter"]
+            .sudo()
+            .get_param("wms_barcode.issue_approval_enabled", "1")
+            == "1"
+        )
+
+    def _check_high_value(self):
+        """F5 — True when the planned issue's total value exceeds the
+        high-value threshold.
+
+        Value = sum(take x standard_price). Python's ``standard_price``
+        resolves the company automatically. A non-numeric / missing
+        threshold is treated as disabled (try/except → 0), never a crash.
+        """
+        self.ensure_one()
+        if not self.plan_line_ids:
+            return False
+        try:
+            threshold = float(
+                self.env["ir.config_parameter"]
+                .sudo()
+                .get_param("wms_barcode.high_value_threshold", "5000")
+                or 0
+            )
+        except (TypeError, ValueError):
+            return False  # bad param value → gate disabled, no crash
+        if threshold <= 0:
+            return False
+        return self._issue_value() > threshold
+
+    def _issue_value(self):
+        """Frozen-at-call total value of the current plan."""
+        self.ensure_one()
+        return sum(
+            line.take * (line.product_id.standard_price or 0.0) for line in self.plan_line_ids
+        )
+
+    def _check_min_life(self):
+        """F4 — has the SAME department issued the SAME product within its
+        minimum re-request interval?
+
+        Per planned product: window = product.wms_min_life_days, or the
+        global ``wms_location.default_min_life_days`` fallback when the
+        product leaves it at 0. window <= 0 means no guard. If a done Scan
+        Issue done move-line for this department + product exists inside the
+        window (same shape as ``_enforce_overuse_caps``; race-safe inside
+        the per-product lock), the guard trips.
+
+        Returns ``(tripped, product, last_date)``. ``getattr`` guards the
+        product field so this never crashes if the wms_location side hasn't
+        loaded yet (defensive — the field is shipped there by the contract).
+        """
+        self.ensure_one()
+        if not (self.plan_line_ids and self.department_id):
+            return (False, self.env["product.product"], False)
+        try:
+            global_default = int(
+                self.env["ir.config_parameter"]
+                .sudo()
+                .get_param("wms_location.default_min_life_days", "0")
+                or 0
+            )
+        except (TypeError, ValueError):
+            global_default = 0
+
+        from datetime import datetime, timedelta
+
+        now = datetime.now()
+        # One product per planned product (FEFO can split across siblings).
+        products = self.plan_line_ids.mapped("product_id")
+        for product in products:
+            window = getattr(product, "wms_min_life_days", 0) or global_default
+            if window <= 0:
+                continue
+            cutoff = now - timedelta(days=window)
+            line = (
+                self.env["stock.move.line"]
+                .sudo()
+                .search(
+                    [
+                        ("product_id", "=", product.id),
+                        ("state", "=", "done"),
+                        ("create_date", ">=", cutoff),
+                        ("picking_id.wms_is_scan_issue", "=", True),
+                        ("picking_id.wms_department_id", "=", self.department_id.id),
+                    ],
+                    order="create_date desc",
+                    limit=1,
+                )
+            )
+            if line:
+                return (True, product, line.create_date)
+        return (False, self.env["product.product"], False)
+
+    def _create_approval(self, reason_high_value, reason_min_life, min_life_product, min_life_date):
+        """Snapshot the held request onto a persistent ``wms.issue.approval``
+        in state ``pending``. NOTHING is issued — a Manager replays it later.
+
+        ``issue_value`` is FROZEN here, never recomputed (FPAT lesson)."""
+        self.ensure_one()
+        line_vals = [
+            (
+                0,
+                0,
+                {
+                    "product_id": line.product_id.id,
+                    "location_id": line.location_id.id,
+                    "quant_id": line.quant_id.id,
+                    "take": line.take,
+                    "expiry_date": line.expiry_date,
+                },
+            )
+            for line in self.plan_line_ids
+        ]
+        approval = self.env["wms.issue.approval"].create(
+            {
+                "state": "pending",
+                "reason_high_value": reason_high_value,
+                "reason_min_life": reason_min_life,
+                "issue_value": self._issue_value(),
+                "keeper_reason": self.keeper_reason,
+                "min_life_product_id": min_life_product.id if min_life_product else False,
+                "min_life_last_date": min_life_date or False,
+                "warehouse_id": self.warehouse_id.id,
+                "destination_id": self.destination_id.id,
+                "department_id": self.department_id.id,
+                "purpose_id": self.purpose_id.id or False,
+                "animal_id": self.animal_id.id or False,
+                "taken_by": (self.taken_by or "").strip(),
+                "ordered_by": (self.ordered_by or "").strip(),
+                "storekeeper_id": self.storekeeper_id.id,
+                "usage_note": self.usage_note,
+                "expected_return_date": self._expected_return_date() or False,
+                "photo": self.photo,
+                "line_ids": line_vals,
+            }
+        )
+        approval.notify_managers_held()
+        return approval
+
+    def _open_approval(self, approval):
+        """Open the held approval read-only so the keeper sees it went to a
+        Manager (the keeper ACL is read+create only — no Approve button)."""
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Issue held for approval",
+            "res_model": "wms.issue.approval",
+            "res_id": approval.id,
+            "view_mode": "form",
+        }
 
     def action_plan(self):
         self.ensure_one()
@@ -414,108 +690,74 @@ class WmsScanIssue(models.TransientModel):
         # Now race-safe: it runs inside the per-product lock above.
         self._enforce_overuse_caps()
 
-        # Pick a picking type via warehouse-level m2o so we don't get bitten
-        # by Odoo 19 archiving the internal type for 1-step warehouses.
-        if self.destination_id.usage == "customer":
-            picking_type = self.warehouse_id.out_type_id
-        else:
-            picking_type = self.warehouse_id.int_type_id
-        if not picking_type:
-            raise UserError(
-                "Warehouse %s isn't set up to issue stock this way. Ask "
-                "a Manager to check the warehouse settings in Odoo and "
-                "enable the right operation type." % self.warehouse_id.display_name
-            )
-        if not picking_type.active:
-            picking_type.sudo().active = True
+        # ---- Manager-approval gate (F4 + F5) --------------------------------
+        # Inside the per-product lock (after the hard caps) so the min-life
+        # query is race-safe, exactly like _enforce_overuse_caps. The master
+        # switch lets the whole gate be turned off cheaply. When tripped, the
+        # request is SNAPSHOTTED to a persistent wms.issue.approval (pending)
+        # and NOTHING is issued — a Manager replays it later. Hard caps stay
+        # HARD blocks above; this is the new SOFT (reason + approval) path.
+        if self._approval_gate_enabled():
+            high_value = self._check_high_value()
+            min_life, ml_product, ml_date = self._check_min_life()
+            if high_value or min_life:
+                if not (self.keeper_reason or "").strip():
+                    raise UserError(
+                        "This issue needs a Manager's approval "
+                        "(it's high value, or your department requested this "
+                        "item too recently). Type the reason in the "
+                        "'Reason for the Manager' box below and submit again — "
+                        "it will be sent to a Manager to approve. No stock has "
+                        "moved."
+                    )
+                approval = self._create_approval(
+                    reason_high_value=high_value,
+                    reason_min_life=min_life,
+                    min_life_product=ml_product,
+                    min_life_date=ml_date,
+                )
+                # Do NOT create the picking — a Manager replays it on approve.
+                return self._open_approval(approval)
+
+        # Returnable items (F3): when any planned product is returnable,
+        # stamp the date it's expected back so the overdue-returns alert
+        # and the Returns-due report can track it. wms_returned stays at
+        # its False default until Scan Return marks it back in.
+        expected_return_date = self._expected_return_date()
 
         # Group plan lines by source so we make one move per (product, source).
-        picking = self.env["stock.picking"].create(
-            {
-                "picking_type_id": picking_type.id,
-                "location_id": self.warehouse_id.lot_stock_id.id,
-                "location_dest_id": self.destination_id.id,
-                "origin": "Barcode FIFO issue",
-                # Immutable marker the 24h daily-cap counter filters on
-                # (robust replacement for matching the origin string).
-                "wms_is_scan_issue": True,
-                # Audit-trail fields — who took it, who authorised it,
-                # which keeper was on duty.
+        # Normalise the plan into the shared (product, [(quant, take)]) shape
+        # the helper consumes — the SAME shape action_approve re-plans into.
+        replanned = []
+        for product in self.plan_line_ids.mapped("product_id"):
+            pairs = [
+                (line.quant_id, line.take)
+                for line in self.plan_line_ids
+                if line.product_id == product
+            ]
+            replanned.append((product, pairs))
+
+        picking = self._build_issue_picking(
+            warehouse=self.warehouse_id,
+            destination=self.destination_id,
+            replanned=replanned,
+            origin="Barcode FIFO issue",
+            audit_vals={
                 "wms_taken_by": (self.taken_by or "").strip(),
                 "wms_ordered_by": (self.ordered_by or "").strip(),
                 "wms_storekeeper_id": self.storekeeper_id.id,
-                "wms_issued_for": self.issued_for,
-            }
+                "wms_department_id": self.department_id.id,
+                "wms_purpose_id": self.purpose_id.id or False,
+                "wms_animal_id": self.animal_id.id or False,
+                "wms_issued_for": self.department_id.legacy_issued_for
+                or self.issued_for
+                or "other",
+                "wms_expected_return_date": expected_return_date,
+            },
+            usage_note=self.usage_note,
         )
-        for line in self.plan_line_ids:
-            move = self.env["stock.move"].create(
-                {
-                    "description_picking": line.product_id.display_name,
-                    "product_id": line.product_id.id,
-                    "product_uom_qty": line.take,
-                    "product_uom": line.product_id.uom_id.id,
-                    "picking_id": picking.id,
-                    "location_id": line.location_id.id,
-                    "location_dest_id": self.destination_id.id,
-                }
-            )
-            move._action_confirm()
-        picking.action_assign()
-        # ---- Concurrency safety: only issue what we could actually reserve --
-        # action_assign reserves against LIVE quants (Odoo row-locks them).
-        # If another keeper emptied a planned slot between planning and now,
-        # the move won't be fully assigned. Abort cleanly — raising here rolls
-        # back the whole transaction (no half-made picking, no negative stock)
-        # — instead of blindly forcing the line quantity and deducting stock
-        # that isn't on the shelf.
-        unassigned = picking.move_ids.filtered(lambda m: m.state != "assigned")
-        if unassigned:
-            raise UserError(
-                "Another keeper took some of this stock while you were "
-                "finishing up, so it can no longer be issued in full. "
-                "Nothing was issued. Please scan again to plan against "
-                "what's left on the shelf."
-            )
-        for move in picking.move_ids:
-            for ml in move.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or move.product_uom_qty
-                # FPAT High: snapshot unit cost ONTO the move line so the
-                # Consumption Value report reads a frozen number. The previous
-                # view joined to live product.standard_price which retroactively
-                # rewrote past months when the cost changed.
-                ml.wms_unit_cost_at_done = ml.product_id.standard_price or 0.0
-        picking.button_validate()
         # Record the picking so a re-submit is a no-op (idempotency guard).
         self.picking_id = picking.id
-
-        # Audit-trail message. Goes into the picking's history so the
-        # Admin can scroll back through it later. Includes the Odoo
-        # login (env.user) too — the on-duty roster name covers the
-        # actual human; the login records which Odoo account was used.
-        # Markup() so Odoo 19 renders the HTML instead of escaping it.
-        audit_body = Markup(
-            "<p><b>Issued.</b> "
-            "Taken by <b>%s</b>; ordered by <b>%s</b>; "
-            "Store Keeper on duty: <b>%s</b>; "
-            "logged in as: <b>%s</b>.</p>"
-            "<p><b>Reason / usage note:</b><br/>%s</p>"
-        ) % (
-            picking.wms_taken_by or "(unspecified)",
-            picking.wms_ordered_by or "(unspecified)",
-            picking.wms_storekeeper_id.name or "(unknown)",
-            self.env.user.display_name or "(system)",
-            (self.usage_note or "").replace("\n", "<br/>") or "(missing — should never happen)",
-        )
-        picking.message_post(
-            body=audit_body,
-            subject="Issue audit",
-            message_type="notification",
-        )
-        # Copy usage_note onto the picking's `note` so it shows up in
-        # the form view, not just the chatter.
-        if "note" in picking._fields:
-            picking.note = self.usage_note
 
         # Attach the photo (if any) so it's visible from the picking's
         # history and survives in the audit trail. We always store it
@@ -545,6 +787,148 @@ class WmsScanIssue(models.TransientModel):
             )
 
         return self._open_picking()
+
+    @api.model
+    def _build_issue_picking(
+        self, warehouse, destination, replanned, origin, audit_vals, usage_note
+    ):
+        """Create + validate the outbound picking for a Scan Issue.
+
+        Shared by BOTH the inline auto-allow path (action_validate) and the
+        deferred approval path (wms.issue.approval.action_approve), so the
+        move/assign/validate/cost-snapshot/chatter logic lives in ONE place.
+
+        :param warehouse: the stock.warehouse to issue from.
+        :param destination: the destination stock.location.
+        :param replanned: a list of ``(product, [(quant, take), ...])`` —
+            one entry per product, each with the source quant(s) and qty.
+            The source location is read from each quant.
+        :param origin: the picking origin. MUST start ``'Barcode'`` so the
+            audit-triplet DB CHECK + @api.constrains fire and enforce
+            wms_storekeeper_id — both the inline and the approved origins do.
+        :param audit_vals: dict of wms_* audit fields written onto the
+            picking create dict (wms_taken_by / wms_ordered_by /
+            wms_storekeeper_id / dimensions / wms_issued_for /
+            wms_expected_return_date).
+        :param usage_note: the reason/usage note for the chatter + note.
+        :returns: the validated stock.picking.
+
+        Preserves the original inline behaviour exactly: the
+        wms_is_scan_issue marker, the not-fully-assigned abort (no
+        half-picking / no negative stock), and the frozen
+        wms_unit_cost_at_done snapshot onto each move line.
+        """
+        # Pick a picking type via warehouse-level m2o so we don't get bitten
+        # by Odoo 19 archiving the internal type for 1-step warehouses.
+        if destination.usage == "customer":
+            picking_type = warehouse.out_type_id
+        else:
+            picking_type = warehouse.int_type_id
+        if not picking_type:
+            raise UserError(
+                "Warehouse %s isn't set up to issue stock this way. Ask "
+                "a Manager to check the warehouse settings in Odoo and "
+                "enable the right operation type." % warehouse.display_name
+            )
+        if not picking_type.active:
+            picking_type.sudo().active = True
+
+        picking_vals = {
+            "picking_type_id": picking_type.id,
+            "location_id": warehouse.lot_stock_id.id,
+            "location_dest_id": destination.id,
+            "origin": origin,
+            # Immutable marker the 24h daily-cap counter filters on
+            # (robust replacement for matching the origin string).
+            "wms_is_scan_issue": True,
+        }
+        picking_vals.update(audit_vals or {})
+        picking = self.env["stock.picking"].create(picking_vals)
+
+        # One move per (product, source slot).
+        for product, pairs in replanned:
+            for quant, take in pairs:
+                move = self.env["stock.move"].create(
+                    {
+                        "description_picking": product.display_name,
+                        "product_id": product.id,
+                        "product_uom_qty": take,
+                        "product_uom": product.uom_id.id,
+                        "picking_id": picking.id,
+                        "location_id": quant.location_id.id,
+                        "location_dest_id": destination.id,
+                    }
+                )
+                move._action_confirm()
+        picking.action_assign()
+        # ---- Concurrency safety: only issue what we could actually reserve --
+        # action_assign reserves against LIVE quants (Odoo row-locks them).
+        # If another keeper emptied a planned slot between planning and now,
+        # the move won't be fully assigned. Abort cleanly — raising here rolls
+        # back the whole transaction (no half-made picking, no negative stock)
+        # — instead of blindly forcing the line quantity and deducting stock
+        # that isn't on the shelf.
+        unassigned = picking.move_ids.filtered(lambda m: m.state != "assigned")
+        if unassigned:
+            raise UserError(
+                "Another keeper took some of this stock while you were "
+                "finishing up, so it can no longer be issued in full. "
+                "Nothing was issued. Please scan again to plan against "
+                "what's left on the shelf."
+            )
+        for move in picking.move_ids:
+            for ml in move.move_line_ids:
+                if not ml.quantity:
+                    ml.quantity = ml.quantity_product_uom or move.product_uom_qty
+                # FPAT High: snapshot unit cost ONTO the move line so the
+                # Consumption Value report reads a frozen number. The previous
+                # view joined to live product.standard_price which retroactively
+                # rewrote past months when the cost changed.
+                ml.wms_unit_cost_at_done = ml.product_id.standard_price or 0.0
+        picking.button_validate()
+
+        # Audit-trail message. Goes into the picking's history so the
+        # Admin can scroll back through it later. Includes the Odoo
+        # login (env.user) too — the on-duty roster name covers the
+        # actual human; the login records which Odoo account was used.
+        # Markup() so Odoo 19 renders the HTML instead of escaping it.
+        # Issue dimensions for the audit trail. Department/Purpose/Animal
+        # names are admin-seeded, but escape() defensively so a stray HTML
+        # character in a renamed record can never break the chatter markup.
+        dims_body = Markup(
+            "<p><b>Department:</b> %s; <b>Purpose:</b> %s; <b>Animal:</b> %s.</p>"
+        ) % (
+            escape(picking.wms_department_id.name or "(unspecified)"),
+            escape(picking.wms_purpose_id.name or "(none)"),
+            escape(picking.wms_animal_id.name or "(none)"),
+        )
+        audit_body = (
+            Markup(
+                "<p><b>Issued.</b> "
+                "Taken by <b>%s</b>; ordered by <b>%s</b>; "
+                "Store Keeper on duty: <b>%s</b>; "
+                "logged in as: <b>%s</b>.</p>"
+            )
+            % (
+                picking.wms_taken_by or "(unspecified)",
+                picking.wms_ordered_by or "(unspecified)",
+                picking.wms_storekeeper_id.name or "(unknown)",
+                self.env.user.display_name or "(system)",
+            )
+            + dims_body
+            + Markup("<p><b>Reason / usage note:</b><br/>%s</p>")
+            % ((usage_note or "").replace("\n", "<br/>") or "(missing — should never happen)")
+        )
+        picking.message_post(
+            body=audit_body,
+            subject="Issue audit",
+            message_type="notification",
+        )
+        # Copy usage_note onto the picking's `note` so it shows up in
+        # the form view, not just the chatter.
+        if "note" in picking._fields:
+            picking.note = usage_note
+        return picking
 
     def _open_picking(self):
         """Open the delivery this issue created (also the no-op target a

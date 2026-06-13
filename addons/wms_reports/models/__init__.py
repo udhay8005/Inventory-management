@@ -9,6 +9,7 @@ from . import (
     wms_oldest_stock_report,
     wms_product_stock_report,
     wms_reorder_summary,
+    wms_returns_due,
     wms_self_diagnostics,
     wms_stock_alert,
     wms_storekeeper_activity,

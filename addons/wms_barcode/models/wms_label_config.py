@@ -1,6 +1,14 @@
 import base64
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
+
+# Scannability floor for a Code128 barcode printed at 203 DPI (1 dot =
+# 0.125 mm). A barcode box narrower than ~40 mm or shorter than ~8 mm starts
+# to drop below the bar-width / height a Helett HT20pro can read reliably off
+# the True-Ally sticker, so the form rejects it before a roll is wasted.
+MIN_BARCODE_WIDTH_MM = 40.0
+MIN_BARCODE_HEIGHT_MM = 8.0
 
 
 class WmsLabelConfig(models.Model):
@@ -93,6 +101,36 @@ class WmsLabelConfig(models.Model):
     barcode_height_mm = fields.Float(string="Barcode height (mm)", default=12.0)
     show_human_readable = fields.Boolean(string="Show the number below the bars", default=True)
     human_readable_size_pt = fields.Float(string="Number font size (pt)", default=6.0)
+
+    @api.constrains("barcode_width_mm", "barcode_height_mm")
+    def _check_barcode_scannable(self):
+        """Keep the barcode box big enough for a 203 DPI scan.
+
+        A Code128 barcode shrinks its bar widths to fit the box; below ~40 mm
+        wide or ~8 mm tall the narrowest bars fall under what the trust's
+        Helett HT20pro reads dependably off the printed sticker. Reject the
+        save up front rather than print a roll of dead labels. (The shipped
+        default of 74 x 12 mm clears both floors comfortably.)
+        """
+        for cfg in self:
+            if cfg.barcode_width_mm < MIN_BARCODE_WIDTH_MM:
+                raise ValidationError(
+                    _(
+                        "Barcode width is %(value).1f mm; it must be at least "
+                        "%(floor).1f mm so the Code128 bars stay scannable at "
+                        "203 DPI. The default is 74 mm."
+                    )
+                    % {"value": cfg.barcode_width_mm, "floor": MIN_BARCODE_WIDTH_MM}
+                )
+            if cfg.barcode_height_mm < MIN_BARCODE_HEIGHT_MM:
+                raise ValidationError(
+                    _(
+                        "Barcode height is %(value).1f mm; it must be at least "
+                        "%(floor).1f mm so the Code128 bars stay scannable at "
+                        "203 DPI. The default is 12 mm."
+                    )
+                    % {"value": cfg.barcode_height_mm, "floor": MIN_BARCODE_HEIGHT_MM}
+                )
 
     @api.model
     def get_active(self):

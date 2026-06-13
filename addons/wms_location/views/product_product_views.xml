@@ -44,6 +44,8 @@
                             <field name="wms_product_kind"
                                    options="{'no_create': True, 'no_create_edit': True}"/>
                             <field name="wms_is_returnable" widget="boolean_toggle"/>
+                            <field name="expected_return_days"
+                                   invisible="not wms_is_returnable"/>
                         </group>
                         <div class="alert alert-info">
                             <b>WMS Kind</b> drives the default returnability and is shown in
@@ -143,6 +145,7 @@
                         <group string="Usage limits (0 = no cap)">
                             <field name="wms_max_per_issue"/>
                             <field name="wms_daily_cap"/>
+                            <field name="wms_min_life_days"/>
                         </group>
                         <div class="alert alert-info" role="alert"
                              invisible="not wms_product_kind">

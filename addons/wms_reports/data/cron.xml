@@ -177,5 +177,26 @@
             <field name="nextcall"
                    eval="(DateTime.now() + timedelta(hours=1)).replace(minute=45, second=0)"/>
         </record>
+
+        <!--
+            Daily 08:30 overdue-returns alert (F3). Notifies every WMS Manager
+            (Discuss inbox; email too when wms_reports.alert_email = 1) of
+            returnable items whose expected return date has passed and that
+            have not yet come back via Scan Return. Silent when nothing is
+            overdue. :30 staggers it clear of the 08:00/08:05/08:10 backup +
+            low-stock crons.
+        -->
+        <record id="cron_wms_returns_overdue" model="ir.cron">
+            <field name="name">WMS — Daily overdue-returns alert</field>
+            <field name="model_id" ref="model_wms_returns_cron"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_overdue_returns()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=30, second=0)"/>
+        </record>
     </data>
 </odoo>

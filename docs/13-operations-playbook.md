@@ -131,7 +131,24 @@ Operator picks destination:
 
 For measured products (litres / kg / etc.) the wizard **requires a photo**
 of the dispensed quantity before validate — that proof attaches to the
-picking's audit trail.
+picking's audit trail. Counted *Units* items don't need one; a product's base
+unit is set from its Kind at onboarding — see
+[docs/UOM-BY-KIND.md](UOM-BY-KIND.md).
+
+Every issue also captures a **Department** (required), an optional **Purpose**
+and **Animal/cow** — these drive the consumption-by-department report and
+replace the old single "Issued for" tag (auto-derived for back-compat). See
+[docs/ISSUE-DIMENSIONS.md](ISSUE-DIMENSIONS.md).
+
+An issue that re-requests the same product for the same department too soon
+(min-life guard), or is worth more than the high-value threshold, is **held for
+a manager's approval** instead of issuing immediately — the keeper types a
+reason and a manager Approves/Rejects under **WMS → Approvals**. See
+[docs/ISSUE-APPROVALS.md](ISSUE-APPROVALS.md).
+
+Tools and spares can be marked **returnable** with an expected-return date; a
+daily alert and the **Returns-due report** chase overdue items, and Scan Return
+clears them — see [docs/RETURNABLE-ITEMS.md](RETURNABLE-ITEMS.md).
 
 ### The process
 | Scenario | Destination to pick | Who triggers |
@@ -145,8 +162,10 @@ picking's audit trail.
 ### Minimum bar
 - Nothing leaves the warehouse without going through one of these flows.
 - The "Take material later, log it later" habit is the #1 killer — ban it.
-- Issues > a certain ₹ threshold need Manager-group user to validate (add a
-  domain on the action if you want it enforced in code).
+- Issues > a configurable ₹ threshold (and same-department re-requests inside a
+  product's min-life window) are **held for manager approval** automatically —
+  see [docs/ISSUE-APPROVALS.md](ISSUE-APPROVALS.md) for the threshold and the
+  Approvals queue.
 
 ---
 

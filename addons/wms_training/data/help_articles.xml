@@ -1927,5 +1927,88 @@
                     <p><b>Trust example</b> A monsoon storm knocks out the broadband for two days. Each afternoon the 4:30 PM backup still runs and is kept on the store-room PC; the Drive uploads queue as <i>waiting</i>. When the line is restored on the third morning, the hourly check quietly uploads all three days' sets within minutes — the Manager sees the queue empty itself and the last-upload time go green, with no lost data and nothing to do by hand.</p>
             </div></field>
         </record>
+
+        <record id="help_issue_dimensions_department_purpose_animal" model="wms.help.article">
+            <field name="slug">issue-dimensions-department-purpose-animal</field>
+            <field name="name">Department, Purpose, and Animal on a Scan Issue</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">268</field>
+            <field name="keywords">department purpose animal cow scan issue gaushala cowshed veterinary panchgavya dairy fodder kitchen bhojanalaya consumption value report issued for routine treatment vaccination deworming</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Every Scan Issue now records <b>where the stock is going</b> and <b>why</b>, so the trust can see, for example, how much feed the cowshed used or how much medicine the veterinary hospital consumed. Three fields capture this on the issue: <b>Department</b>, <b>Purpose</b>, and an optional <b>Animal / Cow</b>.</p>
+                    <p><b>The three fields</b></p>
+                    <ul>
+                    <li><b>Department</b> (required) — the part of the trust the stock is for. The list is set up by a Manager and includes Gaushala / Cowshed, Veterinary Hospital, R&amp;D / Panchgavya, Dairy, Fodder &amp; Agriculture, Kitchen / Bhojanalaya, Maintenance, Construction / Project, Administration, Temple / Pooja, and Other. If you are unsure, it defaults to <b>Other</b>, but pick the right one whenever you can — it is what makes the consumption reports useful.</li>
+                    <li><b>Purpose</b> — why the stock is being taken: Routine consumption, Animal treatment, Vaccination / deworming, Maintenance, Research, or Other.</li>
+                    <li><b>Animal / Cow</b> (optional) — if the issue is for one specific animal (say a calf under treatment), pick it from the lightweight register, which holds each animal's name, tag, shed, and age-class. Leave it blank for general issues like a sack of feed for the whole shed.</li>
+                    </ul>
+                    <p>The familiar audit names — <b>Taken by</b>, <b>Ordered by</b>, and the on-duty <b>Store Keeper</b> — are unchanged; Department, Purpose, and Animal sit alongside them.</p>
+                    <p><b>Where the master lists come from</b> The Department, Purpose, and Animal lists are managed by a <b>Manager</b> under <b>WMS &#8594; Configuration</b> (Departments, Purposes, Animals). A Store Keeper picks from the lists but does not edit them.</p>
+                    <p><b>Why this workflow exists</b> A gaushala spends very differently across the cowshed, the veterinary hospital, the dairy, and the kitchen. Tagging each issue with a Department turns the raw issue history into a <b>Consumption Value report split by Department</b>, so a Manager can see exactly where the trust's feed, medicine, and supplies are going.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not leave everything on <b>Other</b> out of habit — the Department split is only as honest as the field you pick.</li>
+                    <li>Do not force an Animal when the issue is general; the field is optional on purpose.</li>
+                    </ul>
+                    <p><b>Good to know</b> The old "Issued for" value is now worked out automatically from the Department, so older reports that relied on it keep working.</p>
+                    <p><b>Trust example</b> A keeper issues 5 calcium boluses for a calf under treatment. He sets Department <b>Veterinary Hospital</b>, Purpose <b>Animal treatment</b>, picks the calf in <b>Animal / Cow</b>, fills Taken by and Ordered by, and validates. At month end the Manager opens the Consumption Value report and sees the veterinary spend separated from the cowshed's routine feed.</p>
+            </div></field>
+        </record>
+
+        <record id="help_returnable_items_and_returns" model="wms.help.article">
+            <field name="slug">returnable-items-and-returns</field>
+            <field name="name">Returnable items and expected returns</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">269</field>
+            <field name="keywords">returnable returnable items expected return days due date overdue returns due report scan return tools spares borrowed not returned daily alert manager cron</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Some items leave the store expecting to come <b>back</b> — tools and spares above all. The system can mark such products as <b>returnable</b> and keep track of whether they have actually returned, so a borrowed drill or torque wrench is never quietly lost.</p>
+                    <p><b>How returnable items work</b></p>
+                    <ul>
+                    <li>A product can be flagged <b>returnable</b> with an <b>expected return days</b> window. Tools and spares are seeded at <b>14 days</b>; a Manager can change the window per product.</li>
+                    <li>When you issue a returnable item, the system stamps an <b>expected return date</b> on that issue (today plus the window).</li>
+                    <li>A <b>daily check</b> looks for returnable items that are past their expected return date and not yet returned, and <b>alerts the Managers</b> about them.</li>
+                    <li>The <b>Returns-due report</b> (under <b>WMS &#8594; Reports</b>) lists everything outstanding or overdue, so anyone can see what is still out.</li>
+                    </ul>
+                    <p><b>Bringing an item back</b> Use <b>Scan Return</b> as before: scan the item coming back and validate. The system matches it to the outstanding issue and marks that item <b>returned</b>, so it drops off the Returns-due report and the overdue alerts stop. (See "How to handle returns" for the full Scan Return steps.)</p>
+                    <p><b>Why this workflow exists</b> Tools are expensive for a donation-funded trust and easy to forget once lent out. An expected return date plus a daily nudge means a Manager knows within a day when something is overdue, instead of discovering a missing tool months later.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Items that get used up — feed, medicine, fluids, pooja items, cement, soap — are <b>not</b> returnable; Scan Return refuses them. If such an item is spoiled, use the Damage workflow instead.</li>
+                    <li>Do not leave a returned tool on the shelf without a Scan Return — the system still thinks it is out and will keep flagging it overdue.</li>
+                    </ul>
+                    <p><b>Trust example</b> A keeper issues a cordless drill (returnable, 14-day window) for a fence repair; the issue is stamped due in two weeks. The job drags on, the date passes, and the next morning the Managers get an overdue alert and see the drill on the Returns-due report. When the worker brings it back, the keeper does a Scan Return; the drill is marked returned and the alert clears.</p>
+            </div></field>
+        </record>
+
+        <record id="help_issue_approval_min_life_high_value" model="wms.help.article">
+            <field name="slug">issue-approval-min-life-high-value</field>
+            <field name="name">When an issue needs manager approval (and how managers approve)</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">270</field>
+            <field name="keywords">approval pending approval manager approve reject min life minimum life re-request guard high value threshold 5000 hold issue reason discuss notify self-approval approvals menu</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Most issues go straight through. Two situations put an issue on <b>hold</b> until a <b>Manager approves</b> it: a too-soon re-request of the same item, and a high-value issue. This protects the trust against waste and against large amounts leaving the store without a second pair of eyes.</p>
+                    <p><b>1. Minimum-life re-request guard</b> A product can have a <b>minimum life</b> (a number of days). Sanitation, textile, and safety items are seeded at <b>7 days</b>, with a global fallback for the rest. If the <b>same Department</b> re-requests the <b>same product</b> within that window — for example asking for more soap two days after the last batch — the keeper must enter a <b>reason</b> and a <b>Manager must approve</b> before it issues.</p>
+                    <p><b>2. High-value approval</b> An issue worth more than a configurable threshold (default <b>Rs 5,000</b>) also needs a Manager's approval, however ordinary the item.</p>
+                    <p><b>What a Store Keeper sees</b> When either rule triggers, the issue does not complete — it becomes a <b>Pending Approval</b>. As a keeper you can <b>see</b> the pending request (and the reason you gave), but you <b>cannot approve it yourself</b> — only a Manager can. There is no self-approval: you raise it and wait. Carry on with other work; you will be told once a Manager has decided.</p>
+                    <p><b>What a Manager does (managers only)</b> Pending requests appear under <b>WMS &#8594; Approvals</b> — a menu only Managers see. Managers are also notified in <b>Discuss</b>. Open the request and either:</p>
+                    <ul>
+                    <li><b>Approve</b> — the system re-checks that the stock is still available, then issues it.</li>
+                    <li><b>Reject</b> — nothing is issued; the request is closed.</li>
+                    </ul>
+                    <p><b>Why this workflow exists</b> The min-life guard stops the same department drawing the same consumable again and again far faster than it could really be used (a classic sign of waste or leakage). The high-value rule means nothing expensive leaves on one person's say-so. Both keep a donation-funded trust honest without slowing down ordinary day-to-day issues.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Keepers: do not try to dodge a hold by splitting one large issue into several small ones, or by re-keying it — raise the request and let a Manager decide.</li>
+                    <li>The whole approval step can be switched off by a Manager (System Parameter <code>wms_barcode.issue_approval_enabled</code>); leave it on unless a Manager has decided otherwise.</li>
+                    </ul>
+                    <p><b>Good to know</b> The high-value threshold lives in the System Parameter <code>wms_barcode.high_value_threshold</code> (default 5000) and can be tuned by a Manager.</p>
+                    <p><b>Trust example</b> A keeper re-requests 20 cakes of soap for the cowshed just three days after the last lot (minimum life 7 days). The issue holds, the keeper types the reason "extra cleaning before inspection", and it appears under Approvals. The Manager gets a Discuss message, opens it, agrees, and clicks Approve; the system re-checks stock and issues the soap. Had it been an unexplained repeat, the Manager would Reject it and nothing would leave the store.</p>
+            </div></field>
+        </record>
     </data>
 </odoo>

@@ -69,7 +69,68 @@ class StockPicking(models.Model):
         tracking=True,
         help="Which part of the trust consumed this stock. Set by the Scan "
         "Issue wizard so the Consumption Value report can break spend down by "
-        "purpose (Cows, Pooja, Maintenance, ...).",
+        "purpose (Cows, Pooja, Maintenance, ...). Kept for backward "
+        "compatibility and derived from the department on new issues; the "
+        "structured Department field below is now the primary capture.",
+    )
+    # ---- Issue dimensions (F1) -------------------------------------------
+    # Structured Department / Purpose / Animal captured by the Scan Issue
+    # wizard. Department supersedes the legacy wms_issued_for selection as
+    # the primary "what was this consumed for" dimension (the consumption
+    # report now breaks down by Department); wms_issued_for above is still
+    # derived from the department so old reports/searches keep working.
+    wms_department_id = fields.Many2one(
+        "wms.department",
+        string="Department",
+        index=True,
+        tracking=True,
+        help="Which department / cost centre consumed this stock (Gaushala, "
+        "Veterinary, Dairy, ...). Set by the Scan Issue wizard so the "
+        "Consumption Value report can break spend down by department.",
+    )
+    wms_purpose_id = fields.Many2one(
+        "wms.purpose",
+        string="Purpose / reason",
+        index=True,
+        tracking=True,
+        help="The structured reason this stock was issued (routine feed, "
+        "treatment, repair, ...). Optional.",
+    )
+    wms_animal_id = fields.Many2one(
+        "wms.animal",
+        string="Animal / cow",
+        index=True,
+        tracking=True,
+        help="The specific animal this issue was for, when it applies "
+        "(e.g. a treatment for a named cow). Optional.",
+    )
+    # ---- Returnable items (F3) -------------------------------------------
+    # When the Scan Issue wizard issues a returnable product, it stamps the
+    # date the stock is expected back (today + the product's
+    # expected_return_days, falling back to the global
+    # wms_reports.default_return_days System Parameter). The overdue-returns
+    # cron (wms_reports) alerts managers about pickings still un-returned
+    # past this date; Scan Return flips wms_returned True when the item
+    # comes back. Advisory only — never blocks issuing.
+    wms_expected_return_date = fields.Date(
+        string="Expected return",
+        index=True,
+        tracking=True,
+        help="Date a returnable item issued by this transfer is expected "
+        "back in the warehouse. Set by the Scan Issue wizard for returnable "
+        "products (today + the product's Expected-return days, or the global "
+        "default). Drives the overdue-returns alert; advisory, does not "
+        "block issuing.",
+    )
+    wms_returned = fields.Boolean(
+        string="Returned",
+        default=False,
+        index=True,
+        tracking=True,
+        help="Set True when the issued returnable stock has come back via "
+        "Scan Return. While False and past the Expected return date, the "
+        "picking shows on the Returns-due report and triggers the overdue "
+        "alert.",
     )
     wms_is_scan_issue = fields.Boolean(
         string="Scan Issue picking",

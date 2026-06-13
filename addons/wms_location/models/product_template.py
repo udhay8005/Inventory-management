@@ -42,6 +42,50 @@ KIND_RETURNABLE_DEFAULTS = {
     "pooja": False,  # ghee, flowers, incense, oil - consumed in puja
 }
 
+# Default expected-return SLA (in days) per WMS kind, used to SEED
+# ``expected_return_days`` on product.template the same way
+# KIND_RETURNABLE_DEFAULTS seeds ``wms_is_returnable``. Only returnable
+# kinds get a non-zero default — a returnable tool / spare is expected
+# back within a fortnight, washable textile / reusable safety gear
+# within a week, and everything else is 0 (= fall back to the global
+# System Parameter ``wms_reports.default_return_days``).
+#
+# 0 is also the right default for the NON-returnable kinds (feed,
+# medicine, fluid, …): they never come back, so an SLA is meaningless.
+# The compute below only seeds a non-zero value when the kind is
+# returnable, so a kind absent from this map (or a non-returnable one)
+# simply stays at 0. Admin-overridable per product, exactly like the
+# returnable boolean.
+KIND_DEFAULT_RETURN_DAYS = {
+    "tool": 14,
+    "spare": 14,
+    "textile": 7,
+    "safety": 7,
+}
+
+# Default minimum re-request interval (in days) per WMS kind, used to
+# SEED ``wms_min_life_days`` on product.template the same way
+# KIND_DEFAULT_RETURN_DAYS seeds ``expected_return_days``. Only the
+# kinds that genuinely warrant a "you asked for this too soon" guard
+# get a non-zero default; everything else stays 0 (= no per-product
+# guard, fall back to the global System Parameter
+# ``wms_location.default_min_life_days``).
+#
+# Sanitation / textile / safety items are durable, slow-burn supplies:
+# a fresh tin of disinfectant, a bundle of towels, or a refilled fire
+# extinguisher should comfortably last a department a week, so a repeat
+# request inside seven days is worth a manager glance (not a hard
+# block — Scan Issue asks for a reason and routes it for approval).
+# Consumed-daily kinds (feed, fluid) deliberately stay 0 here: a cow
+# shed legitimately draws feed every day, so a per-kind min-life guard
+# would only generate noise. The admin can still set a per-product
+# value on any product, exactly like the cap fields.
+KIND_DEFAULT_MIN_LIFE_DAYS = {
+    "sanitation": 7,
+    "textile": 7,
+    "safety": 7,
+}
+
 # Kinds whose stock must be issued by **expiry date** (FEFO), not by
 # arrival date (FIFO). Trust workflow: veterinary medicine must leave
 # the shelf with the soonest-expiring batch first, cattle feed rots,
@@ -133,6 +177,58 @@ KIND_SEQ_CODE = {
     "pooja": "wms.sku.pooja",
 }
 
+# Default Unit-of-Measure per WMS kind, used to SEED ``uom_id`` at
+# product-create time only (never retrofitted — changing a UoM
+# *category* is blocked once a product has stock, so we must get it
+# right the first time and otherwise leave the operator's choice
+# alone). Values are uom.uom external ids, all verified present in
+# Odoo CE 19's ``uom/data/uom_data.xml``; resolved lazily with
+# ``raise_if_not_found=False`` so a half-loaded DB never crashes.
+#
+# Only two kinds get a non-Units default:
+#   * fluid -> Litre  (oil, ghee, disinfectant measured by volume)
+#   * feed  -> kg     (grass, bran, cattle feed weighed in)
+# EVERYTHING else stays Units (counted by piece).
+#
+# IMPORTANT — medicine maps to Units on purpose, NOT millilitre:
+# Scan Issue's ``_compute_photo_required`` forces a photo whenever the
+# product's UoM category is not "Units" (i.e. it is measured, not
+# counted). Defaulting medicine to mL would silently switch every vet
+# injection into the photo-required gate, an unintended regression.
+# Vials / strips are counted; the per-dose strength stays free-text in
+# ``wms_dosage``. An operator can still flip a specific bulk medicine
+# to mL by hand on the product form.
+#
+# Length-by-the-metre items (cut pipe, cable/wire spools, cloth) are
+# NOT a separate kind: plumbing / electrical / textile default to
+# Units (count of pipes / fittings / pieces) and the operator switches
+# the individual product to Metre (``uom.product_uom_meter``, Length
+# category) when it is stocked / issued by length.
+KIND_DEFAULT_UOM = {
+    "raw_material": "uom.product_uom_unit",
+    "packaging": "uom.product_uom_unit",
+    "fluid": "uom.product_uom_litre",
+    "finished_good": "uom.product_uom_unit",
+    "wip": "uom.product_uom_unit",
+    "consumable": "uom.product_uom_unit",
+    "tool": "uom.product_uom_unit",
+    "spare": "uom.product_uom_unit",
+    "medicine": "uom.product_uom_unit",
+    "feed": "uom.product_uom_kgm",
+    "sanitation": "uom.product_uom_unit",
+    "construction": "uom.product_uom_unit",
+    "plumbing": "uom.product_uom_unit",
+    "electrical": "uom.product_uom_unit",
+    "textile": "uom.product_uom_unit",
+    "stationery": "uom.product_uom_unit",
+    "safety": "uom.product_uom_unit",
+    "pooja": "uom.product_uom_unit",
+}
+
+# Fallback UoM xmlid for any kind not in KIND_DEFAULT_UOM (e.g. a
+# future kind added to WMS_KIND_SELECTION before this dict is updated).
+_KIND_DEFAULT_UOM_FALLBACK = "uom.product_uom_unit"
+
 
 class ProductTemplate(models.Model):
     """WMS classification + returnability — defined on product.template
@@ -179,6 +275,106 @@ class ProductTemplate(models.Model):
         for p in self:
             if p.wms_product_kind:
                 p.wms_is_returnable = KIND_RETURNABLE_DEFAULTS.get(p.wms_product_kind, True)
+
+    expected_return_days = fields.Integer(
+        string="Expected return (days)",
+        compute="_compute_expected_return_days",
+        store=True,
+        readonly=False,  # admin can override the kind-derived default
+        tracking=True,
+        help="Days within which a returnable item is expected back. 0 = use "
+        "the global default (System Parameter wms_reports.default_return_days). "
+        "Advisory SLA — drives the overdue-returns alert, does not block "
+        "issuing. Auto-seeded from WMS Kind for returnable items "
+        "(tool/spare = 14, textile/safety = 7); the Admin can override per "
+        "product, exactly like the Returnable flag.",
+    )
+
+    @api.depends("wms_product_kind")
+    def _compute_expected_return_days(self):
+        """Seed the expected-return SLA from kind, mirroring
+        ``_compute_wms_is_returnable``. A returnable kind gets its per-kind
+        default (tool/spare = 14, textile/safety = 7, others 0); a
+        non-returnable or unset kind gets 0 (= fall back to the global
+        default). No fields.Integer ``default`` is declared on purpose:
+        a stored editable compute with an explicit default is treated as
+        user-supplied at create time and the compute would not seed. The
+        compute assigns in every branch so the stored value is always
+        concrete, and being store=True / readonly=False it only seeds —
+        an admin override afterwards persists."""
+        for p in self:
+            if p.wms_product_kind and KIND_RETURNABLE_DEFAULTS.get(p.wms_product_kind):
+                p.expected_return_days = KIND_DEFAULT_RETURN_DAYS.get(p.wms_product_kind, 0)
+            else:
+                p.expected_return_days = 0
+
+    wms_min_life_days = fields.Integer(
+        string="Min re-request interval (days)",
+        compute="_compute_wms_min_life_days",
+        store=True,
+        readonly=False,  # admin can override the kind-derived default
+        tracking=True,
+        help="Minimum number of days the SAME department should wait before "
+        "re-requesting this product. 0 = no per-product guard (falls back to "
+        "the global System Parameter wms_location.default_min_life_days; 0 "
+        "there too means the guard is off). A too-soon request is NOT blocked "
+        "outright — Scan Issue asks the keeper for a reason and routes the "
+        "issue to a Manager for approval. Auto-seeded from WMS Kind "
+        "(sanitation/textile/safety = 7, others = 0); the Admin can override "
+        "per product, exactly like the Returnable flag and the usage caps.",
+    )
+
+    @api.depends("wms_product_kind")
+    def _compute_wms_min_life_days(self):
+        """Seed the min re-request interval from kind, mirroring
+        ``_compute_expected_return_days`` / ``_compute_wms_is_returnable``.
+        Durable slow-burn kinds (sanitation/textile/safety) get 7 days; every
+        other (or unset) kind gets 0 (= no per-product guard, fall back to the
+        global default). No fields.Integer ``default`` is declared on purpose:
+        a stored editable compute with an explicit default is treated as
+        user-supplied at create time and the compute would not seed. The
+        compute assigns in every branch so the stored value is always
+        concrete, and being store=True / readonly=False it only seeds — an
+        admin override afterwards persists."""
+        for p in self:
+            if p.wms_product_kind:
+                p.wms_min_life_days = KIND_DEFAULT_MIN_LIFE_DAYS.get(p.wms_product_kind, 0)
+            else:
+                p.wms_min_life_days = 0
+
+    def _wms_default_uom_id(self):
+        """Return the UoM id this product's WMS kind should default to.
+
+        Looks the kind up in ``KIND_DEFAULT_UOM`` (falling back to
+        Units for an unmapped / blank kind) and resolves the external
+        id with ``raise_if_not_found=False`` so a half-loaded DB never
+        crashes the create path — it just returns False and the caller
+        leaves Odoo's own default in place.
+
+        Returns the integer uom.uom id, or False when neither the
+        kind's UoM nor the Units fallback can be resolved.
+        """
+        self.ensure_one()
+        xmlid = KIND_DEFAULT_UOM.get(self.wms_product_kind, _KIND_DEFAULT_UOM_FALLBACK)
+        uom = self.env.ref(xmlid, raise_if_not_found=False)
+        if not uom:
+            uom = self.env.ref(_KIND_DEFAULT_UOM_FALLBACK, raise_if_not_found=False)
+        return uom.id if uom else False
+
+    @api.model
+    def _wms_kind_default_uom_id(self, kind):
+        """Class-level twin of ``_wms_default_uom_id`` for the create
+        path, where there is no record yet to seed ``uom_id`` from.
+
+        Same resolution rules: kind -> KIND_DEFAULT_UOM (Units
+        fallback), resolved with ``raise_if_not_found=False``. Returns
+        the uom.uom id or False.
+        """
+        xmlid = KIND_DEFAULT_UOM.get(kind, _KIND_DEFAULT_UOM_FALLBACK)
+        uom = self.env.ref(xmlid, raise_if_not_found=False)
+        if not uom:
+            uom = self.env.ref(_KIND_DEFAULT_UOM_FALLBACK, raise_if_not_found=False)
+        return uom.id if uom else False
 
     # ----------------------------------------------------------------------
     # Kind-specific attribute fields
@@ -360,6 +556,20 @@ class ProductTemplate(models.Model):
                         vals["default_code"] = new_sku
             if kind and "sale_ok" not in vals:
                 vals["sale_ok"] = False
+            # Seed the unit of measure from the kind ONLY when the
+            # caller left it blank (mirrors how default_code above is
+            # only auto-filled when empty). A non-Units category cannot
+            # be changed once a product carries stock, so this
+            # create-time seed is the only safe place to set it — we
+            # never retrofit an existing catalog. uom_id stays fully
+            # editable per-product afterwards. (uom_po_id is NOT set:
+            # product.template.uom_po_id was removed in Odoo 19 in
+            # favour of per-supplier UoM on product.supplierinfo, and
+            # writing it raises — see wms_product_onboard._do_onboard.)
+            if kind and not vals.get("uom_id"):
+                uom_id = self._wms_kind_default_uom_id(kind)
+                if uom_id:
+                    vals["uom_id"] = uom_id
         templates = super().create(vals_list)
 
         # 2. After super().create(), each template has at least one
@@ -672,4 +882,16 @@ class ProductProduct(models.Model):
         store=True,
         readonly=False,
         string="Returnable",
+    )
+    expected_return_days = fields.Integer(
+        related="product_tmpl_id.expected_return_days",
+        store=True,
+        readonly=False,
+        string="Expected return (days)",
+    )
+    wms_min_life_days = fields.Integer(
+        related="product_tmpl_id.wms_min_life_days",
+        store=True,
+        readonly=False,
+        string="Min re-request interval (days)",
     )

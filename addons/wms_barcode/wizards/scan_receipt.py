@@ -278,7 +278,64 @@ class WmsScanReceipt(models.TransientModel):
         # Record the picking so a re-submit is a no-op (idempotency guard).
         self.picking_id = picking.id
 
+        # Returnable items (F3): when this was a return, best-effort flip
+        # the matching outstanding issued picking to "returned" so it drops
+        # off the Returns-due report and the overdue alert. Lean by design
+        # (no strict per-unit reconciliation) — if no confident match is
+        # found the item simply stays 'due', which is the safe default.
+        if self.is_return:
+            self._mark_outstanding_returns()
+
         return self._open_picking()
+
+    def _mark_outstanding_returns(self):
+        """Match each returned product against the oldest outstanding
+        returnable issue and mark it ``wms_returned``.
+
+        Best-effort, per the F3 contract: for every product on this
+        return, find the earliest-expected, still-open Scan Issue picking
+        that issued that product (not yet returned, not reversed) and set
+        ``wms_returned=True`` on it. One issue picking is cleared per
+        distinct returned product; if nothing matches, do nothing (the
+        item keeps showing as 'due', which is safe). This is not a strict
+        per-unit reconciliation — it just clears the oldest debt for the
+        product that physically came back.
+        """
+        self.ensure_one()
+        Picking = self.env["stock.picking"]
+        cleared = Picking.browse()
+        for product in self.line_ids.mapped("product_id"):
+            if not product.wms_is_returnable:
+                continue
+            match = Picking.search(
+                [
+                    ("wms_is_scan_issue", "=", True),
+                    ("wms_returned", "=", False),
+                    ("wms_expected_return_date", "!=", False),
+                    ("wms_reversed_by_id", "=", False),
+                    ("move_line_ids.product_id", "=", product.id),
+                    ("id", "not in", cleared.ids),
+                ],
+                order="wms_expected_return_date asc, id asc",
+                limit=1,
+            )
+            if match:
+                match.wms_returned = True
+                cleared |= match
+                match.message_post(
+                    body=Markup(
+                        "<p><b>Returned.</b> %s came back via Scan Return "
+                        "%s — marked returned, dropped off the Returns-due "
+                        "report.</p>"
+                    )
+                    % (
+                        product.display_name,
+                        self.picking_id.name or self.last_scan or "",
+                    ),
+                    subject="Return matched",
+                    message_type="notification",
+                )
+        return cleared
 
     def _open_picking(self):
         """Open the receipt this scan created (also the no-op target a

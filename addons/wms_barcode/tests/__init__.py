@@ -5,8 +5,13 @@ from . import (
     test_barcode_integrity,
     test_concurrency,
     test_fpat_fx4,
+    test_issue_approval,
+    test_issue_dimensions,
+    test_label_geometry,
     test_onboard_validation,
     test_quantity_integrity,
     test_receipt_photo,
+    test_returnable_items,
     test_undo,
+    test_uom_by_kind,
 )
