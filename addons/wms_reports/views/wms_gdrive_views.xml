@@ -206,39 +206,93 @@
                   sequence="82"/>
 
         <!-- ==============================================================
-             Settings wizard (P12) — fronts the wms_gdrive.* parameters
-             (D9) + Test Connection / Test Upload / Apply Schedule.
-             Manager-only.
+             Backup & Disaster Recovery page (P1/P12, v18 DR page) — fronts
+             the wms_gdrive.* parameters (D9) and drives Test Connection /
+             Validate Folder / Refresh Token / Disconnect / Connect (guided
+             console step) / Retry Now via the shared PowerShell stack.
+
+             CREDENTIAL BOUNDARY (hard): there are NO raw secret input
+             fields. Client ID / Secret / refresh token render as read-only
+             presence-only status; Service-Account JSON is an explicit
+             "not supported" note. No secret is ever displayed, stored, or
+             logged. Manager-only by three gates (menu group + model ACL +
+             _check_manager re-check in every action).
              ============================================================== -->
         <record id="view_wms_gdrive_settings_form" model="ir.ui.view">
             <field name="name">wms.gdrive.settings.form</field>
             <field name="model">wms.gdrive.settings</field>
             <field name="arch" type="xml">
-                <form string="Google Drive Backup Settings">
+                <form string="Backup &amp; Disaster Recovery">
                     <sheet>
+                        <!-- Live health strip (read-only, reused) -->
                         <field name="health_html" nolabel="1"/>
+
+                        <!-- 1. Google Drive enable -->
+                        <group string="Google Drive backup">
+                            <field name="enabled"/>
+                            <field name="manual_enabled"/>
+                        </group>
+
+                        <!-- 2. Connection (STATUS + masked presence; NO raw secrets) -->
+                        <group string="Connection">
+                            <field name="conn_status_html" nolabel="1" colspan="2"/>
+                            <field name="cred_presence_html" nolabel="1" colspan="2"/>
+                        </group>
+
+                        <!-- 3. Folder -->
+                        <group string="Backup folder">
+                            <field name="folder_name"/>
+                            <field name="folder_url"
+                                   placeholder="Paste a Drive folder URL or leave blank"/>
+                            <field name="parent_folder_id"/>
+                            <field name="folder_validate_html" nolabel="1" colspan="2"/>
+                        </group>
+
+                        <!-- 4. Schedule + retention -->
                         <group>
-                            <group string="Google Drive upload">
-                                <field name="enabled"/>
-                                <field name="manual_enabled"/>
-                                <field name="folder_name"/>
+                            <group string="Schedule">
                                 <field name="backup_time" placeholder="16:30"/>
+                                <field name="schedule_tz_note" nolabel="1" colspan="2"/>
                             </group>
-                            <group string="Manager notifications">
-                                <field name="notify_success"/>
-                                <field name="notify_failure"/>
-                            </group>
-                            <group string="Drive retention tiers">
+                            <group string="Retention (Drive tiers)">
                                 <field name="retention_daily_days"/>
                                 <field name="retention_weekly_months"/>
                                 <field name="retention_monthly_years"/>
                                 <field name="delete_manual"/>
                             </group>
                         </group>
+
+                        <!-- 5. Manager notifications -->
+                        <group string="Manager notifications">
+                            <field name="notify_success"/>
+                            <field name="notify_failure"/>
+                        </group>
+
+                        <!-- 6. Offline upload queue (READ-ONLY metrics) -->
+                        <group string="Offline upload queue">
+                            <field name="queue_pending"/>
+                            <field name="queue_waiting"/>
+                            <field name="queue_abandoned"/>
+                            <field name="queue_last_upload"/>
+                            <field name="queue_last_failure"/>
+                            <field name="queue_last_failure_msg"/>
+                            <field name="queue_max_retry"/>
+                        </group>
+
+                        <!-- 7. Offline-queue tuning (EDITABLE) -->
+                        <group string="Offline queue tuning">
+                            <field name="offline_retry_max"/>
+                            <field name="offline_retry_window_days"/>
+                            <field name="offline_retry_max_per_run"/>
+                            <field name="offline_backoff_base_min"/>
+                        </group>
+
                         <div class="alert alert-info" role="status">
                             Local encrypted backups always run and are kept
                             regardless of these settings — Google Drive is the
-                            off-site tier on top. One-time connection setup:
+                            off-site tier on top, and it can only ever lag,
+                            never lose. One-time connection setup is an operator
+                            console step:
                             <code>scripts\setup-gdrive-auth.ps1</code>.
                         </div>
                         <field name="result_html" nolabel="1"/>
@@ -248,9 +302,16 @@
                                 type="object" class="btn-primary"/>
                         <button name="action_test_connection" string="Test Connection"
                                 type="object" class="btn-secondary"/>
-                        <button name="action_test_upload" string="Test Upload"
+                        <button name="action_validate_folder" string="Validate Folder"
                                 type="object" class="btn-secondary"/>
-                        <button name="action_apply_schedule" string="Apply Schedule"
+                        <button name="action_refresh_token" string="Refresh Token"
+                                type="object" class="btn-secondary"/>
+                        <button name="action_disconnect" string="Disconnect"
+                                type="object" class="btn-secondary"
+                                confirm="Revoke the Google Drive authorization on this server? Local backups are unaffected."/>
+                        <button name="action_connect_help" string="Connect…"
+                                type="object" class="btn-secondary"/>
+                        <button name="action_retry_now" string="Retry Now"
                                 type="object" class="btn-secondary"/>
                         <button string="Close" class="btn-secondary" special="cancel"/>
                     </footer>
@@ -259,19 +320,22 @@
         </record>
 
         <record id="action_wms_gdrive_settings" model="ir.actions.act_window">
-            <field name="name">Google Drive Backup Settings</field>
+            <field name="name">Backup &amp; Disaster Recovery</field>
             <field name="res_model">wms.gdrive.settings</field>
             <field name="view_mode">form</field>
             <field name="target">new</field>
             <field name="view_id" ref="view_wms_gdrive_settings_form"/>
         </record>
 
-        <menuitem id="menu_wms_gdrive_settings"
-                  name="Google Drive Backup"
+        <!-- Permanent DR-page menu (manager-only). Sequence 81 places it
+             above the restore browser (82). The old settings menuitem is
+             removed: this page IS that action, relabelled and expanded. -->
+        <menuitem id="menu_wms_gdrive_dr"
+                  name="Backup &amp; Disaster Recovery"
                   parent="wms_location.menu_wms_config"
                   action="action_wms_gdrive_settings"
                   groups="wms_location.group_wms_manager"
-                  sequence="83"/>
+                  sequence="81"/>
 
     </data>
 </odoo>

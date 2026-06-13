@@ -63,7 +63,14 @@ param(
     [string]$DbUser,
     [ValidateSet('auto', 'manual', 'emergency')]
     [string]$Source = 'auto',
-    [string]$FilePrefix = ''
+    [string]$FilePrefix = '',
+    # v18: run ONLY the Drive pending-upload sweep (Stage 5a + 5e). No pg_dump,
+    # no filestore, no local backup_db/backup_filestore audit rows (those would
+    # corrupt the Backup Now poll watermark). Fired by the hourly reconnect
+    # cron + the DR-page "Retry Now" button via the trigger-less
+    # 'WMS Pending Upload Sweep' SYSTEM task. Up-front Test-GDriveReachable
+    # no-ops the run when still offline / auth-expired.
+    [switch]$PendingSweep
 )
 
 $ErrorActionPreference = 'Stop'
@@ -106,53 +113,60 @@ New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
 # variable space; convert to plaintext only at the gpg stdin boundary
 # inside Start-GpgPipe. This keeps it off Process Explorer's command-
 # line snapshot and off PowerShell's transcription logs.
-if (-not $Passphrase) {
-    if (Test-Path $EnvPath) {
-        $line = (Select-String -Path $EnvPath -Pattern '^BACKUP_PASSPHRASE=(.+)$' | Select-Object -First 1)
-        if ($line) {
-            $envPass = $line.Matches.Groups[1].Value.Trim()
-            if ($envPass) {
-                $Passphrase = ConvertTo-SecureString $envPass -AsPlainText -Force
+# -PendingSweep does NO encryption (it only re-uploads already-encrypted
+# .gpg artifacts), so the passphrase + gpg requirements are skipped for it.
+if (-not $PendingSweep) {
+    if (-not $Passphrase) {
+        if (Test-Path $EnvPath) {
+            $line = (Select-String -Path $EnvPath -Pattern '^BACKUP_PASSPHRASE=(.+)$' | Select-Object -First 1)
+            if ($line) {
+                $envPass = $line.Matches.Groups[1].Value.Trim()
+                if ($envPass) {
+                    $Passphrase = ConvertTo-SecureString $envPass -AsPlainText -Force
+                }
+                # Wipe the plaintext local var the instant we're done.
+                $envPass = $null
             }
-            # Wipe the plaintext local var the instant we're done.
-            $envPass = $null
         }
     }
-}
-if (-not $Passphrase) {
-    Write-Host "BACKUP_PASSPHRASE not set in .env." -ForegroundColor Red
-    Write-Host "Add a strong passphrase to .env:" -ForegroundColor Yellow
-    Write-Host "    BACKUP_PASSPHRASE=<24+ random chars, no whitespace>" -ForegroundColor Yellow
-    Write-Host "Then re-run." -ForegroundColor Yellow
-    exit 1
-}
-# Detect the placeholder by briefly converting to plaintext.
-$ppPlainPeek = [System.Net.NetworkCredential]::new('', $Passphrase).Password
-if ($ppPlainPeek -eq 'changeme_backup_passphrase') {
+    if (-not $Passphrase) {
+        Write-Host "BACKUP_PASSPHRASE not set in .env." -ForegroundColor Red
+        Write-Host "Add a strong passphrase to .env:" -ForegroundColor Yellow
+        Write-Host "    BACKUP_PASSPHRASE=<24+ random chars, no whitespace>" -ForegroundColor Yellow
+        Write-Host "Then re-run." -ForegroundColor Yellow
+        exit 1
+    }
+    # Detect the placeholder by briefly converting to plaintext.
+    $ppPlainPeek = [System.Net.NetworkCredential]::new('', $Passphrase).Password
+    if ($ppPlainPeek -eq 'changeme_backup_passphrase') {
+        $ppPlainPeek = $null
+        Write-Host "BACKUP_PASSPHRASE is still the placeholder 'changeme_backup_passphrase'." -ForegroundColor Red
+        Write-Host "Replace it with a real 24+ char random string in .env." -ForegroundColor Yellow
+        exit 1
+    }
     $ppPlainPeek = $null
-    Write-Host "BACKUP_PASSPHRASE is still the placeholder 'changeme_backup_passphrase'." -ForegroundColor Red
-    Write-Host "Replace it with a real 24+ char random string in .env." -ForegroundColor Yellow
-    exit 1
 }
-$ppPlainPeek = $null
 
 # --- Find gpg.exe on PATH (or in the default Gpg4win install location) ---
 # PowerShell 5.1 has no `?.` operator, so use the explicit null check.
-$gpgCmd = Get-Command gpg.exe -ErrorAction SilentlyContinue
-$gpg = if ($gpgCmd) { $gpgCmd.Source } else { $null }
-if (-not $gpg) {
-    foreach ($cand in @(
-        'C:\Program Files (x86)\GnuPG\bin\gpg.exe',
-        'C:\Program Files\GnuPG\bin\gpg.exe'
-    )) {
-        if (Test-Path $cand) { $gpg = $cand; break }
+$gpg = $null
+if (-not $PendingSweep) {
+    $gpgCmd = Get-Command gpg.exe -ErrorAction SilentlyContinue
+    $gpg = if ($gpgCmd) { $gpgCmd.Source } else { $null }
+    if (-not $gpg) {
+        foreach ($cand in @(
+            'C:\Program Files (x86)\GnuPG\bin\gpg.exe',
+            'C:\Program Files\GnuPG\bin\gpg.exe'
+        )) {
+            if (Test-Path $cand) { $gpg = $cand; break }
+        }
     }
-}
-if (-not $gpg) {
-    Write-Host "gpg.exe not found on PATH." -ForegroundColor Red
-    Write-Host "Install Gpg4win (https://gpg4win.org/) or:" -ForegroundColor Yellow
-    Write-Host "    winget install GnuPG.Gpg4win" -ForegroundColor Yellow
-    exit 1
+    if (-not $gpg) {
+        Write-Host "gpg.exe not found on PATH." -ForegroundColor Red
+        Write-Host "Install Gpg4win (https://gpg4win.org/) or:" -ForegroundColor Yellow
+        Write-Host "    winget install GnuPG.Gpg4win" -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 # Hand gpg the passphrase via stdin to keep it off the command line
@@ -303,8 +317,11 @@ function Write-BackupAudit {
 
 # Failure-path observability: any terminating error pings /fail + logs a
 # failed audit row, then re-raises (break) so the exit code is unchanged.
+# -PendingSweep is exempt: it takes no fresh backup, so a failure there must
+# NOT write a backup_db audit row (that would corrupt the Backup Now poll
+# watermark). The pending-sweep handler is failure-safe on its own.
 trap {
-    if (-not $script:ObsBackupOk) {
+    if (-not $script:ObsBackupOk -and -not $PendingSweep) {
         Send-Heartbeat -Url $HeartbeatUrl -Fail
         Write-BackupAudit -AuditType 'backup_db' -Success $false -FileName "$DbName-$Stamp" `
             -DurationSeconds ((Get-Date) - $BackupStart).TotalSeconds `
@@ -312,6 +329,11 @@ trap {
     }
     break
 }
+
+# --- 1-4. Local backup pipeline (skipped entirely under -PendingSweep, which
+# only re-uploads already-built artifacts; see the Stage-5 -PendingSweep
+# handler). The full local path is unchanged for normal runs. ---
+if (-not $PendingSweep) {
 
 # --- 1. Database dump (encrypted) ---------------------------------------
 $DumpPath    = Join-Path $BackupDir "$FilePrefix$DbName-$Stamp.dump"
@@ -446,6 +468,8 @@ if ($OffsiteDir) {
     Write-Host "Off-site copy: disabled (set BACKUP_OFFSITE_DIR in .env to enable)" -ForegroundColor DarkGray
 }
 
+}  # end: if (-not $PendingSweep) — local backup Stages 1-4
+
 # --- 5. Google Drive upload (optional; disabled until setup-gdrive-auth.ps1 has run) ---
 # Failure-safe by position AND construction: the local backup already
 # succeeded ($script:ObsBackupOk above), so every Drive problem degrades to a
@@ -500,6 +524,42 @@ function Set-WmsGdriveParam {
     }
 }
 
+function Set-GDriveQueueFailure {
+    # Persist a queue-failure transition on the catalog row. FAILURE-SAFE
+    # (Write-GDriveCatalogRow degrades silently). Computes error_class via
+    # Get-GDriveErrorClass (reused), backoff via offline_backoff_base_min.
+    # ONE enrichment point shared by the Stage-5 catch and the per-set sweep
+    # catch so classification/backoff live in a single place.
+    param(
+        [Parameter(Mandatory)] [hashtable]$RowBase,   # name/set_stamp/db_name/.../checksum already built
+        [Parameter(Mandatory)] [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [int]$PriorRetryCount = 0,
+        [int]$BackoffBaseMin = 15,
+        [string]$DbName, [string]$DbHost, [int]$DbPort, [string]$DbUser
+    )
+    $msg    = $ErrorRecord.Exception.Message
+    $status = Get-GDriveHttpStatus $ErrorRecord
+    $reason = Get-GDriveErrorReason -ErrorRecord $ErrorRecord
+    $class  = Get-GDriveErrorClass -StatusCode $status -Reason $reason -Message $msg
+    $retry  = $PriorRetryCount + 1
+    $state  = if ($class -eq 'offline') { 'waiting' } else { 'failed' }
+    # Backoff: base * 2^(retry-1) minutes, capped 24h. auth_expired retries
+    # promptly once re-consented -> NULL next_retry_at.
+    $next = $null
+    if ($class -ne 'auth_expired') {
+        $mins = [math]::Min(1440, $BackoffBaseMin * [math]::Pow(2, [math]::Max(0, $retry - 1)))
+        $next = (Get-Date).ToUniversalTime().AddMinutes($mins)
+    }
+    $row = $RowBase.Clone()
+    $row['uploaded']      = $false
+    $row['queue_state']   = $state
+    $row['retry_count']   = $retry
+    $row['error_class']   = $class
+    $row['last_error']    = if ($msg.Length -gt 240) { $msg.Substring(0, 240) } else { $msg }
+    if ($next) { $row['next_retry_at'] = $next }
+    Write-GDriveCatalogRow -Row $row -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+}
+
 function Send-GDriveBackupSet {
     # Upload one complete backup set (db .gpg [+ filestore .gpg] + SHA256.txt
     # + backup-info.json) into its Drive day folder, verify every transfer via
@@ -531,7 +591,8 @@ function Send-GDriveBackupSet {
         -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
     if (-not $folderName) { $folderName = 'Inventory_Backups' }
     $dayId = Resolve-GDriveBackupFolder -Date $setDate -EnvConfig $EnvConfig `
-        -AccessToken $AccessToken -FolderName $folderName
+        -AccessToken $AccessToken -FolderName $folderName `
+        -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
     $monthLabel = '{0:00}-{1}' -f $setDate.Month,
         [System.Globalization.CultureInfo]::InvariantCulture.DateTimeFormat.GetMonthName($setDate.Month)
     $folderPath = '{0}/{1}/{2}/{3}' -f $folderName, $setDate.ToString('yyyy'), $monthLabel, $setDate.ToString('yyyy-MM-dd')
@@ -650,6 +711,10 @@ function Send-GDriveBackupSet {
         encrypted          = $true
         wms_version        = $WmsVersion
         info_json          = $infoJson
+        # v18 offline queue: terminal success mirrors uploaded=true; clear the
+        # backoff (NULL) but keep retry_count as the audit trail of attempts.
+        queue_state        = 'uploaded'
+        next_retry_at      = $null
     } -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
 
     return [pscustomobject]@{
@@ -657,6 +722,290 @@ function Send-GDriveBackupSet {
         FileId     = [string](Get-GDriveProp $dbRemote 'id' '')
         FolderPath = $folderPath
     }
+}
+
+function Invoke-GDrivePendingSweep {
+    # Stage 5a: re-upload locally-present sets that have no uploaded=true
+    # catalog row. The catalog row (not the filesystem) is AUTHORITATIVE for
+    # eligibility / ordering / backoff; the filesystem only gates "what bytes
+    # still exist to upload" (a pruned .dump.gpg can never be sent). Shared by
+    # the daily/manual run AND the -PendingSweep reconnect mode so there is one
+    # sweep implementation. Each set is individually failure-safe (one bad set
+    # never blocks the others); a non-offline failure records the queue state
+    # via Set-GDriveQueueFailure. Returns @{ Ok; Tried }.
+    param(
+        [Parameter(Mandatory)] [string]$AccessToken,
+        [Parameter(Mandatory)] [object]$EnvConfig,
+        [string]$WmsVersion = 'unknown',
+        [string]$ExcludeStamp = '',     # today's set (uploaded separately) - never swept
+        [string]$Creator = 'system (pending sweep)',
+        [Parameter(Mandatory)] [string]$BackupDir,
+        [string]$DbName, [string]$DbHost, [int]$DbPort, [string]$DbUser
+    )
+    $sweepOk = 0
+    $sweepTried = 0
+    # Tunables (failure-safe parse -> default; REPLACES the old AddDays(-7) /
+    # -First 3 / hard-coded backoff magic numbers).
+    $retMax     = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.offline_retry_max'        -Default '8'  -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 8
+    $retWindow  = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.offline_retry_window_days' -Default '14' -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 14
+    $retPerRun  = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.offline_retry_max_per_run' -Default '5'  -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 5
+    $backoffMin = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.offline_backoff_base_min'  -Default '15' -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 15
+    try {
+        $uploadedNames = @{}
+        $pendingMeta   = @{}   # name -> @{ State; Retry; NextRetry(datetime|$null) }
+        $catReadable = $false
+        $rows = & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -t -A -v ON_ERROR_STOP=1 `
+            -c "SELECT name FROM wms_gdrive_backup WHERE uploaded = true;" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $catReadable = $true
+            foreach ($r in @($rows)) { if ($r) { $uploadedNames[([string]$r).Trim()] = $true } }
+        }
+        # Catalog unreadable (wms_reports < 3.0.0 or DB down): skip the sweep
+        # rather than blindly re-uploading history.
+        if ($catReadable) {
+            # Catalog-authoritative queue state for the not-yet-uploaded rows.
+            # Pipe-separated so a name with no value still yields fixed columns.
+            # NOTE: next_retry_at is rendered ISO-8601 WITHOUT a quoted 'T'
+            # literal in to_char ('YYYY-MM-DD"T"...'); on Windows PowerShell 5.1
+            # the embedded \" in the -c argument gets re-toggled by the C-runtime
+            # arg parser of psql.exe, which truncates the SQL at that quote and
+            # emits a "extra command-line argument FROM ignored" warning. Under
+            # $ErrorActionPreference='Stop' that native-stderr line becomes a
+            # terminating error and the whole sweep is skipped. Concatenating the
+            # date and time halves with a plain 'T' string keeps the -c argument
+            # free of double-quotes, so it tokenizes cleanly on PS 5.1.
+            $qrows = & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -t -A -F '|' -v ON_ERROR_STOP=1 `
+                -c "SELECT name, COALESCE(queue_state,''), COALESCE(retry_count,0), COALESCE(to_char(next_retry_at,'YYYY-MM-DD')||'T'||to_char(next_retry_at,'HH24:MI:SS'),'') FROM wms_gdrive_backup WHERE uploaded = false;" 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                foreach ($qr in @($qrows)) {
+                    if (-not $qr) { continue }
+                    $parts = ([string]$qr).Split('|')
+                    if ($parts.Count -lt 4) { continue }
+                    $nm = $parts[0].Trim()
+                    if (-not $nm) { continue }
+                    $rc = 0; [void][int]::TryParse($parts[2].Trim(), [ref]$rc)
+                    $nr = $null
+                    $nrRaw = $parts[3].Trim()
+                    if ($nrRaw) {
+                        $styles = [System.Globalization.DateTimeStyles]::AssumeUniversal -bor `
+                                  [System.Globalization.DateTimeStyles]::AdjustToUniversal
+                        $tmp = [datetime]::MinValue
+                        if ([datetime]::TryParse($nrRaw, [System.Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$tmp)) { $nr = $tmp }
+                    }
+                    $pendingMeta[$nm] = @{ State = $parts[1].Trim(); Retry = $rc; NextRetry = $nr }
+                }
+            }
+
+            $stampRx = '^(emergency-)?' + [regex]::Escape($DbName) + '-(\d{8}-\d{6})\.dump\.gpg$'
+            $cutoff  = (Get-Date).AddDays(-$retWindow)
+            $nowUtc  = (Get-Date).ToUniversalTime()
+            $candidates = @(Get-ChildItem $BackupDir -Filter '*.dump.gpg' -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    if ($_.Name -match $stampRx) {
+                        $ps = $Matches[2]
+                        $pd = $null
+                        try { $pd = [datetime]::ParseExact($ps, 'yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture) } catch {}
+                        # filesystem guard: the .dump.gpg must exist, parse, not
+                        # be the current stamp, and not already be uploaded=true.
+                        if ($pd -and $ps -ne $ExcludeStamp -and -not $uploadedNames.ContainsKey($_.Name)) {
+                            $meta  = $pendingMeta[$_.Name]
+                            $retry = 0; $nextRetry = $null
+                            if ($meta) { $retry = [int]$meta['Retry']; $nextRetry = $meta['NextRetry'] }
+                            [pscustomobject]@{
+                                File        = $_
+                                SetStamp    = $ps
+                                IsEmergency = [bool]$Matches[1]
+                                FileTooOld  = ($pd -lt $cutoff)
+                                Retry       = $retry
+                                NextRetry   = $nextRetry
+                            }
+                        }
+                    }
+                })
+
+            # Abandon (write-once) sets past the attempt cap or the window;
+            # they never re-enter the eligible list.
+            foreach ($c in $candidates) {
+                if ($c.Retry -ge $retMax -or $c.FileTooOld) {
+                    $meta = $pendingMeta[$c.File.Name]
+                    if (-not $meta -or $meta['State'] -ne 'abandoned') {
+                        Write-Host "    [warn] pending set $($c.SetStamp) abandoned (retry=$($c.Retry)/$retMax, older-than-window=$($c.FileTooOld))" -ForegroundColor Yellow
+                        Write-GDriveCatalogRow -Row @{ name = $c.File.Name; queue_state = 'abandoned' } `
+                            -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+                    }
+                }
+            }
+
+            # Eligible = within window AND retry_count < max AND backoff elapsed
+            # (next_retry_at NULL or <= now). Oldest-first, then fewest retries
+            # so a chronically-failing set can't starve newer ones in the cap.
+            $pendingSets = @($candidates |
+                Where-Object {
+                    -not $_.FileTooOld -and $_.Retry -lt $retMax -and
+                    ($null -eq $_.NextRetry -or $_.NextRetry -le $nowUtc)
+                } |
+                Sort-Object -Property SetStamp, Retry |
+                Select-Object -First $retPerRun)
+
+            foreach ($p in $pendingSets) {
+                $sweepTried++
+                # Re-derive the catalog row base so a failure can record full
+                # metadata (Set-GDriveQueueFailure UPSERTs on name).
+                $pSetDate = $null
+                try { $pSetDate = [datetime]::ParseExact($p.SetStamp, 'yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture) } catch {}
+                $pType = 'auto'
+                if ($p.IsEmergency) { $pType = 'emergency' }
+                $pDbHash = (Get-FileHash -LiteralPath $p.File.FullName -Algorithm SHA256).Hash
+                $rowBase = @{
+                    name        = $p.File.Name
+                    set_stamp   = $p.SetStamp
+                    db_name     = $DbName
+                    backup_type = $pType
+                    size_mb     = [math]::Round($p.File.Length / 1MB, 2)
+                    checksum    = $pDbHash
+                    creator     = $Creator
+                    encrypted   = $true
+                    wms_version = $WmsVersion
+                }
+                if ($pSetDate) {
+                    $rowBase['backup_time'] = $pSetDate.ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss')
+                    $rowBase['year']        = $pSetDate.ToString('yyyy')
+                    $rowBase['month_label'] = '{0:00}-{1}' -f $pSetDate.Month, [System.Globalization.CultureInfo]::InvariantCulture.DateTimeFormat.GetMonthName($pSetDate.Month)
+                    $rowBase['day']         = $pSetDate.ToString('yyyy-MM-dd')
+                }
+                # Transient in-flight marker immediately before the upload.
+                Write-GDriveCatalogRow -Row @{ name = $p.File.Name; queue_state = 'uploading' } `
+                    -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+                try {
+                    Write-Host "    retrying pending set $($p.SetStamp)" -ForegroundColor DarkGray
+                    $pFsPath = $p.File.FullName -replace '\.dump\.gpg$', '-filestore.zip.gpg'
+                    $pFsHash = ''
+                    if (Test-Path -LiteralPath $pFsPath) {
+                        $pFsHash = (Get-FileHash -LiteralPath $pFsPath -Algorithm SHA256).Hash
+                    } else {
+                        $pFsPath = ''
+                    }
+                    Send-GDriveBackupSet -SetStamp $p.SetStamp -DbFilePath $p.File.FullName `
+                        -DbFileHash $pDbHash -FsFilePath $pFsPath -FsFileHash $pFsHash `
+                        -BackupType $pType -Creator $Creator `
+                        -WmsVersion $WmsVersion -EnvConfig $EnvConfig -AccessToken $AccessToken | Out-Null
+                    $sweepOk++
+                } catch {
+                    Write-Host "    [warn] pending set $($p.SetStamp) retry failed (will retry next run): $($_.Exception.Message)" -ForegroundColor Yellow
+                    Set-GDriveQueueFailure -RowBase $rowBase -ErrorRecord $_ `
+                        -PriorRetryCount $p.Retry -BackoffBaseMin $backoffMin `
+                        -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+                }
+            }
+        }
+    } catch {
+        Write-Host "    [warn] pending sweep skipped: $($_.Exception.Message)" -ForegroundColor DarkGray
+    }
+    return @{ Ok = $sweepOk; Tried = $sweepTried }
+}
+
+if ($PendingSweep) {
+    # === -PendingSweep mode: reconnect / "Retry Now" warm-loop ============
+    # Stage 5a (sweep) + 5e (quota cache) ONLY. No pg_dump, no filestore, no
+    # local backup_db/backup_filestore audit rows (Stages 1-4 were skipped).
+    # An up-front Test-GDriveReachable makes the run a clean no-op while still
+    # offline / when the grant has expired, so the hourly reconnect cron and
+    # the DR-page button are cheap to fire.
+    if (-not $GdReady) {
+        Write-Host "Pending sweep: Google Drive stage not ready (disabled / not connected) - nothing to do." -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "Pending sweep complete (no-op)." -ForegroundColor Green
+        exit 0
+    }
+    Write-Host "Google Drive pending-upload sweep" -ForegroundColor Cyan
+    $psOk = $false
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $cfg = Get-GDriveEnvConfig -EnvPath $EnvPath
+        $tok = Get-GDriveAccessToken -TokenPath $TokenPath -EnvConfig $cfg
+
+        # wms_version for backup-info.json (failure-safe; DB may be down).
+        $GdWmsVersion = 'unknown'
+        try {
+            $vOut = & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -t -A -v ON_ERROR_STOP=1 `
+                -c "SELECT latest_version FROM ir_module_module WHERE name='wms_reports';" 2>$null
+            if ($LASTEXITCODE -eq 0 -and $vOut) {
+                $v0 = (@($vOut) | Where-Object { $_ } | Select-Object -First 1)
+                if ($v0) { $GdWmsVersion = ([string]$v0).Trim() }
+            }
+        } catch {}
+
+        # Up-front reachability probe: ONE about.get instead of a doomed upload.
+        $reach = Test-GDriveReachable -AccessToken $tok
+        if (-not $reach.Reachable) {
+            if ($reach.Class -eq 'auth_expired') {
+                Write-Host "    Drive authorization expired - re-run scripts\setup-gdrive-auth.ps1 (publish the GCP consent screen to Production if still in Testing). Pending sets are kept; sweep skipped." -ForegroundColor Yellow
+            } else {
+                Write-Host "    Drive unreachable ($($reach.Class)) - still offline. Pending sets stay queued; nothing uploaded." -ForegroundColor DarkGray
+            }
+            Write-Host ""
+            Write-Host "Pending sweep complete (no-op: $($reach.Class))." -ForegroundColor Green
+            exit 0
+        }
+
+        # 5a. The sweep itself (no ExcludeStamp - there is no fresh set today).
+        $sweep = Invoke-GDrivePendingSweep -AccessToken $tok -EnvConfig $cfg `
+            -WmsVersion $GdWmsVersion -BackupDir $BackupDir `
+            -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+
+        # 5e. Quota snapshot -> wms_gdrive.last_about cache (health page reads
+        # it; failure-safe).
+        try {
+            $about    = Get-GDriveAbout -AccessToken $tok
+            $quota    = Get-GDriveProp $about 'storageQuota' $null
+            $aboutUsr = Get-GDriveProp $about 'user' $null
+            $usedMb  = 0.0
+            $limitMb = 0.0
+            $usedRaw  = Get-GDriveProp $quota 'usage' ''
+            $limitRaw = Get-GDriveProp $quota 'limit' ''
+            if ($usedRaw)  { $usedMb  = [math]::Round([double]$usedRaw / 1MB, 1) }
+            if ($limitRaw) { $limitMb = [math]::Round([double]$limitRaw / 1MB, 1) }
+            $aboutJson = [ordered]@{
+                used_mb     = $usedMb
+                limit_mb    = $limitMb
+                checked_utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+                email       = [string](Get-GDriveProp $aboutUsr 'emailAddress' '')
+            } | ConvertTo-Json -Compress
+            Set-WmsGdriveParam -Key 'wms_gdrive.last_about' -Value $aboutJson
+        } catch {
+            Write-Host "    [warn] Drive quota check failed (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray
+        }
+
+        # A backup_gdrive audit row only when sets were actually attempted, so
+        # the existing _cron_notify_gdrive_events path notifies on a reconnect
+        # upload (P3) without a new notification channel. A quiet empty queue
+        # writes nothing (avoids audit-row spam every hour).
+        if ($sweep.Tried -gt 0) {
+            $allOk = ($sweep.Ok -eq $sweep.Tried)
+            Send-Heartbeat -Url $GdriveHb
+            Write-BackupAudit -AuditType 'backup_gdrive' -Success $allOk `
+                -FileName "pending-sweep-$Stamp" `
+                -Message "Pending-upload sweep (reconnect): $($sweep.Ok)/$($sweep.Tried) set(s) uploaded"
+        }
+        Write-Host "    Pending sweep: $($sweep.Ok)/$($sweep.Tried) retried." -ForegroundColor Green
+        $psOk = $true
+    } catch {
+        # Failure-safe: a sweep problem must never crash the cron / button.
+        # A dead refresh grant throws here (before the reachability probe);
+        # surface the re-consent instruction like the spec's auth_expired path.
+        if ($_.Exception.Message -match 'GDRIVE_AUTH_EXPIRED|invalid_grant') {
+            Write-Host "    Drive authorization expired - re-run scripts\setup-gdrive-auth.ps1 (publish the GCP consent screen to Production if still in Testing). Pending sets are kept; sweep skipped." -ForegroundColor Yellow
+        } else {
+            Write-Host "    [warn] Pending sweep failed (queued sets are intact): $($_.Exception.Message)" -ForegroundColor Yellow
+        }
+    }
+    Write-Host ""
+    if ($psOk) {
+        Write-Host "Pending sweep complete." -ForegroundColor Green
+    } else {
+        Write-Host "Pending sweep complete (with warnings)." -ForegroundColor Yellow
+    }
+    exit 0
 }
 
 if ($GdReady) {
@@ -705,67 +1054,23 @@ if ($GdReady) {
             $GdCreator = "$env:COMPUTERNAME\$env:USERNAME"
         }
 
-        # 5a. Pending sweep (P14 'retry later'): local sets < 7 days old with
-        # no uploaded=true catalog row are re-uploaded oldest-first, max 3 per
-        # run (bounds the 2 h task limit). Each set is individually
-        # failure-safe so one bad set cannot block today's upload.
-        $sweepOk = 0
-        $sweepTried = 0
-        try {
-            $uploadedNames = @{}
-            $catReadable = $false
-            $rows = & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -t -A -v ON_ERROR_STOP=1 `
-                -c "SELECT name FROM wms_gdrive_backup WHERE uploaded = true;" 2>$null
-            if ($LASTEXITCODE -eq 0) {
-                $catReadable = $true
-                foreach ($r in @($rows)) { if ($r) { $uploadedNames[([string]$r).Trim()] = $true } }
-            }
-            # Catalog unreadable (wms_reports < 3.0.0 or DB down): skip the
-            # sweep rather than blindly re-uploading history.
-            if ($catReadable) {
-                $stampRx = '^(emergency-)?' + [regex]::Escape($DbName) + '-(\d{8}-\d{6})\.dump\.gpg$'
-                $cutoff  = (Get-Date).AddDays(-7)
-                $pendingSets = @(Get-ChildItem $BackupDir -Filter '*.dump.gpg' -ErrorAction SilentlyContinue |
-                    ForEach-Object {
-                        if ($_.Name -match $stampRx) {
-                            $ps = $Matches[2]
-                            $pd = $null
-                            try { $pd = [datetime]::ParseExact($ps, 'yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture) } catch {}
-                            if ($pd -and $ps -ne $Stamp -and $pd -ge $cutoff -and -not $uploadedNames.ContainsKey($_.Name)) {
-                                [pscustomobject]@{ File = $_; SetStamp = $ps; IsEmergency = [bool]$Matches[1] }
-                            }
-                        }
-                    } | Sort-Object SetStamp | Select-Object -First 3)
-                foreach ($p in $pendingSets) {
-                    $sweepTried++
-                    try {
-                        Write-Host "    retrying pending set $($p.SetStamp)" -ForegroundColor DarkGray
-                        # Old sets: the run-time hashes are gone - re-hash here.
-                        $pDbHash = (Get-FileHash -LiteralPath $p.File.FullName -Algorithm SHA256).Hash
-                        $pFsPath = $p.File.FullName -replace '\.dump\.gpg$', '-filestore.zip.gpg'
-                        $pFsHash = ''
-                        if (Test-Path -LiteralPath $pFsPath) {
-                            $pFsHash = (Get-FileHash -LiteralPath $pFsPath -Algorithm SHA256).Hash
-                        } else {
-                            $pFsPath = ''
-                        }
-                        $pType = 'auto'
-                        if ($p.IsEmergency) { $pType = 'emergency' }
-                        Send-GDriveBackupSet -SetStamp $p.SetStamp -DbFilePath $p.File.FullName `
-                            -DbFileHash $pDbHash -FsFilePath $pFsPath -FsFileHash $pFsHash `
-                            -BackupType $pType -Creator 'system (pending sweep)' `
-                            -WmsVersion $GdWmsVersion -EnvConfig $cfg -AccessToken $tok | Out-Null
-                        $sweepOk++
-                    } catch {
-                        Write-Host "    [warn] pending set $($p.SetStamp) retry failed (will retry next run): $($_.Exception.Message)" -ForegroundColor Yellow
-                    }
-                }
-            }
-        } catch {
-            Write-Host "    [warn] pending sweep skipped: $($_.Exception.Message)" -ForegroundColor DarkGray
-        }
+        # 5a. Pending sweep (P14 'retry later' / v18 offline queue): catalog-
+        # authoritative re-upload of local sets lacking an uploaded=true row,
+        # oldest-first, capped per run, with per-set backoff + abandonment.
+        # Shared with the -PendingSweep reconnect mode. Each set is failure-safe
+        # so one bad set cannot block today's upload.
+        $sweep = Invoke-GDrivePendingSweep -AccessToken $tok -EnvConfig $cfg `
+            -WmsVersion $GdWmsVersion -ExcludeStamp $Stamp -BackupDir $BackupDir `
+            -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+        $sweepOk = $sweep.Ok
+        $sweepTried = $sweep.Tried
 
         # 5b. Today's set - reuse the in-scope artifact hashes (no re-hash).
+        # v18 state machine: write a 'created' row BEFORE the attempt so the
+        # queue can show the in-flight set; Send-GDriveBackupSet flips it to
+        # 'uploaded' on success, the Stage-5 catch to 'waiting'/'failed'.
+        Write-GDriveCatalogRow -Row @{ name = (Split-Path -Leaf $DumpEncPath); queue_state = 'created' } `
+            -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
         $GdFsPath = ''
         $GdFsHash = ''
         if ((Test-Path Variable:\ZipEncPath) -and $ZipEncPath -and (Test-Path -LiteralPath $ZipEncPath)) {
@@ -826,20 +1131,23 @@ if ($GdReady) {
             -Message "Drive upload verified (set $Stamp, source=$Source) -> $($today.DriveName) id=$($today.FileId); retention: $retSummary$sweepNote"
         Write-Host "    Drive upload complete + verified." -ForegroundColor Green
     } catch {
-        Write-Host "    [warn] Drive upload failed (LOCAL backup is intact): $($_.Exception.Message)" -ForegroundColor Yellow
+        $gdErr = $_   # captured so the nested psql try/catch can't shadow $_
+        Write-Host "    [warn] Drive upload failed (LOCAL backup is intact): $($gdErr.Exception.Message)" -ForegroundColor Yellow
         Send-Heartbeat -Url $GdriveHb -Fail
         Write-BackupAudit -AuditType 'backup_gdrive' -Success $false `
             -FileName (Split-Path -Leaf $DumpEncPath) `
-            -Message "Drive upload FAILED (source=$Source): $($_.Exception.Message)"
-        # Pending catalog row so the next run's sweep retries this set.
-        # Write-GDriveCatalogRow is failure-safe itself; the re-guard covers a
-        # partially-loaded lib.
+            -Message "Drive upload FAILED (source=$Source): $($gdErr.Exception.Message)"
+        # Pending catalog row so the next run's sweep retries this set. v18:
+        # record the queue-failure transition (class/backoff/retry++) via the
+        # shared Set-GDriveQueueFailure. Failure-safe itself; the re-guard
+        # covers a partially-loaded lib.
         try {
+            $failName  = (Split-Path -Leaf $DumpEncPath)
             $failDate  = [datetime]::ParseExact($Stamp, 'yyyyMMdd-HHmmss', [System.Globalization.CultureInfo]::InvariantCulture)
             $failMonth = '{0:00}-{1}' -f $failDate.Month,
                 [System.Globalization.CultureInfo]::InvariantCulture.DateTimeFormat.GetMonthName($failDate.Month)
-            Write-GDriveCatalogRow -Row @{
-                name        = (Split-Path -Leaf $DumpEncPath)
+            $failRowBase = @{
+                name        = $failName
                 set_stamp   = $Stamp
                 db_name     = $DbName
                 backup_type = $Source
@@ -849,11 +1157,27 @@ if ($GdReady) {
                 day         = $failDate.ToString('yyyy-MM-dd')
                 size_mb     = $dbSizeMb
                 checksum    = $dbHash
-                uploaded    = $false
                 creator     = $GdCreator
                 encrypted   = $true
                 wms_version = $GdWmsVersion
-            } -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+            }
+            # Prior retry_count from the catalog (the 'created' row, or a prior
+            # failed row); failure-safe -> 0.
+            $priorRetry = 0
+            try {
+                $escName = ($failName -replace "'", "''")
+                $rcOut = & psql -U $DbUser -h $DbHost -p $DbPort -d $DbName -w -t -A -v ON_ERROR_STOP=1 `
+                    -c "SELECT COALESCE(retry_count,0) FROM wms_gdrive_backup WHERE name = '$escName' ORDER BY id DESC LIMIT 1;" 2>$null
+                if ($LASTEXITCODE -eq 0 -and $rcOut) {
+                    $rc0 = (@($rcOut) | Where-Object { "$_" -match '^\s*\d+\s*$' } | Select-Object -First 1)
+                    if ($null -ne $rc0) { [void][int]::TryParse(([string]$rc0).Trim(), [ref]$priorRetry) }
+                }
+            } catch {}
+            $backoffBase = ConvertTo-GDrivePositiveInt (Get-WmsConfigParam -Key 'wms_gdrive.offline_backoff_base_min' -Default '15' `
+                -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser) 15
+            Set-GDriveQueueFailure -RowBase $failRowBase -ErrorRecord $gdErr `
+                -PriorRetryCount $priorRetry -BackoffBaseMin $backoffBase `
+                -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
         } catch {
             Write-Host "    [warn] pending catalog row not written (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray
         }

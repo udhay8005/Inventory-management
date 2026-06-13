@@ -104,6 +104,31 @@ function Get-GDriveHttpErrorBody {
     return ''
 }
 
+function Get-GDriveErrorReason {
+    # Google error "reason" string (e.g. invalid_grant / storageQuotaExceeded /
+    # userRateLimitExceeded) out of a failed web call; '' when none. Built on
+    # Get-GDriveHttpErrorBody (never re-reads the response stream when the
+    # caller already pulled the body and passes it via -ErrorBody). Shared by
+    # Invoke-GDriveApi (its former inline parse), Test-GDriveReachable and
+    # Set-GDriveQueueFailure so there is ONE reason parser. Never throws.
+    param(
+        [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [string]$ErrorBody
+    )
+    $body = $ErrorBody
+    if (-not $PSBoundParameters.ContainsKey('ErrorBody')) {
+        if ($null -ne $ErrorRecord) { $body = Get-GDriveHttpErrorBody $ErrorRecord }
+    }
+    if (-not $body) { return '' }
+    try {
+        $ej   = $body | ConvertFrom-Json
+        $eobj = Get-GDriveProp $ej 'error' $null
+        $errs = Get-GDriveProp $eobj 'errors' $null
+        if ($errs) { return [string](Get-GDriveProp (@($errs)[0]) 'reason' '') }
+    } catch { }
+    return ''
+}
+
 function Get-GDriveErrorClass {
     # P14 error taxonomy. Callers use the class for messaging/decisions:
     #   offline      -> retry next run (pending sweep picks the set up)
@@ -213,6 +238,30 @@ function Write-GDriveMockMeta {
     }
     ($meta | ConvertTo-Json -Depth 5) |
         Set-Content -LiteralPath "$FilePath.gdrivemeta.json" -Encoding UTF8
+}
+
+function Get-GDriveMockFault {
+    # Test-only fault injection over the mock seam. Returns '' (no fault) or a
+    # class string. GDRIVE_MOCK_OFFLINE=1 -> 'offline'; GDRIVE_MOCK_FAIL=<class>
+    # -> that class (auth_expired/quota/server_error/...). Only consulted when
+    # GDRIVE_MOCK_DIR is set, so production is never affected.
+    if (-not (Test-GDriveMock)) { return '' }
+    if ($env:GDRIVE_MOCK_OFFLINE) { return 'offline' }
+    if ($env:GDRIVE_MOCK_FAIL)    { return [string]$env:GDRIVE_MOCK_FAIL }
+    return ''
+}
+
+function Invoke-GDriveMockFaultThrow {
+    # Throw a message Get-GDriveErrorClass will map back to $Class, with an
+    # HTTP status the existing Get-GDriveHttpStatus parse recovers (0 for offline).
+    param([Parameter(Mandatory)][string]$Class)
+    switch ($Class) {
+        'offline'      { throw 'Drive API GET about failed (HTTP 0, offline): simulated network drop' }
+        'auth_expired' { throw 'GDRIVE_AUTH_EXPIRED: simulated invalid_grant (mock fault)' }
+        'quota'        { throw 'Drive API failed (storageQuotaExceeded): simulated quota (mock fault)' }
+        'server_error' { throw 'Drive API failed (HTTP 503, server_error): simulated 5xx (mock fault)' }
+        default        { throw "Drive API failed (HTTP 400, client_error): simulated $Class (mock fault)" }
+    }
 }
 
 # === .env / token / access token ==========================================
@@ -416,15 +465,13 @@ function Invoke-GDriveApi {
         } catch {
             $status  = Get-GDriveHttpStatus $_
             $errBody = Get-GDriveHttpErrorBody $_
-            $reason  = ''
+            $reason  = Get-GDriveErrorReason -ErrorBody $errBody
             $gmsg    = ''
             if ($errBody) {
                 try {
                     $ej   = $errBody | ConvertFrom-Json
                     $eobj = Get-GDriveProp $ej 'error' $null
                     $gmsg = [string](Get-GDriveProp $eobj 'message' '')
-                    $errs = Get-GDriveProp $eobj 'errors' $null
-                    if ($errs) { $reason = [string](Get-GDriveProp (@($errs)[0]) 'reason' '') }
                 } catch { }
             }
             if ($status -eq 401 -and -not $reauthDone -and
@@ -513,10 +560,24 @@ function Resolve-GDriveBackupFolder {
         [Parameter(Mandatory)] [datetime]$Date,
         [object]$EnvConfig,
         [string]$AccessToken,
-        [string]$FolderName = 'Inventory_Backups'
+        [string]$FolderName = 'Inventory_Backups',
+        [string]$DbName,
+        [string]$DbHost,
+        [int]$DbPort,
+        [string]$DbUser
     )
+    # Parent precedence (AREA 3 DB-param route): the DR-page-validated
+    # ir.config_parameter wms_gdrive.parent_folder_id wins over the .env
+    # GDRIVE_PARENT_FOLDER_ID (EnvConfig.ParentFolderId), which in turn wins
+    # over My Drive root. Get-WmsConfigParam is failure-safe (returns '' on a
+    # down DB) so the .env fallback always survives.
     $parent = 'root'
-    if ($EnvConfig) {
+    if (-not (Test-GDriveMock)) {
+        $paramParent = Get-WmsConfigParam -Key 'wms_gdrive.parent_folder_id' -Default '' `
+            -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+        if ($paramParent) { $parent = $paramParent }
+    }
+    if ($parent -eq 'root' -and $EnvConfig) {
         $pf = [string](Get-GDriveProp $EnvConfig 'ParentFolderId' '')
         if ($pf) { $parent = $pf }
     }
@@ -566,6 +627,36 @@ function Get-GDriveFileById {
         -Query @{ fields = $Fields }
 }
 
+function Get-GDriveFolderInfo {
+    # files.get on a FOLDER id: name + owner + writable + accessible. Backs the
+    # DR page's "Validate Folder" button via gdrive-test.ps1 -Mode validate-folder.
+    # Mock-aware (honors the fault seam so validate-folder failure rendering is
+    # testable). Routed through Invoke-GDriveApi for the live path.
+    param([Parameter(Mandatory)][string]$FolderId, [string]$AccessToken)
+    if (Test-GDriveMock) {
+        $fault = Get-GDriveMockFault
+        if ($fault) { Invoke-GDriveMockFaultThrow -Class $fault }
+        $p = Resolve-GDriveMockId $FolderId
+        $ok = Test-Path -LiteralPath $p -PathType Container
+        return [pscustomobject]@{ id=$FolderId; name=(Split-Path -Leaf $p);
+            owner='mock@gdrive.local'; accessible=$ok; writable=$ok; trashed=$false }
+    }
+    $f = Invoke-GDriveApi -Method Get -Uri "files/$FolderId" -AccessToken $AccessToken `
+        -Query @{ fields='id,name,mimeType,owners(emailAddress),capabilities(canAddChildren),trashed' }
+    $owner = ''
+    $owners = @(Get-GDriveProp $f 'owners' @())
+    if ($owners.Count -gt 0) { $owner = [string](Get-GDriveProp $owners[0] 'emailAddress' '') }
+    $caps = Get-GDriveProp $f 'capabilities' $null
+    return [pscustomobject]@{
+        id         = [string](Get-GDriveProp $f 'id' $FolderId)
+        name       = [string](Get-GDriveProp $f 'name' '')
+        owner      = $owner
+        accessible = $true
+        writable   = [bool](Get-GDriveProp $caps 'canAddChildren' $false)
+        trashed    = [bool](Get-GDriveProp $f 'trashed' $false)
+    }
+}
+
 function Remove-GDriveFile {
     # files.delete; a 404 is tolerated (idempotent cleanup paths re-delete).
     param(
@@ -595,6 +686,8 @@ function Get-GDriveAbout {
     # Caller caches the result to ir.config_parameter wms_gdrive.last_about.
     param([string]$AccessToken)
     if (Test-GDriveMock) {
+        $fault = Get-GDriveMockFault
+        if ($fault) { Invoke-GDriveMockFaultThrow -Class $fault }
         $root = Get-GDriveMockRoot
         $used = [long]0
         Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
@@ -614,6 +707,25 @@ function Get-GDriveAbout {
     }
     return Invoke-GDriveApi -Method Get -Uri 'about' -AccessToken $AccessToken `
         -Query @{ fields = 'storageQuota,user' }
+}
+
+function Test-GDriveReachable {
+    # Cheap pre-flight: ONE about.get instead of a failed multi-MB upload.
+    # Returns @{ Reachable=[bool]; Class='offline'|'auth_expired'|'quota'|
+    # 'server_error'|'client_error'|'unknown'|''; Message='' }.
+    # Reuses Get-GDriveAbout (drive.file scope) + Get-GDriveErrorClass.
+    # FAILURE-SAFE: never throws; an exception becomes Reachable=$false.
+    param([string]$AccessToken)
+    try {
+        $null = Get-GDriveAbout -AccessToken $AccessToken
+        return @{ Reachable = $true; Class = ''; Message = '' }
+    } catch {
+        $msg    = $_.Exception.Message
+        $status = Get-GDriveHttpStatus $_
+        $reason = Get-GDriveErrorReason -ErrorRecord $_
+        $class  = Get-GDriveErrorClass -StatusCode $status -Reason $reason -Message $msg
+        return @{ Reachable = $false; Class = $class; Message = $msg }
+    }
 }
 
 # === Upload ===============================================================
@@ -813,6 +925,8 @@ function Send-GDriveFile {
     }
 
     if (Test-GDriveMock) {
+        $fault = Get-GDriveMockFault
+        if ($fault) { Invoke-GDriveMockFaultThrow -Class $fault }
         $parentPath = Resolve-GDriveMockId $ParentId
         if (-not (Test-Path -LiteralPath $parentPath -PathType Container)) {
             throw "Send-GDriveFile (mock): parent folder not found: $ParentId"
@@ -1283,7 +1397,9 @@ function Write-GDriveCatalogRow {
             'year', 'month_label', 'day', 'drive_name', 'drive_file_id',
             'drive_folder', 'filestore_drive_id', 'size_mb', 'checksum',
             'uploaded', 'upload_time', 'creator', 'encrypted', 'wms_version',
-            'info_json', 'restored_count'
+            'info_json', 'restored_count',
+            # v18 offline queue (plain-stored, see wms_gdrive_backup.py contract):
+            'queue_state', 'retry_count', 'last_error', 'error_class', 'next_retry_at'
         )
         $colSql = [ordered]@{ }
         foreach ($col in $allowed) {

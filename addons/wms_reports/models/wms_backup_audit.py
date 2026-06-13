@@ -14,8 +14,9 @@ DB connection), so the audit trail survives even when Odoo's HTTP layer
 is down. Daily crons (_cron_check_backup_freshness,
 _cron_check_gdrive_freshness) escalate staleness, an hourly cron
 (_cron_notify_gdrive_events) turns the scripts' Drive rows into manager
-Discuss notices, and the /wms/health controller reads _health_snapshot()
-for monitoring.
+Discuss notices, an hourly reconnect cron (_cron_retry_gdrive_uploads)
+/Runs the SYSTEM pending-upload sweep when offline-queued sets exist,
+and the /wms/health controller reads _health_snapshot() for monitoring.
 
 No secrets are ever stored here — only filenames, sizes, checksums,
 timings, and human-readable status messages.
@@ -24,6 +25,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 from datetime import datetime, timedelta
 
 from odoo import api, fields, models
@@ -36,6 +38,12 @@ _logger = logging.getLogger(__name__)
 BACKUP_STALE_HOURS = 24
 DRILL_STALE_DAYS = 7
 DISK_FREE_MIN_MB = 1024  # warn when the backup volume drops below 1 GB free
+# Fixed Scheduled Task name registered by scripts/install-backup-tasks.ps1 for
+# the reconnect / pending-upload sweep (backup-native.ps1 -PendingSweep). The
+# reconnect cron and the DR-page "Retry Now" button both /Run this — never
+# built from user input, so the injection surface is zero (mirrors
+# wms_gdrive_backup_now.MANUAL_TASK_NAME).
+PENDING_SWEEP_TASK_NAME = "WMS Pending Upload Sweep"
 # Google Drive upload staleness: daily cadence + 2h slack. DEGRADED-tier
 # ONLY, never CRITICAL — the local artifact is THE backup; a cloud problem
 # must not page like local-backup loss (spec section 10).
@@ -150,9 +158,12 @@ class WmsBackupAudit(models.Model):
         (wms_gdrive.enabled != '0' AND an upload row or about-cache exists)
         the snapshot grows gdrive_enabled / drive_connected /
         last_upload_age_hours / drive_storage_used_mb /
-        drive_storage_limit_mb / next_backup_at; otherwise only
-        gdrive_enabled=False. Drive problems escalate to DEGRADED at most -
-        NEVER CRITICAL (the local artifact is the backup that pages).
+        drive_storage_limit_mb / next_backup_at plus the v18 offline-queue
+        keys queued_count / queue_oldest_age_hours / queue_abandoned_count /
+        last_failure_time / last_failure_message / queue_max_retry;
+        otherwise only gdrive_enabled=False. Drive problems escalate to
+        DEGRADED at most - NEVER CRITICAL (the local artifact is the backup
+        that pages).
         """
         now = fields.Datetime.now()
         warnings = []
@@ -254,6 +265,14 @@ class WmsBackupAudit(models.Model):
         wms_gdrive.last_about cache is populated). Otherwise only
         {"gdrive_enabled": False}, so a dark or kill-switched Drive stage
         can never degrade health.
+
+        v18 offline queue: when live, also reports queued_count (sets in
+        created/waiting/uploading/failed), queue_oldest_age_hours,
+        queue_abandoned_count, queue_max_retry (highest retry_count among
+        pending), and the newest backup_gdrive failure's
+        last_failure_time / last_failure_message — all read from the
+        psql-written wms.gdrive.backup catalog. A backed-up or abandoned
+        queue raises a DEGRADED warning (never CRITICAL).
         """
         param = self.env["ir.config_parameter"].sudo()
         enabled = (param.get_param("wms_gdrive.enabled", "1") or "").strip() != "0"
@@ -305,6 +324,35 @@ class WmsBackupAudit(models.Model):
             (upload_age_hours is not None and upload_age_hours <= GDRIVE_STALE_HOURS)
             or (about_age_hours is not None and about_age_hours <= GDRIVE_STALE_HOURS)
         )
+
+        # --- v18 offline upload queue (catalog is authoritative). DEGRADED
+        # only — a backed-up/abandoned queue is never CRITICAL.
+        backup = self.env["wms.gdrive.backup"].sudo()
+        pending_states = ("created", "waiting", "uploading", "failed")
+        queued_count = backup.search_count([("queue_state", "in", pending_states)])
+        queue_waiting = backup.search_count([("queue_state", "=", "waiting")])
+        abandoned_count = backup.search_count([("queue_state", "=", "abandoned")])
+        oldest = backup.search(
+            [("queue_state", "in", pending_states)], order="create_date asc", limit=1
+        )
+        oldest_age_hours = None
+        if oldest and oldest.create_date:
+            oldest_age_hours = (now - oldest.create_date).total_seconds() / 3600.0
+        newest_fail = self.sudo().search(
+            [("audit_type", "=", "backup_gdrive"), ("success", "=", False)],
+            order="event_time desc, id desc",
+            limit=1,
+        )
+        if abandoned_count:
+            warnings.append(
+                "%d Google Drive backup set(s) abandoned (need attention)" % abandoned_count
+            )
+        if queued_count and oldest_age_hours is not None and oldest_age_hours > GDRIVE_STALE_HOURS:
+            warnings.append(
+                "Google Drive upload queue backed up (%d pending, oldest %.0fh)"
+                % (queued_count, oldest_age_hours)
+            )
+
         return {
             "gdrive_enabled": True,
             "drive_connected": connected,
@@ -314,8 +362,34 @@ class WmsBackupAudit(models.Model):
             "drive_storage_used_mb": used_mb,
             "drive_storage_limit_mb": limit_mb,
             "next_backup_at": self._gdrive_next_backup_at(),
+            "queued_count": queued_count,
+            "queue_waiting": queue_waiting,
+            "queue_abandoned_count": abandoned_count,
+            "queue_oldest_age_hours": (
+                round(oldest_age_hours, 1) if oldest_age_hours is not None else None
+            ),
+            "queue_max_retry": self._gdrive_queue_max_retry(),
+            "last_failure_time": newest_fail.event_time if newest_fail else None,
+            "last_failure_message": ((newest_fail.message or "")[:300] if newest_fail else None),
             "warnings": warnings,
         }
+
+    @api.model
+    def _gdrive_queue_max_retry(self):
+        """Highest retry_count among offline-queue rows still pending
+        (created/waiting/uploading/failed). 0 when the queue is empty.
+
+        Read from the psql-written wms.gdrive.backup catalog; surfaced as
+        the DR-page 'queue_max_retry' metric so a manager can see how hard
+        a chronically-failing set is being retried before it is abandoned.
+        """
+        backup = self.env["wms.gdrive.backup"].sudo()
+        rows = backup.search(
+            [("queue_state", "in", ("created", "waiting", "uploading", "failed"))],
+            order="retry_count desc",
+            limit=1,
+        )
+        return rows.retry_count if rows else 0
 
     @api.model
     def _gdrive_last_about(self):
@@ -585,6 +659,65 @@ class WmsBackupAudit(models.Model):
                 subject = "WMS - %s FAILED" % noun
             notify_wms_managers(self.env, body, subject)
         rows.write({"notified": True})
+
+    @api.model
+    def _cron_retry_gdrive_uploads(self):
+        """Hourly (:45): if the Drive tier is live AND there are
+        pending/waiting/uploading/failed sets, /Run the 'WMS Pending Upload
+        Sweep' SYSTEM task (which probes connectivity itself and no-ops when
+        still offline). Heavy work runs as SYSTEM, never in this worker
+        thread. Quiet when the stage is kill-switched or the queue is empty.
+
+        The reconnect loop only TRIGGERS the sweep; the sweep writes the
+        usual backup_gdrive audit rows, so the existing :25 event notifier
+        (_cron_notify_gdrive_events) delivers the success/failure Discuss
+        notice — no new notification path (P3 "extend, don't fork notify").
+        """
+        param = self.env["ir.config_parameter"].sudo()
+        if (param.get_param("wms_gdrive.enabled", "1") or "").strip() == "0":
+            return
+        backup = self.env["wms.gdrive.backup"].sudo()
+        pending = backup.search_count(
+            [("queue_state", "in", ("created", "waiting", "uploading", "failed"))]
+        )
+        if not pending:
+            return
+        rc, detail = self._run_pending_sweep_task()
+        if rc != 0:
+            # Graceful no-op when the task is absent / could not start: the
+            # daily SYSTEM backup task's -StartWhenAvailable catch-up is the
+            # documented Odoo-down fallback (spec section 0.3). The local
+            # backup tier is unaffected.
+            _logger.warning(
+                "wms.backup.audit: pending-upload sweep %r not started (rc=%s): %s",
+                PENDING_SWEEP_TASK_NAME,
+                rc,
+                detail,
+            )
+
+    def _run_pending_sweep_task(self):
+        """Fire the trigger-less 'WMS Pending Upload Sweep' task. Returns
+        (rc, detail).
+
+        Same schtasks /Run seam as wms.gdrive.backup.now._run_schtasks: with
+        context key ``test_skip_schtasks`` the subprocess is never spawned
+        and the call reports success. Argument-array invocation only (no
+        shell string interpolation) with the fixed task-name constant — the
+        injection surface is zero. A missing task surfaces as a non-zero rc
+        the caller treats as a graceful no-op (never an exception).
+        """
+        if self.env.context.get("test_skip_schtasks"):
+            return 0, ""
+        try:
+            proc = subprocess.run(
+                ["schtasks.exe", "/Run", "/TN", PENDING_SWEEP_TASK_NAME],
+                capture_output=True,
+                timeout=15,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            return 1, str(exc)
+        detail = (proc.stderr or proc.stdout or b"").decode("utf-8", "replace").strip()
+        return proc.returncode, detail
 
     @api.model
     def _notify_managers(self, status, detail):

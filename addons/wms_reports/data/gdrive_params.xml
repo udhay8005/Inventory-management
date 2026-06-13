@@ -49,5 +49,20 @@
         <!-- 'login|iso-ts' Backup Now requester handshake (wizard writes, script reads). -->
         <function model="ir.config_parameter" name="set_param"
                   eval="('wms_gdrive.last_manual_requester', '')"/>
+        <!-- v18 offline queue: max upload attempts before a set goes 'abandoned' (caps retry_count). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_retry_max', '8')"/>
+        <!-- v18 offline queue: sweep look-back window (days); aligns with local -Retain 14 so a kept file is never an orphan. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_retry_window_days', '14')"/>
+        <!-- v18 offline queue: max sets retried per sweep run (bounds the 2h task limit). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_retry_max_per_run', '5')"/>
+        <!-- v18 offline queue: exponential-backoff base in minutes (next_retry_at = now + base * 2^(retry-1), capped 24h). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_backoff_base_min', '15')"/>
+        <!-- v18 optional Drive parent folder id (validated bare id); blank = fall back to .env GDRIVE_PARENT_FOLDER_ID then My Drive root. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.parent_folder_id', '')"/>
     </data>
 </odoo>

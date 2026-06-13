@@ -925,3 +925,619 @@ class TestGdriveHealthEndpoint(HttpCase):
         ):
             self.assertIn(key, data, "/wms/health must expose %s" % key)
         self.assertTrue(data["drive_connected"])
+
+
+# =========================================================================
+# v18 offline-first Google Drive backup queue (spec v18-offline-spec.md).
+#
+# The catalog row is now AUTHORITATIVE for the offline queue: the 5 new
+# plain-stored columns (queue_state / retry_count / last_error /
+# error_class / next_retry_at) are psql-written by Set-GDriveQueueFailure /
+# the Stage 5a sweep / Send-GDriveBackupSet (see the model docstring's
+# COLUMN CONTRACT). Odoo only READS them. These suites seed rows (the only
+# Odoo-side test door — spec section 8) and assert the model defaults, the
+# plain-stored drift guard, the seeded params, the live/dark health-snapshot
+# queue keys (DEGRADED-only, NEVER CRITICAL), the DR-page wizard fields /
+# onchange / subprocess seams / manager-only & storekeeper gates, and the
+# hourly reconnect cron.
+# =========================================================================
+
+# The 5 v18 queue columns appended to Write-GDriveCatalogRow's $allowed
+# whitelist (scripts/gdrive-lib.ps1) IN THE SAME COMMIT as the model fields.
+# psql writes them via the same plain-stored path as CATALOG_COLUMNS, so the
+# same rename/add-in-lockstep contract applies (spec sections 1.1 / 1.2).
+QUEUE_COLUMNS = [
+    "queue_state",
+    "retry_count",
+    "last_error",
+    "error_class",
+    "next_retry_at",
+]
+
+# The 5 offline-queue ir.config_parameter keys seeded by data/gdrive_params.xml
+# under noupdate=1 (spec section 2). parent_folder_id seeds as '' and is
+# probed separately (get_param coalesces '' to its default).
+OFFLINE_PARAM_DEFAULTS = {
+    "wms_gdrive.offline_retry_max": "8",
+    "wms_gdrive.offline_retry_window_days": "14",
+    "wms_gdrive.offline_retry_max_per_run": "5",
+    "wms_gdrive.offline_backoff_base_min": "15",
+}
+
+
+@tagged("post_install", "-at_install", "wms", "wms_gdrive")
+class TestGdriveQueueColumns(TransactionCase):
+    """The 5 v18 offline-queue catalog columns: record_set door accepts
+    them, defaults agree with the script's first-write expectations, and
+    the plain-stored drift guard holds (psql bypasses the ORM, so a
+    compute/related/onchange on any of them would silently diverge)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Catalog = cls.env["wms.gdrive.backup"]
+
+    def test_queue_columns_exist(self):
+        for col in QUEUE_COLUMNS:
+            self.assertIn(
+                col,
+                self.Catalog._fields,
+                "queue column %r missing — Set-GDriveQueueFailure / the "
+                "Stage 5a sweep write it via psql" % col,
+            )
+
+    def test_queue_columns_are_plain_stored(self):
+        # Same contract as CATALOG_COLUMNS: psql writes bypass the ORM, so a
+        # compute / related / onchange would silently diverge from the script.
+        for col in QUEUE_COLUMNS:
+            field = self.Catalog._fields[col]
+            self.assertTrue(field.store, "queue column %r must be stored" % col)
+            self.assertFalse(field.compute, "queue column %r must not be computed" % col)
+            self.assertFalse(field.related, "queue column %r must not be related" % col)
+            self.assertFalse(field.inverse, "queue column %r must not have an inverse" % col)
+
+    def test_queue_state_defaults_to_created(self):
+        # The Stage 5b "created" row is written before the first upload
+        # attempt; the ORM default must match so a seeded row agrees.
+        rec = self.Catalog.record_set({"name": "wms-20260613-163000.dump.gpg"})
+        self.assertEqual(rec.queue_state, "created")
+
+    def test_retry_count_defaults_to_zero(self):
+        rec = self.Catalog.record_set({"name": "wms-20260613-163000.dump.gpg"})
+        self.assertEqual(rec.retry_count, 0)
+        # last_error / error_class / next_retry_at are unset on a fresh row.
+        self.assertFalse(rec.last_error)
+        self.assertFalse(rec.error_class)
+        self.assertFalse(rec.next_retry_at)
+
+    def test_record_set_accepts_queue_failure_vals(self):
+        # Exactly the shape Set-GDriveQueueFailure UPSERTs on an offline
+        # failure: waiting / retry_count++ / error_class / next_retry_at.
+        next_at = fields.Datetime.now() + timedelta(minutes=15)
+        rec = self.Catalog.record_set(
+            {
+                "name": "wms-20260613-170000.dump.gpg",
+                "queue_state": "waiting",
+                "retry_count": 1,
+                "error_class": "offline",
+                "last_error": "Drive API GET about failed (HTTP 0, offline)",
+                "next_retry_at": next_at,
+            }
+        )
+        self.assertEqual(rec.queue_state, "waiting")
+        self.assertEqual(rec.retry_count, 1)
+        self.assertEqual(rec.error_class, "offline")
+        self.assertIn("offline", rec.last_error)
+        self.assertEqual(rec.next_retry_at, next_at)
+
+    def test_record_set_accepts_uploaded_terminal_state(self):
+        # Send-GDriveBackupSet's success UPSERT sets queue_state='uploaded'
+        # in the SAME row write as uploaded=true (they never diverge).
+        rec = self.Catalog.record_set(
+            {
+                "name": "wms-20260613-170100.dump.gpg",
+                "queue_state": "uploaded",
+                "uploaded": True,
+                "retry_count": 3,
+            }
+        )
+        self.assertEqual(rec.queue_state, "uploaded")
+        self.assertTrue(rec.uploaded)
+        self.assertEqual(rec.retry_count, 3, "retry_count is preserved as the attempt audit trail")
+
+    def test_error_class_is_free_char_not_selection(self):
+        # error_class is a Char, NOT a Selection: an unexpected class string
+        # from a future PowerShell change must never raise on the psql path
+        # (Selections validate on ORM write; a Char is contract-safe).
+        field = self.Catalog._fields["error_class"]
+        self.assertEqual(field.type, "char")
+        rec = self.Catalog.record_set(
+            {"name": "wms-20260613-170200.dump.gpg", "error_class": "some_future_class"}
+        )
+        self.assertEqual(rec.error_class, "some_future_class")
+
+    def test_queue_state_selection_keys(self):
+        keys = dict(self.Catalog._fields["queue_state"].selection)
+        for state in ("created", "waiting", "uploading", "uploaded", "failed", "abandoned"):
+            self.assertIn(state, keys, "queue_state must offer the %r lifecycle value" % state)
+
+
+@tagged("post_install", "-at_install", "wms", "wms_gdrive")
+class TestGdriveOfflineParams(TransactionCase):
+    """The 5 offline-queue ir.config_parameter keys: seeded defaults,
+    write/read round-trip (the shared Odoo<->PowerShell contract), and the
+    blank-probe for parent_folder_id (seeded '' so the key exists)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Param = cls.env["ir.config_parameter"].sudo()
+
+    def test_offline_params_seeded_with_defaults(self):
+        for key, default in OFFLINE_PARAM_DEFAULTS.items():
+            self.assertEqual(
+                self.Param.get_param(key),
+                default,
+                "%s must be seeded to %r by data/gdrive_params.xml" % (key, default),
+            )
+
+    def test_parent_folder_id_seeded_blank(self):
+        # Seeded '' so the key exists for the script/wizard handshake;
+        # get_param('') falls back to its default, so probe the row.
+        self.assertTrue(
+            self.Param.search_count([("key", "=", "wms_gdrive.parent_folder_id")]),
+            "wms_gdrive.parent_folder_id must be seeded (blank) by data/gdrive_params.xml",
+        )
+
+    def test_offline_params_round_trip(self):
+        # The scripts read these via Get-WmsConfigParam (psql); a write here
+        # must survive a read unchanged (they are the remote config).
+        for key in OFFLINE_PARAM_DEFAULTS:
+            self.Param.set_param(key, "11")
+            self.assertEqual(self.Param.get_param(key), "11")
+        self.Param.set_param("wms_gdrive.parent_folder_id", "1AbC_def-GHIjkl")
+        self.assertEqual(self.Param.get_param("wms_gdrive.parent_folder_id"), "1AbC_def-GHIjkl")
+
+
+@tagged("post_install", "-at_install", "wms", "wms_gdrive")
+class TestGdriveQueueHealthSnapshot(GdriveHealthMixin, TransactionCase):
+    """_health_snapshot() offline-queue keys (spec section 5.1): present
+    when the Drive tier is LIVE, absent when dark, and a backed-up /
+    abandoned queue escalates to DEGRADED — NEVER CRITICAL."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Audit = cls.env["wms.backup.audit"]
+        cls.Param = cls.env["ir.config_parameter"].sudo()
+        cls.Catalog = cls.env["wms.gdrive.backup"]
+
+    def _seed_set(self, name, queue_state, retry_count=0, **extra):
+        vals = {"name": name, "queue_state": queue_state, "retry_count": retry_count}
+        vals.update(extra)
+        return self.Catalog.record_set(vals)
+
+    # The 7 offline-queue keys _gdrive_snapshot_fields adds when live.
+    _QUEUE_KEYS = (
+        "queued_count",
+        "queue_waiting",
+        "queue_abandoned_count",
+        "queue_oldest_age_hours",
+        "queue_max_retry",
+        "last_failure_time",
+        "last_failure_message",
+    )
+
+    def test_queue_keys_present_when_live(self):
+        self._seed_local_healthy()
+        self._mk("backup_gdrive", True, 1)  # makes the Drive tier live
+        self._seed_set("wms-a.dump.gpg", "waiting", retry_count=2)
+        self._seed_set("wms-b.dump.gpg", "created")
+        self._seed_set("wms-c.dump.gpg", "uploaded", uploaded=True)
+        snap = self.Audit._health_snapshot()
+        for key in self._QUEUE_KEYS:
+            self.assertIn(key, snap, "%s must be exposed when the Drive tier is live" % key)
+        # created + waiting are pending; uploaded is terminal (excluded).
+        self.assertEqual(snap["queued_count"], 2)
+        self.assertEqual(snap["queue_waiting"], 1)
+        self.assertEqual(snap["queue_abandoned_count"], 0)
+        self.assertEqual(snap["queue_max_retry"], 2)
+
+    def test_queue_keys_absent_when_disabled(self):
+        # Kill-switch dark: only the gate key, even with queue rows seeded.
+        self._seed_local_healthy()
+        self.Param.set_param("wms_gdrive.enabled", "0")
+        self._mk("backup_gdrive", True, 1)
+        self._seed_set("wms-a.dump.gpg", "waiting")
+        snap = self.Audit._health_snapshot()
+        self.assertFalse(snap["gdrive_enabled"])
+        for key in self._QUEUE_KEYS:
+            self.assertNotIn(key, snap, "%s must be absent when Drive is disabled" % key)
+        self.assertEqual(snap["status"], "HEALTHY", "a kill-switched Drive stage cannot degrade")
+
+    def test_queue_keys_absent_when_dark(self):
+        # enabled but never set up (no backup_gdrive rows, blank about):
+        # the whole Drive block stays dark even though queue rows exist.
+        self._seed_local_healthy()
+        self.Param.set_param("wms_gdrive.last_about", "")
+        self._seed_set("wms-a.dump.gpg", "waiting")
+        snap = self.Audit._health_snapshot()
+        self.assertFalse(snap["gdrive_enabled"])
+        for key in self._QUEUE_KEYS:
+            self.assertNotIn(key, snap)
+        self.assertEqual(snap["status"], "HEALTHY")
+
+    def test_abandoned_set_is_degraded_never_critical(self):
+        self._seed_local_healthy()
+        self._mk("backup_gdrive", True, 1)
+        self._seed_set("wms-doomed.dump.gpg", "abandoned", retry_count=8)
+        snap = self.Audit._health_snapshot()
+        self.assertEqual(snap["queue_abandoned_count"], 1)
+        self.assertTrue(
+            any("abandoned" in w for w in snap["warnings"]),
+            "an abandoned set must raise a manager-facing warning",
+        )
+        self.assertEqual(
+            snap["status"],
+            "DEGRADED",
+            "an abandoned Drive set is DEGRADED — CRITICAL stays reserved for local",
+        )
+
+    def test_backed_up_queue_warns_degraded(self):
+        # A pending set older than GDRIVE_STALE_HOURS -> backed-up warning.
+        self._seed_local_healthy()
+        self._mk("backup_gdrive", True, 1)
+        stale = self.Catalog.record_set(
+            {"name": "wms-stuck.dump.gpg", "queue_state": "waiting", "retry_count": 1}
+        )
+        old = fields.Datetime.now() - timedelta(hours=audit_module.GDRIVE_STALE_HOURS + 5)
+        # create_date is the "oldest pending age" source; force it back.
+        self.env.cr.execute(
+            "UPDATE wms_gdrive_backup SET create_date = %s WHERE id = %s",
+            (old, stale.id),
+        )
+        stale.invalidate_recordset(["create_date"])
+        snap = self.Audit._health_snapshot()
+        self.assertTrue(
+            any("queue backed up" in w for w in snap["warnings"]),
+            "a long-pending set must raise the backed-up warning",
+        )
+        self.assertEqual(snap["status"], "DEGRADED")
+        self.assertIsNotNone(snap["queue_oldest_age_hours"])
+        self.assertGreater(snap["queue_oldest_age_hours"], audit_module.GDRIVE_STALE_HOURS)
+
+    def test_last_failure_fields_from_newest_failed_audit(self):
+        self._seed_local_healthy()
+        self._mk("backup_gdrive", True, 30)
+        self._mk(
+            "backup_gdrive",
+            False,
+            1,
+            message="Drive upload FAILED: storageQuotaExceeded (quota)",
+        )
+        snap = self.Audit._health_snapshot()
+        self.assertTrue(snap["last_failure_time"])
+        self.assertIn("storageQuotaExceeded", snap["last_failure_message"])
+
+    def test_all_queue_problems_at_once_only_degraded(self):
+        # Abandoned + backed-up + a fresh failure together never reach
+        # CRITICAL: the local pipeline is healthy, so Drive stays DEGRADED.
+        self._seed_local_healthy()
+        self._mk("backup_gdrive", True, 1)
+        self._mk("backup_gdrive", False, 1, message="boom")
+        self._seed_set("wms-dead.dump.gpg", "abandoned", retry_count=8)
+        stuck = self.Catalog.record_set(
+            {"name": "wms-stuck.dump.gpg", "queue_state": "failed", "retry_count": 4}
+        )
+        old = fields.Datetime.now() - timedelta(hours=audit_module.GDRIVE_STALE_HOURS + 10)
+        self.env.cr.execute(
+            "UPDATE wms_gdrive_backup SET create_date = %s WHERE id = %s",
+            (old, stuck.id),
+        )
+        stuck.invalidate_recordset(["create_date"])
+        snap = self.Audit._health_snapshot()
+        self.assertEqual(snap["status"], "DEGRADED")
+        self.assertNotEqual(snap["status"], "CRITICAL")
+        self.assertEqual(snap["queue_abandoned_count"], 1)
+        self.assertEqual(snap["queue_max_retry"], 4)
+
+
+@tagged("post_install", "-at_install", "wms", "wms_gdrive")
+class TestGdriveDrPageQueue(GdriveUsersMixin, TransactionCase):
+    """The Backup & Disaster Recovery page (extended wms.gdrive.settings):
+    the 5 offline-tuning params round-trip, folder-URL id extraction, the
+    validate-folder / disconnect subprocess seams, and the manager-only +
+    storekeeper-exclusion gates (spec sections 6 / 7 / 9)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Param = cls.env["ir.config_parameter"].sudo()
+        cls.Wizard = cls.env["wms.gdrive.settings"]
+
+    # --- offline-tuning param round-trip ----------------------------------
+    def test_default_get_loads_offline_params(self):
+        self.Param.set_param("wms_gdrive.offline_retry_max", "12")
+        self.Param.set_param("wms_gdrive.offline_retry_window_days", "21")
+        self.Param.set_param("wms_gdrive.offline_retry_max_per_run", "7")
+        self.Param.set_param("wms_gdrive.offline_backoff_base_min", "20")
+        self.Param.set_param("wms_gdrive.parent_folder_id", "1AbC_def-GHIjkl")
+        wiz = self.Wizard.create({})
+        self.assertEqual(wiz.offline_retry_max, 12)
+        self.assertEqual(wiz.offline_retry_window_days, 21)
+        self.assertEqual(wiz.offline_retry_max_per_run, 7)
+        self.assertEqual(wiz.offline_backoff_base_min, 20)
+        self.assertEqual(wiz.parent_folder_id, "1AbC_def-GHIjkl")
+
+    def test_save_round_trips_offline_params(self):
+        wiz = self.Wizard.create({})
+        wiz.write(
+            {
+                "offline_retry_max": 9,
+                "offline_retry_window_days": 15,
+                "offline_retry_max_per_run": 6,
+                "offline_backoff_base_min": 30,
+                "parent_folder_id": "0BxY-zzz_123456",
+            }
+        )
+        wiz.action_save()
+        self.assertEqual(self.Param.get_param("wms_gdrive.offline_retry_max"), "9")
+        self.assertEqual(self.Param.get_param("wms_gdrive.offline_retry_window_days"), "15")
+        self.assertEqual(self.Param.get_param("wms_gdrive.offline_retry_max_per_run"), "6")
+        self.assertEqual(self.Param.get_param("wms_gdrive.offline_backoff_base_min"), "30")
+        self.assertEqual(self.Param.get_param("wms_gdrive.parent_folder_id"), "0BxY-zzz_123456")
+
+    def test_save_validates_offline_ints_positive(self):
+        wiz = self.Wizard.create({})
+        wiz.offline_retry_max = 0
+        with self.assertRaises(UserError):
+            wiz.action_save()
+
+    def test_save_validates_parent_folder_id_charset(self):
+        wiz = self.Wizard.create({})
+        wiz.parent_folder_id = "too short!"  # fails ^[A-Za-z0-9_-]{10,}$
+        with self.assertRaises(UserError):
+            wiz.action_save()
+
+    # --- folder-URL -> bare-id onchange (the raw URL never reaches PS) ----
+    def test_onchange_folder_url_folders_form(self):
+        wiz = self.Wizard.new({})
+        wiz.folder_url = "https://drive.google.com/drive/folders/1A2b3C4d5E6f7G8h9I0j"
+        wiz._onchange_folder_url()
+        self.assertEqual(wiz.parent_folder_id, "1A2b3C4d5E6f7G8h9I0j")
+
+    def test_onchange_folder_url_d_form(self):
+        wiz = self.Wizard.new({})
+        wiz.folder_url = "https://drive.google.com/file/d/1A2b3C4d5E6f7G8h9I0j/view"
+        wiz._onchange_folder_url()
+        self.assertEqual(wiz.parent_folder_id, "1A2b3C4d5E6f7G8h9I0j")
+
+    def test_onchange_folder_url_id_query_form(self):
+        wiz = self.Wizard.new({})
+        wiz.folder_url = "https://drive.google.com/open?id=1A2b3C4d5E6f7G8h9I0j"
+        wiz._onchange_folder_url()
+        self.assertEqual(wiz.parent_folder_id, "1A2b3C4d5E6f7G8h9I0j")
+
+    def test_onchange_folder_url_no_match_leaves_id(self):
+        wiz = self.Wizard.new({"parent_folder_id": "0BxY-zzz_123456"})
+        wiz.folder_url = "https://example.com/not-a-drive-link"
+        wiz._onchange_folder_url()
+        self.assertEqual(wiz.parent_folder_id, "0BxY-zzz_123456")
+
+    # --- validate-folder / disconnect subprocess seams --------------------
+    def _stub_gdrive_test(self, stdout):
+        """Same stub idiom as TestGdriveSettingsWizard: resolve the script
+        path to a file that exists, and feed one JSON stdout line."""
+        fake = subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout, stderr=b"")
+        return (
+            patch.object(
+                settings_wizard.WmsGdriveSettings,
+                "_gdrive_test_script_path",
+                return_value=os.path.abspath(__file__),
+            ),
+            patch.object(settings_wizard.subprocess, "run", return_value=fake),
+        )
+
+    def test_validate_folder_renders_success(self):
+        wiz = self.Wizard.create({"parent_folder_id": "1A2b3C4d5E6f7G8h9I0j"})
+        path_patch, run_patch = self._stub_gdrive_test(
+            b'{"ok": true, "name": "Inventory_Backups", '
+            b'"owner": "office.dakshinvrindavan@gmail.com", '
+            b'"accessible": true, "writable": true}'
+        )
+        with path_patch, run_patch:
+            wiz.action_validate_folder()
+        self.assertIn("Folder is valid", wiz.folder_validate_html)
+        self.assertIn("Inventory_Backups", wiz.folder_validate_html)
+        self.assertIn("office.dakshinvrindavan@gmail.com", wiz.folder_validate_html)
+
+    def test_validate_folder_not_writable_warns(self):
+        wiz = self.Wizard.create({"parent_folder_id": "1A2b3C4d5E6f7G8h9I0j"})
+        path_patch, run_patch = self._stub_gdrive_test(
+            b'{"ok": true, "name": "Shared", "owner": "someone@else.com", '
+            b'"accessible": true, "writable": false}'
+        )
+        with path_patch, run_patch:
+            wiz.action_validate_folder()
+        self.assertIn("cannot add files", wiz.folder_validate_html)
+
+    def test_validate_folder_auth_expired_renders_reconnect(self):
+        wiz = self.Wizard.create({"parent_folder_id": "1A2b3C4d5E6f7G8h9I0j"})
+        path_patch, run_patch = self._stub_gdrive_test(
+            b'{"ok": false, "error": "GDRIVE_AUTH_EXPIRED: token refresh rejected", '
+            b'"auth_expired": true}'
+        )
+        with path_patch, run_patch:
+            wiz.action_validate_folder()
+        self.assertIn("Folder check failed", wiz.folder_validate_html)
+        self.assertIn("setup-gdrive-auth.ps1", wiz.folder_validate_html)
+
+    def test_validate_folder_no_id_is_soft_note(self):
+        # No folder id set: the page renders a "default folder" note and
+        # never shells out (no subprocess to stub).
+        wiz = self.Wizard.create({"parent_folder_id": ""})
+        wiz.action_validate_folder()
+        self.assertIn("default folder", wiz.folder_validate_html)
+
+    def test_validate_folder_script_missing_is_graceful(self):
+        # FileNotFoundError out of subprocess.run -> soft "check failed",
+        # never a raw traceback (the _run_gdrive_test OSError guard).
+        wiz = self.Wizard.create({"parent_folder_id": "1A2b3C4d5E6f7G8h9I0j"})
+        with (
+            patch.object(
+                settings_wizard.WmsGdriveSettings,
+                "_gdrive_test_script_path",
+                return_value=os.path.abspath(__file__),
+            ),
+            patch.object(
+                settings_wizard.subprocess, "run", side_effect=FileNotFoundError("powershell.exe")
+            ),
+        ):
+            wiz.action_validate_folder()  # must NOT raise
+        self.assertIn("Folder check failed", wiz.folder_validate_html)
+        self.assertNotIn("FileNotFoundError", wiz.folder_validate_html)
+
+    def test_disconnect_revoke_success(self):
+        # test_skip_schtasks makes _run_setup_auth report success without a
+        # subprocess; the page confirms the revoke + the local-safe message.
+        wiz = self.Wizard.with_context(test_skip_schtasks=True).create({})
+        wiz.action_disconnect()
+        self.assertIn("Disconnected", wiz.result_html)
+        self.assertIn("Local", wiz.result_html)
+
+    def test_disconnect_file_not_found_is_graceful(self):
+        # No skip seam: subprocess.run raises like a host without
+        # powershell.exe -> graceful fallback, no raw exception in the HTML.
+        # scripts/setup-gdrive-auth.ps1 exists in the repo, so _run_setup_auth
+        # passes its own existence guard and reaches the patched subprocess.run
+        # (no os.path.isfile patch — that would perturb Odoo internals).
+        wiz = self.Wizard.create({})
+        with patch.object(
+            settings_wizard.subprocess, "run", side_effect=FileNotFoundError("powershell.exe")
+        ):
+            wiz.action_disconnect()  # must NOT raise
+        self.assertIn("Could not revoke", wiz.result_html)
+        self.assertNotIn("FileNotFoundError", wiz.result_html)
+
+    # --- manager-only + storekeeper exclusion (three-gate, spec 6.1/9) ----
+    def test_check_manager_raises_for_non_manager(self):
+        # Defense-in-depth gate 3: _check_manager() short-circuits under su,
+        # so create the record in the (su) test env, then rebind the action
+        # call to a plain keeper — with_user() drops su, the has_group gate
+        # fires, and the action raises AccessError before doing any work.
+        keeper = self._user("wms_location.group_wms_user", "gd_dr_keeper")
+        wiz = self.Wizard.create({})
+        with self.assertRaises(AccessError):
+            wiz.with_user(keeper).action_retry_now()
+
+    def test_manager_passes_check_manager(self):
+        mgr = self._user("wms_location.group_wms_manager", "gd_dr_mgr")
+        wiz = self.Wizard.with_user(mgr).with_context(test_skip_schtasks=True).create({})
+        # Reaches the action body (no AccessError) and renders a result.
+        wiz.action_retry_now()
+        self.assertTrue(wiz.result_html)
+
+    def test_storekeeper_cannot_read_settings_model(self):
+        # Structural exclusion: the model ACL is manager-only, so a plain
+        # keeper (and the Backup Now capability keeper) cannot even read it.
+        keeper = self._user("wms_location.group_wms_user", "gd_dr_keeper2")
+        cap = self._user("wms_reports.group_wms_backup_now", "gd_dr_cap")
+        mgr = self._user("wms_location.group_wms_manager", "gd_dr_mgr2")
+        self.assertFalse(self._can(keeper, "wms.gdrive.settings", "read"))
+        self.assertFalse(self._can(cap, "wms.gdrive.settings", "read"))
+        self.assertTrue(self._can(mgr, "wms.gdrive.settings", "read"))
+
+
+@tagged("post_install", "-at_install", "wms", "wms_gdrive")
+class TestGdriveReconnectCron(GdriveHealthMixin, TransactionCase):
+    """_cron_retry_gdrive_uploads (hourly :45): when the Drive tier is live
+    AND offline-queued sets exist, /Run the 'WMS Pending Upload Sweep'
+    SYSTEM task; quiet when the queue is empty or the stage is
+    kill-switched. The cron only TRIGGERS — the existing :25 event notifier
+    delivers the Discuss notice (spec section 5.2)."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.Audit = cls.env["wms.backup.audit"]
+        cls.Param = cls.env["ir.config_parameter"].sudo()
+        cls.Catalog = cls.env["wms.gdrive.backup"]
+
+    def _seed_set(self, name, queue_state, **extra):
+        vals = {"name": name, "queue_state": queue_state}
+        vals.update(extra)
+        return self.Catalog.record_set(vals)
+
+    def test_pending_set_triggers_sweep_task(self):
+        # test_skip_schtasks asserts the cron reaches the /Run seam without
+        # ever spawning a subprocess (the seam returns success).
+        self._seed_set("wms-waiting.dump.gpg", "waiting")
+        with patch.object(type(self.Audit), "_run_pending_sweep_task", return_value=(0, "")) as run:
+            self.Audit.with_context(test_skip_schtasks=True)._cron_retry_gdrive_uploads()
+        run.assert_called_once()
+
+    def test_no_subprocess_under_test_skip(self):
+        # Belt-and-braces: even reaching the real seam spawns nothing under
+        # the skip context, so subprocess.run is never called.
+        self._seed_set("wms-waiting.dump.gpg", "waiting")
+        with patch.object(audit_module.subprocess, "run") as run:
+            self.Audit.with_context(test_skip_schtasks=True)._cron_retry_gdrive_uploads()
+        run.assert_not_called()
+
+    def test_noop_when_queue_empty(self):
+        # Live tier (a successful upload row) but no pending sets -> no /Run.
+        self._mk("backup_gdrive", True, 1)
+        with patch.object(type(self.Audit), "_run_pending_sweep_task") as run:
+            self.Audit.with_context(test_skip_schtasks=True)._cron_retry_gdrive_uploads()
+        run.assert_not_called()
+
+    def test_noop_when_only_terminal_sets(self):
+        # uploaded / abandoned are terminal — they are NOT pending, so the
+        # reconnect loop has nothing to retry.
+        self._seed_set("wms-done.dump.gpg", "uploaded", uploaded=True)
+        self._seed_set("wms-dead.dump.gpg", "abandoned", retry_count=8)
+        with patch.object(type(self.Audit), "_run_pending_sweep_task") as run:
+            self.Audit.with_context(test_skip_schtasks=True)._cron_retry_gdrive_uploads()
+        run.assert_not_called()
+
+    def test_noop_when_stage_disabled(self):
+        # Kill-switch beats a non-empty queue: no /Run when disabled.
+        self.Param.set_param("wms_gdrive.enabled", "0")
+        self._seed_set("wms-waiting.dump.gpg", "waiting")
+        with patch.object(type(self.Audit), "_run_pending_sweep_task") as run:
+            self.Audit.with_context(test_skip_schtasks=True)._cron_retry_gdrive_uploads()
+        run.assert_not_called()
+
+    def test_cron_does_not_notify_directly(self):
+        # The reconnect cron only triggers the sweep; it must NOT post a
+        # Discuss notice itself (the :25 event notifier owns that — no new
+        # notification path).
+        self._seed_set("wms-waiting.dump.gpg", "waiting")
+        with (
+            patch.object(audit_module, "notify_wms_managers") as notify,
+            patch.object(type(self.Audit), "_run_pending_sweep_task", return_value=(0, "")),
+        ):
+            self.Audit.with_context(test_skip_schtasks=True)._cron_retry_gdrive_uploads()
+        notify.assert_not_called()
+
+    def test_graceful_when_task_absent(self):
+        # A missing task surfaces as rc != 0; the cron logs and no-ops
+        # (never raises — the daily -StartWhenAvailable catch-up is the
+        # documented fallback).
+        self._seed_set("wms-waiting.dump.gpg", "waiting")
+        with patch.object(
+            type(self.Audit),
+            "_run_pending_sweep_task",
+            return_value=(1, "ERROR: task not found"),
+        ):
+            # Must not raise.
+            self.Audit.with_context(test_skip_schtasks=True)._cron_retry_gdrive_uploads()
+
+    def test_run_pending_sweep_task_skip_seam(self):
+        # The seam itself returns (0, '') under the skip context with no
+        # subprocess — the deterministic test door for the whole feature.
+        with patch.object(audit_module.subprocess, "run") as run:
+            rc, detail = self.Audit.with_context(test_skip_schtasks=True)._run_pending_sweep_task()
+        self.assertEqual(rc, 0)
+        self.assertEqual(detail, "")
+        run.assert_not_called()

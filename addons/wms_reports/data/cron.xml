@@ -152,5 +152,30 @@
             <field name="nextcall"
                    eval="(DateTime.now() + timedelta(hours=1)).replace(minute=25, second=0)"/>
         </record>
+
+        <!--
+            Hourly :45 Google Drive pending-upload retry (P3 reconnect /
+            warm-loop). When the Drive tier is live AND offline-queued sets
+            exist (queue_state in created/waiting/uploading/failed), this
+            /Runs the trigger-less "WMS Pending Upload Sweep" SYSTEM task,
+            which probes connectivity itself and no-ops when still offline.
+            Heavy upload work runs as SYSTEM, never in the cron worker; the
+            sweep writes backup_gdrive rows so the :25 event notifier
+            delivers the manager notice. :45 staggers the three gdrive crons
+            across the hour (events :25, this :45). Quiet when the stage is
+            kill-switched or the queue is empty.
+        -->
+        <record id="cron_wms_gdrive_retry" model="ir.cron">
+            <field name="name">WMS — Google Drive pending-upload retry</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_retry_gdrive_uploads()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=1)).replace(minute=45, second=0)"/>
+        </record>
     </data>
 </odoo>

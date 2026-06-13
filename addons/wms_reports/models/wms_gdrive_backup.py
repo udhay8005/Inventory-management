@@ -7,7 +7,13 @@ Rows are UPSERTed directly via psql by ``Write-GDriveCatalogRow`` in
 scripts/gdrive-lib.ps1 (the backup pipeline runs out of process under
 Task Scheduler, so the catalog must survive even when Odoo's HTTP layer
 is down), and scripts/gdrive-restore.ps1 bumps ``restored_count`` the
-same way. Those writes BYPASS the ORM entirely, therefore:
+same way. The v18 offline-queue columns (queue_state / retry_count /
+last_error / error_class / next_retry_at) are written by the same psql
+path: ``Set-GDriveQueueFailure`` (backup-native.ps1) on every failed
+upload, the Stage 5a pending sweep on each retry/abandon transition, and
+``Send-GDriveBackupSet``'s success UPSERT (queue_state='uploaded'
+alongside uploaded=true). Those writes BYPASS the ORM entirely,
+therefore:
 
   * every column below is a plain stored field — no compute, no
     related, no onchange may ever be added to a column the script
@@ -82,6 +88,40 @@ class WmsGdriveBackup(models.Model):
     restored_count = fields.Integer(
         default=0,
         help="Times this set was restored (bumped by gdrive-restore.ps1 via psql UPDATE).",
+    )
+    # --- v18 offline-queue state (PLAIN STORED — psql-written, see contract above) ---
+    queue_state = fields.Selection(
+        [
+            ("created", "Created"),  # local set exists, upload not yet attempted
+            ("waiting", "Waiting for internet"),  # offline: queued, no connectivity
+            (
+                "uploading",
+                "Uploading",
+            ),  # transient in-flight marker (set by sweep before Send-GDriveBackupSet)
+            ("uploaded", "Uploaded"),  # mirrors uploaded=true; terminal success
+            ("failed", "Failed"),  # last attempt failed for a non-offline reason
+            ("abandoned", "Abandoned"),  # aged past the retry window / max attempts; needs human
+        ],
+        default="created",
+        index=True,
+        help="Offline-queue lifecycle. 'uploaded' mirrors the boolean `uploaded` "
+        "field (kept for the v17 sweep dedup + restore browser filter).",
+    )
+    retry_count = fields.Integer(
+        default=0,
+        help="Drive upload attempts made for this set (incremented by the pending "
+        "sweep / reconnect cron each time Send-GDriveBackupSet is called and fails).",
+    )
+    last_error = fields.Char(
+        help="Trimmed last Drive upload error message (no secrets — Send-GDriveFile "
+        "and Invoke-GDriveApi never put credentials in messages).",
+    )
+    error_class = fields.Char(
+        help="Last failure class from Get-GDriveErrorClass: offline / auth_expired / "
+        "quota / server_error / client_error / unknown.",
+    )
+    next_retry_at = fields.Datetime(
+        help="UTC earliest next retry (exponential backoff). NULL = retry on next sweep.",
     )
     # NOT part of the psql column contract: store=False means no DB column
     # exists, so Write-GDriveCatalogRow is unaffected (the no-compute rule

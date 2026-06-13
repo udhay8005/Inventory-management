@@ -193,6 +193,33 @@ CLOUD_TOUR_STEP = (
     "</ol>"
 )
 
+# --- Offline-queue / Disaster-Recovery training updates (19.0.1.9.0) --------
+# guided_tours.xml is noupdate="1" and is NOT edited for this feature, so BOTH
+# fresh installs and upgrades get the admin-tour step from the hook below
+# (apply_offline_queue_training is called from post_init_hook AND the
+# 19.0.1.9.0 migration). The NEW offline-queue help article ships in
+# help_articles.xml and needs no hook (new records load even under noupdate=1).
+
+# Idempotency marker: present once the admin-tour Disaster-Recovery step exists.
+DR_TOUR_MARKER = "Disaster Recovery page"
+
+# Admin-tour step 8, inserted after the step-7 "Cloud safety net" list. Carries
+# an action-PENDING placeholder for the manager-only DR page; call
+# apply_tour_action_links() AFTER inserting so the link resolves on the target
+# database.
+DR_TOUR_STEP = (
+    '<ol start="8">'
+    "<li><b>Disaster Recovery page</b> &#8212; the manager-only console for the "
+    "cloud tier. See Drive connection status, validate the backup folder, and "
+    "watch the <b>offline upload queue</b> (anything waiting for internet, plus "
+    "a <b>Retry Now</b> button). If the line is ever down, backups queue here "
+    "and upload themselves when it returns &#8212; nothing is lost. It lives "
+    "under <b>Configuration &#8594; Backup &amp; Disaster Recovery</b>.<br/>"
+    '<a href="/odoo/action-PENDING-wms_reports.action_wms_gdrive_settings" '
+    'class="btn btn-primary btn-sm" target="_self">Open this screen &#8594;</a></li>'
+    "</ol>"
+)
+
 # slug -> [(old text, new text)] — the daily backup moved from "nightly /
 # around 2am" to 4:30 PM when the Google Drive stage landed. Pure-text
 # replacements (no tags), so the Html sanitizer cannot have altered them.
@@ -362,7 +389,47 @@ def apply_cloud_backup_training(env):
     return reworded
 
 
+def apply_offline_queue_training(env):
+    """Insert the admin-tour "Disaster Recovery page" step (19.0.1.9.0).
+
+    guided_tours.xml is noupdate="1" and is not edited for the offline-queue
+    feature, so this hook adds the step on BOTH fresh installs (via
+    post_init_hook) and upgrades (via migrations/19.0.1.9.0/post-migrate.py).
+    It appends step 8 right after the step-7 "Cloud safety net" list.
+
+    Idempotent: skipped once its marker is present. Call
+    apply_tour_action_links() afterwards so the step's action-PENDING
+    placeholder resolves. (The NEW offline-queue help article needs no handling
+    here — new records load on upgrade even under noupdate="1".)
+    """
+    Article = env["wms.help.article"]
+    inserted = False
+    tour = Article.search([("slug", "=", "tour-admin")], limit=1)
+    if tour and DR_TOUR_MARKER not in str(tour.body or ""):
+        body = str(tour.body or "")
+        anchor = body.find('<ol start="7"')
+        close = body.find("</ol>", anchor) if anchor != -1 else -1
+        if close != -1:
+            pos = close + len("</ol>")
+            tour.body = body[:pos] + DR_TOUR_STEP + body[pos:]
+            inserted = True
+        else:
+            _logger.warning(
+                "offline-queue training: admin tour found but no step-7 list "
+                "anchor - DR tour step NOT inserted"
+            )
+    _logger.info("offline-queue training: DR tour step inserted: %s", inserted)
+    return inserted
+
+
 def post_init_hook(env):
-    """Fresh install: apply visual enrichment + resolve guided-tour links."""
+    """Fresh install: apply visual enrichment + the offline-queue DR tour step,
+    then resolve guided-tour links.
+
+    The cloud-backup tour step (start=7) ships in guided_tours.xml for fresh
+    installs, so apply_offline_queue_training finds its anchor; on upgrades the
+    migration calls apply_cloud_backup_training first.
+    """
     apply_visual_enrichment(env)
+    apply_offline_queue_training(env)
     apply_tour_action_links(env)

@@ -18,6 +18,10 @@
       upload      1 KB probe file into <root>/_connection_test/, verified via
                   Drive's sha256Checksum, then deleted (also in failure paths).
                   -> {"ok":true,"file":"...","roundtrip_ms":...}
+      validate-folder  files.get on a caller-supplied bare folder id (the DR
+                  page's "Validate Folder" button; the id is URL-parsed
+                  Odoo-side and charset-validated here).
+                  -> {"ok":true,"name":"...","owner":"...","accessible":true,"writable":true}
 
     Successful runs also refresh the wms_gdrive.last_about quota cache via
     psql (failure-safe; skipped when GDRIVE_MOCK_DIR is set so test runs
@@ -28,7 +32,11 @@
     token file are not required.
 
 .PARAMETER Mode
-    'connection' (default) or 'upload'.
+    'connection' (default), 'upload' or 'validate-folder'.
+
+.PARAMETER FolderId
+    Bare Drive folder id, required by -Mode validate-folder. Charset-validated
+    (^[A-Za-z0-9_-]{10,}$) so nothing dangerous reaches the API call.
 
 .EXAMPLE
     scripts\gdrive-test.ps1 -Mode connection
@@ -36,14 +44,23 @@
 .EXAMPLE
     scripts\gdrive-test.ps1 -Mode upload
 
+.EXAMPLE
+    scripts\gdrive-test.ps1 -Mode validate-folder -FolderId 1A2b3C4d5E6f7G8h9I0j
+
 .NOTES
     Exit codes: 0 = ok:true, 1 = ok:false. No token material, passphrases,
     or client secrets ever appear in the JSON or on stderr.
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('connection', 'upload')]
-    [string]$Mode = 'connection'
+    [ValidateSet('connection', 'upload', 'validate-folder')]
+    [string]$Mode = 'connection',
+    # Bare Drive folder id for -Mode validate-folder. The DR page parses the id
+    # out of any folder URL Odoo-side and passes ONLY the charset-validated bare
+    # id here, so nothing dangerous reaches the API call. Same charset the
+    # wizard's _validate() regex accepts (^[A-Za-z0-9_-]{10,}$).
+    [ValidatePattern('^[A-Za-z0-9_-]{10,}$')]
+    [string]$FolderId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -175,21 +192,37 @@ try {
 
         $script:AccessToken = Get-GDriveAccessToken -TokenPath $TokenPath -EnvConfig $cfg
 
-        # Folder gate shared by both modes: find-or-create the backup root.
+        # Folder gate for connection/upload: find-or-create the backup root.
         # "Not found" is normal before the first upload, hence the create.
-        $folderName = Get-WmsConfigParam -Key 'wms_gdrive.folder_name' -Default 'Inventory_Backups' `
-            -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
-        $parentId = 'root'
-        if ($cfg.ParentFolderId) { $parentId = $cfg.ParentFolderId }
-        $rootId = ConvertTo-GDriveId (Find-GDriveFolder -Name $folderName -ParentId $parentId -AccessToken $script:AccessToken)
-        if (-not $rootId) {
-            $rootId = ConvertTo-GDriveId (New-GDriveFolder -Name $folderName -ParentId $parentId -AccessToken $script:AccessToken)
-        }
-        if (-not $rootId) {
-            throw "could not find or create the '$folderName' folder on Drive"
+        # validate-folder inspects a CALLER-SUPPLIED id instead, so it does not
+        # depend on (or create) the backup root.
+        if ($Mode -ne 'validate-folder') {
+            $folderName = Get-WmsConfigParam -Key 'wms_gdrive.folder_name' -Default 'Inventory_Backups' `
+                -DbName $DbName -DbHost $DbHost -DbPort $DbPort -DbUser $DbUser
+            $parentId = 'root'
+            if ($cfg.ParentFolderId) { $parentId = $cfg.ParentFolderId }
+            $rootId = ConvertTo-GDriveId (Find-GDriveFolder -Name $folderName -ParentId $parentId -AccessToken $script:AccessToken)
+            if (-not $rootId) {
+                $rootId = ConvertTo-GDriveId (New-GDriveFolder -Name $folderName -ParentId $parentId -AccessToken $script:AccessToken)
+            }
+            if (-not $rootId) {
+                throw "could not find or create the '$folderName' folder on Drive"
+            }
         }
 
-        if ($Mode -eq 'connection') {
+        if ($Mode -eq 'validate-folder') {
+            if (-not $FolderId) {
+                throw "validate-folder requires -FolderId (a bare Drive folder id)"
+            }
+            $info = Get-GDriveFolderInfo -FolderId $FolderId -AccessToken $script:AccessToken
+            $script:Result = [ordered]@{
+                ok         = $true
+                name       = [string](Get-GDriveProp $info 'name' '')
+                owner      = [string](Get-GDriveProp $info 'owner' '')
+                accessible = [bool](Get-GDriveProp $info 'accessible' $false)
+                writable   = [bool](Get-GDriveProp $info 'writable' $false)
+            }
+        } elseif ($Mode -eq 'connection') {
             $sum = ConvertTo-AboutSummary (Get-GDriveAbout -AccessToken $script:AccessToken)
             $script:Result = [ordered]@{
                 ok        = $true

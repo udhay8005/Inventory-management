@@ -40,20 +40,23 @@ backup-native.ps1                                   (Task Scheduler, SYSTEM)
 │  ──── local backup is COMPLETE here; nothing below can undo it ────
 │
 └─ 5. Google Drive upload (optional, failure-safe)
-      ├─ 5a. pending sweep: re-upload sets that failed earlier
-      │       (≤ 7 days old, oldest first, max 3 sets per run)
-      ├─ 5b. upload today's set to Inventory_Backups/YYYY/MM-Month/YYYY-MM-DD/
-      │       resumable 8 MiB chunks for files > 5 MB; verified against the
-      │       Drive-computed sha256Checksum; retries 2 s/4 s/8 s + jitter
-      ├─ 5c. catalog row (wms.gdrive.backup, uploaded=true)
+      ├─ 5a. pending sweep: re-upload queued sets from earlier runs
+      │       (oldest first, within the retry window, per-run capped — § 4.5)
+      ├─ 5b. write a `created` catalog row, then upload today's set to
+      │       Inventory_Backups/YYYY/MM-Month/YYYY-MM-DD/ — resumable 8 MiB
+      │       chunks for files > 5 MB; verified against the Drive-computed
+      │       sha256Checksum; retries 2 s/4 s/8 s + jitter
+      ├─ 5c. catalog row → uploaded=true, queue_state=uploaded
       ├─ 5d. Drive retention tiers (daily 30 d / weekly 6 mo / monthly 2 y)
       └─ 5e. storage-quota cache + heartbeat + backup_gdrive audit row
 ```
 
 Any Stage 5 failure warns `Drive upload failed (LOCAL backup is intact)`,
-writes a failed `backup_gdrive` audit row plus a *pending* catalog row, pings
-the `HEALTHCHECK_GDRIVE_URL` `/fail` endpoint, and leaves every local artifact
-in place. The next run's pending sweep (5a) re-uploads it.
+writes a failed `backup_gdrive` audit row, updates the set's catalog row to a
+queued state (`waiting` when offline, else `failed`), pings the
+`HEALTHCHECK_GDRIVE_URL` `/fail` endpoint, and leaves every local artifact in
+place. The set then re-uploads automatically when connectivity returns — the
+durable offline queue is § 4.5.
 
 ### 1.2 Restore path
 
@@ -323,6 +326,113 @@ because the local artifact is unaffected.
 `drive_connected: true` with `last_upload_age_hours` under 24, and the set is
 visible in the Drive web UI under `Inventory_Backups/<year>/<month>/<today>`.
 
+### 4.5 Offline-first upload queue & auto-upload on reconnect
+
+The cloud tier is **offline-first**: the local encrypted backup always runs and
+is always kept, and a Drive upload that cannot complete is *queued* on the
+backup set's own catalog row rather than lost. The queue then drains itself
+when the internet comes back — no operator action and no data loss. This is the
+concrete mechanism behind the "can only ever lag, never lose" rule.
+
+**Where the state lives.** Each set is one `wms.gdrive.backup` catalog row.
+Five columns on that row make it the authoritative queue (they are written only
+by the PowerShell pipeline; Odoo reads them):
+
+| Column | Meaning |
+|---|---|
+| `queue_state` | Lifecycle state (see below) |
+| `retry_count` | Drive upload attempts made for this set |
+| `error_class` | Last failure class from `Get-GDriveErrorClass` (`offline` / `auth_expired` / `quota` / `server_error` / `client_error` / `unknown`) |
+| `last_error` | Trimmed last error message (no secrets) |
+| `next_retry_at` | UTC earliest next retry (exponential backoff); blank = retry on next sweep |
+
+**The state machine.** A set moves through these states:
+
+```
+ local .dump.gpg verified
+        │
+        ▼
+   [ created ] ──reachable, upload starts──► [ uploading ] ──success──► [ uploaded ]  (terminal)
+        │                                          │
+        │ offline pre-flight, or                   │ non-offline failure
+        │ upload fails with class=offline          ▼
+        ▼                                     [ failed ]
+   [ waiting ] <──────────────────────────────────┤  retry within window & under max:
+   (for internet)   reconnect sweep retries        │  back to waiting (offline) / retried (other)
+        │                                          │
+        └──────────> retry_count >= offline_retry_max  OR  age > offline_retry_window_days
+                                  │
+                                  ▼
+                            [ abandoned ]  (terminal-until-human; DEGRADED + manager notice)
+```
+
+- **`created`** — the local set exists and a row is written *before* the upload
+  is tried, so an in-flight set is visible in the queue immediately.
+- **`waiting`** — Drive was unreachable (the cheap pre-flight probe came back
+  `offline`, or the upload itself failed with class `offline`). The set sits
+  here until connectivity returns. `error_class` is `offline`.
+- **`uploading`** — transient marker set immediately before the upload call.
+- **`uploaded`** — terminal success; set in the *same* row write as the
+  existing `uploaded=true` boolean, so the two never diverge.
+- **`failed`** — the last attempt failed for a non-offline reason (`quota`,
+  `server_error`, `client_error`, `auth_expired`, `unknown`). Retried with
+  backoff unless it has aged out.
+- **`abandoned`** — the set hit `offline_retry_max` attempts (default 8) or
+  aged past `offline_retry_window_days` (default 14). Terminal until a human
+  intervenes; surfaced as **DEGRADED** health plus a manager notification
+  (never CRITICAL — see § 8).
+
+**The reachability probe.** Before a multi-MB upload, the pipeline runs one
+cheap `about.get` call (`Test-GDriveReachable`). A success doubles as a free
+storage-quota refresh; a failure is classified by the existing taxonomy
+(`StatusCode 0 → offline`, `401/invalid_grant → auth_expired`, `429/5xx →
+server_error`, `storageQuotaExceeded → quota`). The probe never throws — an
+exception is treated as `offline`.
+
+**Backoff.** A failed (non-offline) set's `next_retry_at` is set to
+`now + offline_backoff_base_min × 2^(retry_count − 1)` minutes, capped at 24 h.
+`auth_expired` is special-cased to **no** backoff (`next_retry_at` blank) so the
+set retries promptly the moment the operator re-consents (§ 10.1).
+
+**Auto-upload on reconnect.** An hourly Odoo cron (*WMS — Google Drive
+pending-upload retry*, fires at **:45**) checks whether any set is pending
+(`created` / `waiting` / `uploading` / `failed`) and, if so, triggers the
+trigger-less SYSTEM scheduled task **"WMS Pending Upload Sweep"** via
+`schtasks /Run`. That task runs `backup-native.ps1 -PendingSweep`:
+
+- it skips Stages 1–4 entirely (no fresh dump, no GPG, no local audit rows) and
+  runs only the pending sweep (Stage 5a) plus the quota-cache refresh (Stage 5e);
+- it probes reachability once up front — if still `offline` it logs and exits 0
+  (nothing to do, sets stay `waiting`); if `auth_expired` it logs the re-consent
+  instruction and exits 0 (retrying is pointless until the human acts);
+- when reachable it sweeps eligible sets oldest-first (secondary sort: fewest
+  attempts first, so a chronically-failing set never starves newer ones),
+  capped at `offline_retry_max_per_run` (default 5) per run, marks each
+  `uploading`, then calls the same shared `Send-GDriveBackupSet` uploader.
+
+The heavy work therefore always runs as `NT AUTHORITY\SYSTEM`, never in the
+Odoo worker thread — the cron only *triggers*. Because the sweep writes the
+same `backup_gdrive` audit rows a normal run does, the existing Drive-event
+notifier (§ 4.3) turns a reconnect-upload into the usual manager notice with no
+new notification path.
+
+> **Honest caveat.** The Odoo cron only fires while Odoo is running. If Drive is
+> offline *and* Odoo is also down, the daily SYSTEM task's `-StartWhenAvailable`
+> catch-up re-attempts the upload on the next daily run — that is the
+> Odoo-down fallback, and it already exists. The cron is the primary warm-loop;
+> the daily-task catch-up is the backstop. No extra repeating SYSTEM task is
+> added.
+
+You can drain the queue on demand without waiting for the hourly cron: open the
+**Backup & Disaster Recovery** page (§ 5.2) and click **Retry Now**, which
+`/Run`s the same "WMS Pending Upload Sweep" task. Running **Backup Now** also
+sweeps as part of its normal Stage 5a.
+
+`✅ CHECKPOINT` — pull the network cable, run Backup Now: the local set is made
+and the catalog row shows `queue_state = waiting`. Restore the network and click
+**Retry Now** (or wait for the :45 cron): within a few minutes the same row
+flips to `uploaded` and the set appears in the Drive web UI.
+
 ---
 
 ## 5. Settings reference
@@ -344,29 +454,89 @@ hardcoded defaults — a down database never blocks a local backup.
 | `wms_gdrive.retention_monthly_years` | `2` | Tier 3: keep one set per month this many years |
 | `wms_gdrive.delete_manual` | `0` | If `1`, manual + emergency sets join Drive retention (§ 6) |
 | `wms_gdrive.folder_name` | `Inventory_Backups` | Drive root folder name |
+| `wms_gdrive.parent_folder_id` | *(blank)* | Optional ID of an existing My Drive folder to hold `Inventory_Backups`. Blank = fall back to `.env GDRIVE_PARENT_FOLDER_ID`, then My Drive root. Set it from the DR page's **Validate Folder** box (§ 5.2) — no `.env` edit needed |
+| `wms_gdrive.offline_retry_max` | `8` | Max upload attempts before a queued set is marked `abandoned` (§ 4.5) |
+| `wms_gdrive.offline_retry_window_days` | `14` | Sweep look-back window in days; aligned with the local *keep last 14* so a kept file is never an orphan |
+| `wms_gdrive.offline_retry_max_per_run` | `5` | Max sets the pending sweep retries per run (bounds the 2 h task limit) |
+| `wms_gdrive.offline_backoff_base_min` | `15` | Exponential-backoff base in minutes: `next_retry_at = now + base × 2^(retry−1)`, capped at 24 h |
 | `wms_gdrive.last_about` | *(internal)* | Cached quota JSON `{used_mb, limit_mb, checked_utc, email}` |
 | `wms_gdrive.last_manual_requester` | *(internal)* | `login|timestamp` handshake that attributes Backup Now runs |
 
-### 5.2 The Settings wizard
+### 5.2 The Backup & Disaster Recovery page
 
-**WMS → Configuration → Google Drive Settings** (manager-only) fronts the
-parameters above — enable flags, backup time, notification flags, retention
-tiers, folder name — plus a health strip and three buttons:
+**WMS → Configuration → Backup & Disaster Recovery** (manager-only) is the
+single admin console for the Drive tier. It fronts the parameters above and
+adds live status, folder validation, and the offline-queue view. Storekeepers
+never see it: the menu is gated to *WMS / Manager*, the model is manager-only,
+and every button re-checks the manager role (three independent gates). Backup
+Now stays separately available to keepers via its own menu (§ 4.2).
 
+The page is organised top to bottom:
+
+- **Health strip** — the same `/wms/health` summary shown on Self-Diagnostics
+  (Drive enabled, connected, last-upload age, quota, next backup time).
+- **Google Drive backup** — the `enabled` soft kill-switch and the
+  `manual_enabled` (Backup Now allowed) flag. *Editable.*
+- **Connection** — **status and masked presence only.** Shows
+  Connected / Not Connected and the signed-in Gmail address, plus a
+  presence-only credential panel: *Client ID: configured / NOT configured*,
+  *Client Secret: configured*, *Refresh token: present (DPAPI, SYSTEM-only)*.
+  It never shows, stores, or logs a secret value — see the boundary note below.
+- **Backup folder** — `folder_name`, plus a **Validate Folder** box: paste a
+  Drive folder URL (or a bare folder id) and the page extracts the id, stores
+  it in `wms_gdrive.parent_folder_id`, and (via Validate Folder) reports the
+  folder's name, owner, and whether it is accessible and writable. *Editable.*
+- **Schedule & Retention** — `backup_time` (HH:MM; runs in server local time
+  via Task Scheduler) and the three Drive retention tiers + `delete_manual`.
+  *Editable.*
+- **Manager notifications** — `notify_success` / `notify_failure`. *Editable.*
+- **Offline upload queue** — **read-only** metrics from the live health
+  snapshot: pending, waiting-for-internet, abandoned, last successful upload,
+  last failure (time + message), and the highest retry count among pending
+  sets (§ 4.5).
+- **Offline queue tuning** — the four `wms_gdrive.offline_*` parameters
+  (§ 5.1). *Editable.*
+
+Footer buttons:
+
+- **Save** — writes the editable parameters.
 - **Test Connection** — refreshes the token and reads the connected account
   + storage quota. Renders the Gmail address and a usage bar, or the error
   (auth-expired failures include the re-consent instruction).
-- **Test Upload** — uploads a 1 KB probe file to
-  `Inventory_Backups/_connection_test/`, verifies its `sha256Checksum`, and
-  deletes it. Proves the full write path end to end.
-- **Apply Schedule** — best-effort `schtasks /Change` of the "WMS Daily
-  Backup" start time to `wms_gdrive.backup_time`; if that fails it tells you
-  to re-run `scripts\install-backup-tasks.ps1 -BackupAt <time>` instead.
-  Never throws.
+- **Validate Folder** — checks the pasted folder id (`gdrive-test.ps1 -Mode
+  validate-folder`); reports name / owner / accessible / writable.
+- **Refresh Token** — re-runs the connection test. ("Refresh" is implicit:
+  the token auto-refreshes within 120 s of expiry or on a 401, so proving it
+  works *is* the connection test.)
+- **Disconnect** — revokes the Google authorization
+  (`setup-gdrive-auth.ps1 -Revoke`: POSTs the token to Google's revoke
+  endpoint and deletes the DPAPI file). Local backups are unaffected. Asks for
+  confirmation first.
+- **Connect…** — **guided console instruction only.** It explains that you
+  must run `scripts\setup-gdrive-auth.ps1` at the server console (it opens a
+  browser for Google consent). This *cannot* be done from the web page — the
+  Desktop-app OAuth loopback flow opens a real browser and refuses to run as
+  SYSTEM (the account Odoo runs as). Honest by design: it documents the step
+  rather than faking it.
+- **Retry Now** — `/Run`s the "WMS Pending Upload Sweep" task to drain the
+  offline queue immediately (§ 4.5).
 
-Both test buttons shell out to `scripts\gdrive-test.ps1` — the same
-PowerShell stack, token, and retry policy the daily task uses, so a green
-test is representative.
+All test/validate buttons shell out to `scripts\gdrive-test.ps1` — the same
+PowerShell stack, token, and retry policy the daily task uses, so a green test
+is representative.
+
+> **Credential boundary (by design).** The page is *incapable* of touching the
+> OAuth secret or the DPAPI token, and never accepts, displays, stores, or logs
+> a raw secret. The Client ID and Client Secret render presence-only
+> ("configured" / "NOT configured"), read from `.env` and compared locally
+> against the same placeholder check `Get-GDriveEnvConfig` uses, then discarded.
+> The refresh token shows only that `config\gdrive-token.json.dpapi` exists; it
+> is a SYSTEM-only DPAPI blob and is never decrypted by the web tier. **Service
+> Account JSON is not supported** in this WMS build (OAuth Desktop + refresh
+> token only) and the page says so. The only things that leave the page toward
+> the OS are fixed `-Mode` strings, a regex-validated `HH:MM`, a
+> charset-validated bare folder id, `schtasks /Run` of fixed task names, and the
+> `-Revoke` switch. See § 9 and the OAuth setup in § 2.
 
 ---
 
@@ -509,9 +679,11 @@ after a successful upload.
 
 | Failure | Automatic behavior | Operator action |
 |---|---|---|
-| Drive unreachable (offline, DNS, 429/5xx) | Retries 2 s/4 s/8 s + jitter; on final failure: `(LOCAL backup is intact)` warning, failed `backup_gdrive` audit row, pending catalog row, `/fail` heartbeat to `HEALTHCHECK_GDRIVE_URL`; next run's pending sweep re-uploads (≤ 7 days old, oldest first, max 3 sets/run) | Usually none — confirm the next run clears the pending row, or run Backup Now to trigger the sweep immediately |
-| Auth expired (`GDRIVE_AUTH_EXPIRED`) | Same as above, plus health goes DEGRADED ("Google Drive auth expired") and managers get a notification with the fix command | Re-run `scripts\setup-gdrive-auth.ps1`; if the consent screen is still in "Testing", publish it to "In production" first (§ 10.1) |
-| Drive quota full | Upload fails into the same pending/retry path; health warns when storage exceeds 90% of the quota | Free space in the Google account, upgrade storage, or tighten the retention tiers in Settings |
+| Drive unreachable / offline (no internet, DNS, `StatusCode 0`) | A cheap pre-flight probe classifies it `offline`; the set is queued on its catalog row as `queue_state = waiting` with `(LOCAL backup is intact)` warning, a failed `backup_gdrive` audit row, and a `/fail` heartbeat. The hourly reconnect cron re-attempts when connectivity returns; backoff is `offline_backoff_base_min × 2^(retry−1)` min, capped 24 h (§ 4.5) | Usually none — it auto-uploads on reconnect. To force it, click **Retry Now** on the DR page (§ 5.2) or run Backup Now |
+| Drive unreachable (transient 429/5xx) | Retries 2 s/4 s/8 s + jitter in-line; on final failure the set is queued `failed` with `error_class = server_error` and retried with backoff by the reconnect sweep | Usually none — confirm the queue clears; persistent 5xx means a Google-side outage, wait it out |
+| Auth expired (`GDRIVE_AUTH_EXPIRED`) | Set queued `failed` with `error_class = auth_expired` and **no** backoff (retries promptly once re-consented); health goes DEGRADED ("Google Drive auth expired") and managers get a notification with the fix command | Re-run `scripts\setup-gdrive-auth.ps1`; if the consent screen is still in "Testing", publish it to "In production" first (§ 10.1). The next sweep uploads the backlog |
+| Drive quota full | Upload fails into the same queue (`error_class = quota`) and retries with backoff; health warns when storage exceeds 90% of the quota | Free space in the Google account, upgrade storage, or tighten the retention tiers on the DR page |
+| Set abandoned (retry exhausted) | A queued set that hits `offline_retry_max` attempts (default 8) or ages past `offline_retry_window_days` (default 14) is marked `queue_state = abandoned` and stops retrying; health goes **DEGRADED** with a manager notification ("Google Drive backup set(s) abandoned") | Investigate the persistent cause (auth, quota, or a long outage), fix it, then run Backup Now — a fresh set uploads cleanly. The local `.gpg` pair for the abandoned set is still on disk within the local retention window |
 | Upload interrupted mid-transfer (reboot, network drop) | Resumable sessions continue from the last confirmed chunk; visible partial files failing the `sha256Checksum` check are deleted; the set is re-uploaded by the pending sweep if the run died | None |
 | "WMS Manual Backup" task missing | Backup Now fails gracefully with a plain-language hint to ask the administrator | Re-run `scripts\install-backup-tasks.ps1` |
 | Catalog/parameter access fails (psql error) | Reads fall back to hardcoded defaults; catalog writes warn and continue — the upload itself still completes | None; bookkeeping reconciles on later runs |
@@ -614,6 +786,36 @@ remain restorable by `-SetStamp`; new uploads went into the fresh tree.
 Leave both trees in place and stop manual reorganizing — history reconverges
 as retention ages the old tree out.
 
+**The Offline upload queue shows pending sets that aren't clearing**
+Open **Configuration → Backup & Disaster Recovery** and read the queue panel
+(§ 5.2). *Waiting for internet* means the box has no Drive connectivity — the
+sets upload automatically when it returns; click **Retry Now** to test
+immediately. If the count keeps climbing across days, the cause is usually
+`auth_expired` (re-consent, § 10.1) or `quota` (free space, above). The hourly
+reconnect cron only fires while Odoo is running; if Odoo was down, the next
+daily backup's `-StartWhenAvailable` catch-up sweeps the backlog instead
+(§ 4.5).
+
+**The queue shows "abandoned" sets**
+A set is abandoned only after `offline_retry_max` attempts (default 8) or
+`offline_retry_window_days` (default 14) — i.e. a long, persistent outage, not a
+blip. Health is DEGRADED (never CRITICAL) and managers were notified. Fix the
+root cause (auth / quota / connectivity), then run **Back Up Now**: a fresh set
+uploads cleanly and clears the DEGRADED state. No data was lost — the local
+encrypted pair for each abandoned set is still in `backups\` within the
+keep-last-14 window, and the off-site mirror is intact. If you need the
+abandoned set itself off-site, copy it from `backups\` manually or restore from
+the local/off-site tier (§ 7, [docs/18-restore-drill.md](18-restore-drill.md)).
+
+**"Connect…" on the DR page won't sign me in**
+By design. Google's Desktop-app consent is a browser loopback flow that refuses
+to run as `NT AUTHORITY\SYSTEM` (the account Odoo runs as), so it cannot
+complete from a web page. The **Connect…** button only shows the instruction:
+run `scripts\setup-gdrive-auth.ps1` at the **server console** (§ 2.4). It opens
+your browser for consent and stores the token; the next backup picks it up with
+no restart. **Disconnect** *can* run server-side (it is a tokenless revoke), so
+that button does the real work.
+
 ---
 
 ## 11. Status
@@ -630,12 +832,16 @@ database) is pending a scheduled maintenance window.
 
 ## 12. References
 
-- `scripts\setup-gdrive-auth.ps1` — one-time consent + `-Status` / `-Revoke` (§ 2.4).
-- `scripts\backup-native.ps1` — backup pipeline; Stage 5 is the Drive upload (§ 1.1).
+- `scripts\setup-gdrive-auth.ps1` — one-time consent + `-Status` / `-Revoke` (§ 2.4); the **Disconnect** button calls `-Revoke`.
+- `scripts\backup-native.ps1` — backup pipeline; Stage 5 is the Drive upload (§ 1.1). `-PendingSweep` runs the offline-queue sweep only (§ 4.5).
 - `scripts\gdrive-restore.ps1` — list / download / verify / auto-restore (§ 7.2).
-- `scripts\gdrive-test.ps1` — connection/upload probe behind the Settings test buttons (§ 5.2).
-- `scripts\install-backup-tasks.ps1` — registers all three scheduled tasks (§ 4.1).
-- `scripts\gdrive-lib.ps1` — shared Drive REST library (dot-sourced by the above).
+- `scripts\gdrive-test.ps1` — connection / upload / `validate-folder` probes behind the DR-page buttons (§ 5.2).
+- `scripts\install-backup-tasks.ps1` — registers the scheduled tasks, including the trigger-less **"WMS Pending Upload Sweep"** (§ 4.5).
+- `scripts\gdrive-lib.ps1` — shared Drive REST library (dot-sourced by the above); includes `Test-GDriveReachable` (the pre-flight probe), `Get-GDriveFolderInfo` (Validate Folder), and `Set-GDriveQueueFailure` (the queue-failure writer).
+
+The offline queue adds the `wms_gdrive.offline_*` and `wms_gdrive.parent_folder_id`
+parameters (§ 5.1), the hourly *WMS — Google Drive pending-upload retry* cron
+(fires at :45), and the **Backup & Disaster Recovery** admin page (§ 5.2).
 - [docs/18-restore-drill.md](18-restore-drill.md) — weekly drill proving the local `.dump.gpg` is recoverable.
 - [docs/19-disaster-recovery.md](19-disaster-recovery.md) — bare-metal rebuild runbook; Drive is an additional recovery source.
 - [docs/13-operations-playbook.md](13-operations-playbook.md) — day-2 operations incl. backup defaults.

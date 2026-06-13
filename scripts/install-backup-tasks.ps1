@@ -19,6 +19,10 @@
                                      (fired on demand by the WMS Backup Now screen
                                      or schtasks /Run; same SYSTEM pipeline as the
                                      daily task)
+      * "WMS Pending Upload Sweep" - NO trigger -> backup-native.ps1 -PendingSweep
+                                     (fired on demand by the hourly Odoo reconnect
+                                     cron + the DR-page Retry Now button; re-uploads
+                                     queued Drive sets without a fresh dump)
 
     Tasks run as the current user when logged on, with missed-run catch-up
     (StartWhenAvailable). Re-running REPLACES the tasks (idempotent).
@@ -110,9 +114,26 @@ Register-ScheduledTask -TaskName "WMS Manual Backup" -Action $manualAction `
     -Force | Out-Null
 Write-Host "Registered 'WMS Manual Backup' (on-demand, no schedule)" -ForegroundColor Green
 
+# --- Pending upload sweep (on-demand) --------------------------------------
+# v18 offline queue: trigger-less SYSTEM task fired via schtasks /Run by the
+# hourly Odoo reconnect cron (_cron_retry_gdrive_uploads) and the DR-page
+# "Retry Now" button. Runs backup-native.ps1 -PendingSweep, which re-uploads
+# already-encrypted pending sets (Stage 5a + quota cache) WITHOUT taking a
+# fresh dump - so it never touches the local backup or the Backup Now poll
+# watermark. Same SYSTEM principal/settings as the other tasks (no drift);
+# MultipleInstances IgnoreNew makes overlapping cron+button fires harmless.
+$sweepAction = New-ScheduledTaskAction -Execute "powershell.exe" `
+    -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -PendingSweep' -f $backupScript) `
+    -WorkingDirectory $ProjectRoot
+Register-ScheduledTask -TaskName "WMS Pending Upload Sweep" -Action $sweepAction `
+    -Settings $settings -Principal $principal `
+    -Description "On-demand Google Drive pending-upload sweep (backup-native.ps1 -PendingSweep). Re-uploads queued backup sets when connectivity returns; no fresh dump. Fired by the hourly reconnect cron and the DR-page Retry Now button." `
+    -Force | Out-Null
+Write-Host "Registered 'WMS Pending Upload Sweep' (on-demand, no schedule)" -ForegroundColor Green
+
 # --- Verify ---------------------------------------------------------------
 Write-Host ""
-foreach ($name in @("WMS Daily Backup", "WMS Weekly Restore Drill", "WMS Manual Backup")) {
+foreach ($name in @("WMS Daily Backup", "WMS Weekly Restore Drill", "WMS Manual Backup", "WMS Pending Upload Sweep")) {
     $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
     if ($t) {
         $info = $t | Get-ScheduledTaskInfo
