@@ -133,6 +133,58 @@ KIND_SEQ_CODE = {
     "pooja": "wms.sku.pooja",
 }
 
+# Default Unit-of-Measure per WMS kind, used to SEED ``uom_id`` at
+# product-create time only (never retrofitted — changing a UoM
+# *category* is blocked once a product has stock, so we must get it
+# right the first time and otherwise leave the operator's choice
+# alone). Values are uom.uom external ids, all verified present in
+# Odoo CE 19's ``uom/data/uom_data.xml``; resolved lazily with
+# ``raise_if_not_found=False`` so a half-loaded DB never crashes.
+#
+# Only two kinds get a non-Units default:
+#   * fluid -> Litre  (oil, ghee, disinfectant measured by volume)
+#   * feed  -> kg     (grass, bran, cattle feed weighed in)
+# EVERYTHING else stays Units (counted by piece).
+#
+# IMPORTANT — medicine maps to Units on purpose, NOT millilitre:
+# Scan Issue's ``_compute_photo_required`` forces a photo whenever the
+# product's UoM category is not "Units" (i.e. it is measured, not
+# counted). Defaulting medicine to mL would silently switch every vet
+# injection into the photo-required gate, an unintended regression.
+# Vials / strips are counted; the per-dose strength stays free-text in
+# ``wms_dosage``. An operator can still flip a specific bulk medicine
+# to mL by hand on the product form.
+#
+# Length-by-the-metre items (cut pipe, cable/wire spools, cloth) are
+# NOT a separate kind: plumbing / electrical / textile default to
+# Units (count of pipes / fittings / pieces) and the operator switches
+# the individual product to Metre (``uom.product_uom_meter``, Length
+# category) when it is stocked / issued by length.
+KIND_DEFAULT_UOM = {
+    "raw_material": "uom.product_uom_unit",
+    "packaging": "uom.product_uom_unit",
+    "fluid": "uom.product_uom_litre",
+    "finished_good": "uom.product_uom_unit",
+    "wip": "uom.product_uom_unit",
+    "consumable": "uom.product_uom_unit",
+    "tool": "uom.product_uom_unit",
+    "spare": "uom.product_uom_unit",
+    "medicine": "uom.product_uom_unit",
+    "feed": "uom.product_uom_kgm",
+    "sanitation": "uom.product_uom_unit",
+    "construction": "uom.product_uom_unit",
+    "plumbing": "uom.product_uom_unit",
+    "electrical": "uom.product_uom_unit",
+    "textile": "uom.product_uom_unit",
+    "stationery": "uom.product_uom_unit",
+    "safety": "uom.product_uom_unit",
+    "pooja": "uom.product_uom_unit",
+}
+
+# Fallback UoM xmlid for any kind not in KIND_DEFAULT_UOM (e.g. a
+# future kind added to WMS_KIND_SELECTION before this dict is updated).
+_KIND_DEFAULT_UOM_FALLBACK = "uom.product_uom_unit"
+
 
 class ProductTemplate(models.Model):
     """WMS classification + returnability — defined on product.template
@@ -179,6 +231,40 @@ class ProductTemplate(models.Model):
         for p in self:
             if p.wms_product_kind:
                 p.wms_is_returnable = KIND_RETURNABLE_DEFAULTS.get(p.wms_product_kind, True)
+
+    def _wms_default_uom_id(self):
+        """Return the UoM id this product's WMS kind should default to.
+
+        Looks the kind up in ``KIND_DEFAULT_UOM`` (falling back to
+        Units for an unmapped / blank kind) and resolves the external
+        id with ``raise_if_not_found=False`` so a half-loaded DB never
+        crashes the create path — it just returns False and the caller
+        leaves Odoo's own default in place.
+
+        Returns the integer uom.uom id, or False when neither the
+        kind's UoM nor the Units fallback can be resolved.
+        """
+        self.ensure_one()
+        xmlid = KIND_DEFAULT_UOM.get(self.wms_product_kind, _KIND_DEFAULT_UOM_FALLBACK)
+        uom = self.env.ref(xmlid, raise_if_not_found=False)
+        if not uom:
+            uom = self.env.ref(_KIND_DEFAULT_UOM_FALLBACK, raise_if_not_found=False)
+        return uom.id if uom else False
+
+    @api.model
+    def _wms_kind_default_uom_id(self, kind):
+        """Class-level twin of ``_wms_default_uom_id`` for the create
+        path, where there is no record yet to seed ``uom_id`` from.
+
+        Same resolution rules: kind -> KIND_DEFAULT_UOM (Units
+        fallback), resolved with ``raise_if_not_found=False``. Returns
+        the uom.uom id or False.
+        """
+        xmlid = KIND_DEFAULT_UOM.get(kind, _KIND_DEFAULT_UOM_FALLBACK)
+        uom = self.env.ref(xmlid, raise_if_not_found=False)
+        if not uom:
+            uom = self.env.ref(_KIND_DEFAULT_UOM_FALLBACK, raise_if_not_found=False)
+        return uom.id if uom else False
 
     # ----------------------------------------------------------------------
     # Kind-specific attribute fields
@@ -360,6 +446,20 @@ class ProductTemplate(models.Model):
                         vals["default_code"] = new_sku
             if kind and "sale_ok" not in vals:
                 vals["sale_ok"] = False
+            # Seed the unit of measure from the kind ONLY when the
+            # caller left it blank (mirrors how default_code above is
+            # only auto-filled when empty). A non-Units category cannot
+            # be changed once a product carries stock, so this
+            # create-time seed is the only safe place to set it — we
+            # never retrofit an existing catalog. uom_id stays fully
+            # editable per-product afterwards. (uom_po_id is NOT set:
+            # product.template.uom_po_id was removed in Odoo 19 in
+            # favour of per-supplier UoM on product.supplierinfo, and
+            # writing it raises — see wms_product_onboard._do_onboard.)
+            if kind and not vals.get("uom_id"):
+                uom_id = self._wms_kind_default_uom_id(kind)
+                if uom_id:
+                    vals["uom_id"] = uom_id
         templates = super().create(vals_list)
 
         # 2. After super().create(), each template has at least one

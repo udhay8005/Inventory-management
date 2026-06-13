@@ -30,9 +30,9 @@ from __future__ import annotations
 
 from odoo import _, api, fields, models
 
-# Re-use the canonical kind list so this wizard stays aligned with
-# the source of truth in wms_location.
-from odoo.addons.wms_location.models.product_template import WMS_KIND_SELECTION
+# Re-use the canonical kind list + per-kind UoM defaults so this
+# wizard stays aligned with the source of truth in wms_location.
+from odoo.addons.wms_location.models.product_template import KIND_DEFAULT_UOM, WMS_KIND_SELECTION
 from odoo.exceptions import UserError
 
 
@@ -381,8 +381,31 @@ class WmsProductOnboardLine(models.TransientModel):
         "uom.uom",
         string="UoM",
         help="Unit of measure for the on-hand quantity (kg, L, units, ...). "
-        "Leave blank for the product-template default.",
+        "Picking a WMS Kind seeds this automatically (Fluid -> L, "
+        "Feed -> kg, everything else -> Units). Switch it to Metre for "
+        "pipe / cable / rope / cloth issued by length, or leave it on "
+        "Units when those are issued by the piece.",
     )
+
+    @api.onchange("wms_product_kind")
+    def _onchange_wms_product_kind_uom(self):
+        """Seed the row's UoM from the chosen WMS kind (Fluid -> L,
+        Feed -> kg, everything else -> Units) — but ONLY when the
+        operator has not already picked a UoM, so a manual Metre choice
+        for cut pipe / cable / cloth is never clobbered when they tweak
+        the kind. Resolved with raise_if_not_found=False so a
+        half-loaded DB degrades to "leave it blank" rather than crash;
+        _do_onboard only writes uom_id when truthy, so a blank row
+        still falls back to the product-template default."""
+        if self.uom_id:
+            return
+        kind = self.wms_product_kind
+        if not kind:
+            return
+        xmlid = KIND_DEFAULT_UOM.get(kind, "uom.product_uom_unit")
+        uom = self.env.ref(xmlid, raise_if_not_found=False)
+        if uom:
+            self.uom_id = uom.id
 
     @api.onchange("location_scan")
     def _onchange_location_scan(self):

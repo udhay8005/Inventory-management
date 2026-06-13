@@ -10,4 +10,5 @@ from . import (
     test_quantity_integrity,
     test_receipt_photo,
     test_undo,
+    test_uom_by_kind,
 )
