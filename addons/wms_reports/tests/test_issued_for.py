@@ -31,6 +31,16 @@ class TestIssuedFor(TransactionCase):
         cls.env["stock.quant"]._update_available_quantity(cls.product, cls.stock, 20.0)
         cls.env.flush_all()
 
+    # F1 — issued_for is now DERIVED from the structured Department
+    # (department.legacy_issued_for). The legacy 'cows' / 'pooja' codes map to
+    # the seeded Gaushala / Temple departments, so the test drives the wizard
+    # through the Department field (the primary capture) and asserts the legacy
+    # column is derived from it.
+    _DEPT_BY_LEGACY = {
+        "cows": "wms_location.dept_gaushala",
+        "pooja": "wms_location.dept_temple",
+    }
+
     def _issue(self, qty, purpose):
         wiz = self.env["wms.scan.issue"].create(
             {
@@ -41,7 +51,7 @@ class TestIssuedFor(TransactionCase):
                 "ordered_by": "O",
                 "usage_note": "issued-for test",
                 "storekeeper_id": self.keeper.id,
-                "issued_for": purpose,
+                "department_id": self.env.ref(self._DEPT_BY_LEGACY[purpose]).id,
             }
         )
         wiz.action_plan()

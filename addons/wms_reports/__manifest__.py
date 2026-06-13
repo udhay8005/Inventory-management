@@ -1,6 +1,6 @@
 {
     "name": "WMS — Reports & Dashboards",
-    "version": "19.0.4.0.0",
+    "version": "19.0.4.1.0",
     "summary": "Live SQL-view dashboards + backup/DR observability (health endpoint, backup audit).",
     "depends": ["wms_location", "wms_ai_forecast", "wms_repair_damage", "stock"],
     "author": "WMS",

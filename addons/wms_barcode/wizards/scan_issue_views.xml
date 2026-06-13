@@ -103,10 +103,29 @@
                                 clicking Validate without a note throws
                                 a UserError.
                             -->
-                            <div class="col-12 col-md-6 mt-2">
-                                <label for="issued_for" class="fw-bold"/>
-                                <field name="issued_for" nolabel="1"/>
+                            <!--
+                                Issue dimensions (F1). Department is required
+                                (defaults to 'Other'); Purpose and Animal are
+                                optional. issued_for is now derived from the
+                                department on validate, so it's hidden here
+                                but kept in the form so the field still posts.
+                            -->
+                            <div class="col-12 col-md-4 mt-2">
+                                <label for="department_id" class="fw-bold"/>
+                                <field name="department_id" nolabel="1"
+                                       options="{'no_create': True, 'no_open': True}"/>
                             </div>
+                            <div class="col-12 col-md-4 mt-2">
+                                <label for="purpose_id" class="fw-bold"/>
+                                <field name="purpose_id" nolabel="1"
+                                       options="{'no_create': True, 'no_open': True}"/>
+                            </div>
+                            <div class="col-12 col-md-4 mt-2">
+                                <label for="animal_id" class="fw-bold"/>
+                                <field name="animal_id" nolabel="1"
+                                       options="{'no_create': True, 'no_open': True}"/>
+                            </div>
+                            <field name="issued_for" invisible="1"/>
                             <div class="col-12 mt-2">
                                 <label for="usage_note" class="fw-bold"/>
                                 <field name="usage_note"

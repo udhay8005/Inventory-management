@@ -69,7 +69,40 @@ class StockPicking(models.Model):
         tracking=True,
         help="Which part of the trust consumed this stock. Set by the Scan "
         "Issue wizard so the Consumption Value report can break spend down by "
-        "purpose (Cows, Pooja, Maintenance, ...).",
+        "purpose (Cows, Pooja, Maintenance, ...). Kept for backward "
+        "compatibility and derived from the department on new issues; the "
+        "structured Department field below is now the primary capture.",
+    )
+    # ---- Issue dimensions (F1) -------------------------------------------
+    # Structured Department / Purpose / Animal captured by the Scan Issue
+    # wizard. Department supersedes the legacy wms_issued_for selection as
+    # the primary "what was this consumed for" dimension (the consumption
+    # report now breaks down by Department); wms_issued_for above is still
+    # derived from the department so old reports/searches keep working.
+    wms_department_id = fields.Many2one(
+        "wms.department",
+        string="Department",
+        index=True,
+        tracking=True,
+        help="Which department / cost centre consumed this stock (Gaushala, "
+        "Veterinary, Dairy, ...). Set by the Scan Issue wizard so the "
+        "Consumption Value report can break spend down by department.",
+    )
+    wms_purpose_id = fields.Many2one(
+        "wms.purpose",
+        string="Purpose / reason",
+        index=True,
+        tracking=True,
+        help="The structured reason this stock was issued (routine feed, "
+        "treatment, repair, ...). Optional.",
+    )
+    wms_animal_id = fields.Many2one(
+        "wms.animal",
+        string="Animal / cow",
+        index=True,
+        tracking=True,
+        help="The specific animal this issue was for, when it applies "
+        "(e.g. a treatment for a named cow). Optional.",
     )
     wms_is_scan_issue = fields.Boolean(
         string="Scan Issue picking",

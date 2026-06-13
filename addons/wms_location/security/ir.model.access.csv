@@ -3,3 +3,9 @@ access_wms_rack_generator_user,wms.rack.generator user,model_wms_rack_generator,
 access_wms_floor_zone_generator,wms.floor.zone.generator manager,model_wms_floor_zone_generator,wms_location.group_wms_manager,1,1,1,0
 access_wms_zone_generator,wms.zone.generator manager,model_wms_zone_generator,wms_location.group_wms_manager,1,1,1,0
 access_wms_move_to_zone,wms.move.to.zone manager,model_wms_move_to_zone,wms_location.group_wms_manager,1,1,1,0
+access_wms_department_manager,wms.department manager,model_wms_department,wms_location.group_wms_manager,1,1,1,1
+access_wms_department_user,wms.department user,model_wms_department,wms_location.group_wms_user,1,0,0,0
+access_wms_purpose_manager,wms.purpose manager,model_wms_purpose,wms_location.group_wms_manager,1,1,1,1
+access_wms_purpose_user,wms.purpose user,model_wms_purpose,wms_location.group_wms_user,1,0,0,0
+access_wms_animal_manager,wms.animal manager,model_wms_animal,wms_location.group_wms_manager,1,1,1,1
+access_wms_animal_user,wms.animal user,model_wms_animal,wms_location.group_wms_user,1,0,0,0

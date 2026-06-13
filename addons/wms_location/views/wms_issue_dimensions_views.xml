@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============ Department ============ -->
+        <record id="view_wms_department_list" model="ir.ui.view">
+            <field name="name">wms.department.list</field>
+            <field name="model">wms.department</field>
+            <field name="arch" type="xml">
+                <list string="Departments" editable="bottom">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="code"/>
+                    <field name="legacy_issued_for"/>
+                    <field name="active" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_department_form" model="ir.ui.view">
+            <field name="name">wms.department.form</field>
+            <field name="model">wms.department</field>
+            <field name="arch" type="xml">
+                <form string="Department">
+                    <sheet>
+                        <widget name="web_ribbon" title="Archived"
+                                bg_color="text-bg-danger"
+                                invisible="active"/>
+                        <group>
+                            <field name="name"/>
+                            <field name="code"/>
+                            <field name="sequence"/>
+                            <field name="legacy_issued_for"/>
+                            <field name="active"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_department" model="ir.actions.act_window">
+            <field name="name">Departments</field>
+            <field name="res_model">wms.department</field>
+            <field name="view_mode">list,form</field>
+        </record>
+
+        <!-- ============ Purpose ============ -->
+        <record id="view_wms_purpose_list" model="ir.ui.view">
+            <field name="name">wms.purpose.list</field>
+            <field name="model">wms.purpose</field>
+            <field name="arch" type="xml">
+                <list string="Purposes" editable="bottom">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="note"/>
+                    <field name="active" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_purpose_form" model="ir.ui.view">
+            <field name="name">wms.purpose.form</field>
+            <field name="model">wms.purpose</field>
+            <field name="arch" type="xml">
+                <form string="Purpose">
+                    <sheet>
+                        <widget name="web_ribbon" title="Archived"
+                                bg_color="text-bg-danger"
+                                invisible="active"/>
+                        <group>
+                            <field name="name"/>
+                            <field name="sequence"/>
+                            <field name="note"/>
+                            <field name="active"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_purpose" model="ir.actions.act_window">
+            <field name="name">Purposes</field>
+            <field name="res_model">wms.purpose</field>
+            <field name="view_mode">list,form</field>
+        </record>
+
+        <!-- ============ Animal ============ -->
+        <record id="view_wms_animal_list" model="ir.ui.view">
+            <field name="name">wms.animal.list</field>
+            <field name="model">wms.animal</field>
+            <field name="arch" type="xml">
+                <list string="Animals" editable="bottom">
+                    <field name="name"/>
+                    <field name="tag"/>
+                    <field name="shed"/>
+                    <field name="age_class"/>
+                    <field name="active" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_animal_form" model="ir.ui.view">
+            <field name="name">wms.animal.form</field>
+            <field name="model">wms.animal</field>
+            <field name="arch" type="xml">
+                <form string="Animal">
+                    <sheet>
+                        <widget name="web_ribbon" title="Archived"
+                                bg_color="text-bg-danger"
+                                invisible="active"/>
+                        <group>
+                            <field name="name"/>
+                            <field name="tag"/>
+                            <field name="shed"/>
+                            <field name="age_class"/>
+                            <field name="active"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_animal" model="ir.actions.act_window">
+            <field name="name">Animals</field>
+            <field name="res_model">wms.animal</field>
+            <field name="view_mode">list,form</field>
+        </record>
+
+        <!-- ============ Menus (WMS / Configuration, manager-gated) ============ -->
+        <menuitem id="menu_wms_department"
+                  name="Departments"
+                  parent="menu_wms_config"
+                  action="action_wms_department"
+                  groups="wms_location.group_wms_manager"
+                  sequence="60"/>
+
+        <menuitem id="menu_wms_purpose"
+                  name="Purposes"
+                  parent="menu_wms_config"
+                  action="action_wms_purpose"
+                  groups="wms_location.group_wms_manager"
+                  sequence="61"/>
+
+        <menuitem id="menu_wms_animal"
+                  name="Animals"
+                  parent="menu_wms_config"
+                  action="action_wms_animal"
+                  groups="wms_location.group_wms_manager"
+                  sequence="62"/>
+
+    </data>
+</odoo>

@@ -1,4 +1,4 @@
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -112,11 +112,50 @@ class WmsScanIssue(models.TransientModel):
         WMS_ISSUED_FOR_SELECTION,
         string="Issued for",
         default="other",
-        help="Which part of the trust is consuming this stock. The free-text "
-        "note above says WHY; this structured choice lets the Consumption "
-        "Value report total spend by purpose (Cows, Pooja, Maintenance, ...). "
-        "Defaults to Other so existing flows are never blocked.",
+        help="Legacy structured purpose. Now derived from the Department on "
+        "validate (department.legacy_issued_for) so old reports/searches keep "
+        "working; the Department field below is the primary capture. Hidden in "
+        "the form, kept on the model for the derivation fallback.",
     )
+
+    # ---- Issue dimensions (F1) -------------------------------------------
+    # Structured Department / Purpose / Animal. Department is required (the
+    # seeded 'Other' department is the default so the wizard is never
+    # blocked — mirrors the old issued_for='other' default); Purpose and
+    # Animal are optional. Copied onto the resulting picking at validate.
+    department_id = fields.Many2one(
+        "wms.department",
+        string="Department",
+        required=True,
+        default=lambda s: s._default_department_id(),
+        help="Which department / cost centre is consuming this stock "
+        "(Gaushala, Veterinary, Dairy, ...). Defaults to 'Other' so an issue "
+        "is never blocked. Drives the Consumption Value report breakdown and "
+        "the legacy 'Issued for' column.",
+    )
+    purpose_id = fields.Many2one(
+        "wms.purpose",
+        string="Purpose / reason",
+        help="The structured reason for this issue (routine feed, treatment, "
+        "repair, ...). Optional — the free-text note above always captures the "
+        "detail.",
+    )
+    animal_id = fields.Many2one(
+        "wms.animal",
+        string="Animal / cow",
+        help="The specific animal this issue is for, when it applies "
+        "(e.g. a treatment for a named cow). Optional.",
+    )
+
+    @api.model
+    def _default_department_id(self):
+        """Default to the seeded 'Other' department so the wizard is never
+        blocked (mirrors the legacy ``issued_for`` default of ``'other'``).
+
+        Returns an empty recordset if the WMS data file hasn't loaded yet
+        (e.g. mid-install); the operator then picks a department manually.
+        """
+        return self.env.ref("wms_location.dept_other", raise_if_not_found=False)
 
     # Photo capture. Binary + widget="image" gives mobile browsers an
     # <input type="file" accept="image/*" capture="environment"> which
@@ -444,7 +483,16 @@ class WmsScanIssue(models.TransientModel):
                 "wms_taken_by": (self.taken_by or "").strip(),
                 "wms_ordered_by": (self.ordered_by or "").strip(),
                 "wms_storekeeper_id": self.storekeeper_id.id,
-                "wms_issued_for": self.issued_for,
+                # Issue dimensions (F1). Department drives the report; derive
+                # the legacy issued_for from its legacy_issued_for map so the
+                # legacy column + old searches keep working (fall back to the
+                # wizard's own issued_for, then 'other').
+                "wms_department_id": self.department_id.id,
+                "wms_purpose_id": self.purpose_id.id or False,
+                "wms_animal_id": self.animal_id.id or False,
+                "wms_issued_for": self.department_id.legacy_issued_for
+                or self.issued_for
+                or "other",
             }
         )
         for line in self.plan_line_ids:
@@ -494,18 +542,32 @@ class WmsScanIssue(models.TransientModel):
         # login (env.user) too — the on-duty roster name covers the
         # actual human; the login records which Odoo account was used.
         # Markup() so Odoo 19 renders the HTML instead of escaping it.
-        audit_body = Markup(
-            "<p><b>Issued.</b> "
-            "Taken by <b>%s</b>; ordered by <b>%s</b>; "
-            "Store Keeper on duty: <b>%s</b>; "
-            "logged in as: <b>%s</b>.</p>"
-            "<p><b>Reason / usage note:</b><br/>%s</p>"
+        # Issue dimensions for the audit trail. Department/Purpose/Animal
+        # names are admin-seeded, but escape() defensively so a stray HTML
+        # character in a renamed record can never break the chatter markup.
+        dims_body = Markup(
+            "<p><b>Department:</b> %s; <b>Purpose:</b> %s; <b>Animal:</b> %s.</p>"
         ) % (
-            picking.wms_taken_by or "(unspecified)",
-            picking.wms_ordered_by or "(unspecified)",
-            picking.wms_storekeeper_id.name or "(unknown)",
-            self.env.user.display_name or "(system)",
-            (self.usage_note or "").replace("\n", "<br/>") or "(missing — should never happen)",
+            escape(picking.wms_department_id.name or "(unspecified)"),
+            escape(picking.wms_purpose_id.name or "(none)"),
+            escape(picking.wms_animal_id.name or "(none)"),
+        )
+        audit_body = (
+            Markup(
+                "<p><b>Issued.</b> "
+                "Taken by <b>%s</b>; ordered by <b>%s</b>; "
+                "Store Keeper on duty: <b>%s</b>; "
+                "logged in as: <b>%s</b>.</p>"
+            )
+            % (
+                picking.wms_taken_by or "(unspecified)",
+                picking.wms_ordered_by or "(unspecified)",
+                picking.wms_storekeeper_id.name or "(unknown)",
+                self.env.user.display_name or "(system)",
+            )
+            + dims_body
+            + Markup("<p><b>Reason / usage note:</b><br/>%s</p>")
+            % ((self.usage_note or "").replace("\n", "<br/>") or "(missing — should never happen)")
         )
         picking.message_post(
             body=audit_body,
