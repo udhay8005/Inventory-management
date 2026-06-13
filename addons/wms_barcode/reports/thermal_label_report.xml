@@ -48,7 +48,7 @@
             <field name="report_type">qweb-pdf</field>
             <field name="report_name">wms_barcode.report_product_label_thermal</field>
             <field name="report_file">wms_barcode.report_product_label_thermal</field>
-            <field name="print_report_name">'Thermal-product-labels-%d' % len(docs)</field>
+            <field name="print_report_name">'Thermal-product-label-%s' % (object.default_code or object.id)</field>
             <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
             <field name="binding_model_id" ref="product.model_product_product"/>
             <field name="binding_type">report</field>
@@ -60,7 +60,7 @@
             <field name="report_type">qweb-pdf</field>
             <field name="report_name">wms_barcode.report_location_label_thermal</field>
             <field name="report_file">wms_barcode.report_location_label_thermal</field>
-            <field name="print_report_name">'Thermal-location-labels-%d' % len(docs)</field>
+            <field name="print_report_name">'Thermal-location-label-%s' % (object.barcode or object.id)</field>
             <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
             <field name="binding_model_id" ref="stock.model_stock_location"/>
             <field name="binding_type">report</field>
