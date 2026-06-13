@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Returnable-items config (namespace wms_reports.*).
+
+            Fallback expected-return SLA, in days, for a returnable product
+            whose own expected_return_days is left at 0. The Scan Issue wizard
+            stamps wms_expected_return_date = today + (product.expected_return_days
+            or this fallback) on the picking; the daily overdue cron + the
+            Returns-due report read off that picking date.
+
+            Seeded via set_param (idempotent: a pre-existing key is updated,
+            never duplicated) inside noupdate="1" so a module update never
+            clobbers an operator-tuned value. Every read path carries a default,
+            so a missing key is always safe.
+        -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_reports.default_return_days', '7')"/>
+    </data>
+</odoo>

@@ -59,6 +59,16 @@
                         <field name="wms_animal_id"
                                invisible="not wms_animal_id"/>
                         <field name="wms_issued_for" invisible="1"/>
+                        <!--
+                            Returnable items (F3). Show the expected-return
+                            date + Returned flag only on pickings that carry an
+                            expected return (returnable issues); other transfers
+                            stay uncluttered.
+                        -->
+                        <field name="wms_expected_return_date"
+                               invisible="not wms_expected_return_date"/>
+                        <field name="wms_returned" widget="boolean_toggle"
+                               invisible="not wms_expected_return_date"/>
                         <field name="wms_reversed_by_id" readonly="1"
                                invisible="not wms_reversed_by_id"/>
                     </group>

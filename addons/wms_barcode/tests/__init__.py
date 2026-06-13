@@ -9,6 +9,7 @@ from . import (
     test_onboard_validation,
     test_quantity_integrity,
     test_receipt_photo,
+    test_returnable_items,
     test_undo,
     test_uom_by_kind,
 )

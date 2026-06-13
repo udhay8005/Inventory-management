@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============================================================
+             Returns due / overdue — outstanding returnable issues (F3)
+             ============================================================ -->
+        <record id="view_wms_returns_due_list" model="ir.ui.view">
+            <field name="name">wms.returns.due.report.list</field>
+            <field name="model">wms.returns.due.report</field>
+            <field name="arch" type="xml">
+                <list create="0" edit="0" delete="0"
+                      default_order="days_overdue desc"
+                      decoration-danger="days_overdue &gt; 7"
+                      decoration-warning="state == 'overdue'">
+                    <field name="picking_id"/>
+                    <field name="product_id"/>
+                    <field name="department_id" optional="show"/>
+                    <field name="wms_storekeeper_id" optional="show"/>
+                    <field name="qty"/>
+                    <field name="wms_expected_return_date"/>
+                    <field name="days_overdue"/>
+                    <field name="state"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_returns_due_pivot" model="ir.ui.view">
+            <field name="name">wms.returns.due.report.pivot</field>
+            <field name="model">wms.returns.due.report</field>
+            <field name="arch" type="xml">
+                <pivot string="Returns due / overdue">
+                    <field name="department_id" type="row"/>
+                    <field name="state" type="col"/>
+                    <field name="qty" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_returns_due_search" model="ir.ui.view">
+            <field name="name">wms.returns.due.report.search</field>
+            <field name="model">wms.returns.due.report</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="department_id"/>
+                    <field name="wms_storekeeper_id"/>
+                    <filter name="filter_overdue" string="Overdue"
+                            domain="[('state', '=', 'overdue')]"/>
+                    <filter name="filter_due_soon" string="Due soon"
+                            domain="[('state', '=', 'due_soon')]"/>
+                    <separator/>
+                    <filter name="group_department" string="Department"
+                            context="{'group_by': 'department_id'}"/>
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_keeper" string="Store Keeper"
+                            context="{'group_by': 'wms_storekeeper_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_returns_due" model="ir.actions.act_window">
+            <field name="name">Returns Due / Overdue</field>
+            <field name="res_model">wms.returns.due.report</field>
+            <field name="view_mode">list,pivot</field>
+            <field name="search_view_id" ref="view_wms_returns_due_search"/>
+            <field name="context">{'search_default_filter_overdue': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Nothing out on loan.</p>
+                <p>
+                    Returnable items (tools, spares, ...) issued via Scan Issue
+                    but not yet brought back. Each row carries the expected
+                    return date and how many days it is overdue. Clear an item
+                    by scanning it back in with <b>Scan Return</b>.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_returns_due"
+                  name="Returns due / overdue"
+                  parent="wms_reports.menu_wms_reports_root"
+                  action="action_wms_returns_due"
+                  groups="wms_location.group_wms_manager"
+                  sequence="35"/>
+
+    </data>
+</odoo>

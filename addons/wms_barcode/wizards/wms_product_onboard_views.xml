@@ -58,6 +58,9 @@
                                 <field name="volume_litres"
                                        string="Litres"
                                        optional="hide"/>
+                                <field name="expected_return_days"
+                                       string="Return days"
+                                       optional="hide"/>
                                 <field name="default_code" optional="hide"/>
                                 <field name="barcode" optional="hide"/>
                                 <field name="categ_id" optional="hide"/>

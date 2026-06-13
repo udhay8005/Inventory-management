@@ -245,6 +245,10 @@ class WmsProductOnboard(models.TransientModel):
                 vals["wms_batch_number"] = line.batch_number
             if line.volume_litres:
                 vals["wms_volume_litres"] = line.volume_litres
+            # Returnable SLA (F3): only write when set so a blank row keeps
+            # the kind-seeded compute default (tool/spare = 14, etc.).
+            if line.expected_return_days:
+                vals["expected_return_days"] = line.expected_return_days
             tmpl = Template.create(vals)
             variant = tmpl.product_variant_ids[:1]
             created_variants |= variant
@@ -336,6 +340,16 @@ class WmsProductOnboardLine(models.TransientModel):
     volume_litres = fields.Float(
         string="Volume (L)",
         help="For fluid products: volume of one unit in litres.",
+    )
+    # Returnable items (F3). Optional import column for the expected-return
+    # SLA in days; leave 0 to fall back to the kind default / global
+    # System Parameter. Only meaningful for returnable kinds.
+    expected_return_days = fields.Integer(
+        string="Return days",
+        help="For returnable products (tools, spares, textiles): days "
+        "within which the item is expected back. Leave 0 to use the WMS "
+        "Kind default (tool/spare = 14, textile/safety = 7) or the global "
+        "default. Advisory SLA — drives the overdue-returns alert.",
     )
     location_id = fields.Many2one(
         "stock.location",

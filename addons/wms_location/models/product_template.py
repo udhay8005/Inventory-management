@@ -42,6 +42,27 @@ KIND_RETURNABLE_DEFAULTS = {
     "pooja": False,  # ghee, flowers, incense, oil - consumed in puja
 }
 
+# Default expected-return SLA (in days) per WMS kind, used to SEED
+# ``expected_return_days`` on product.template the same way
+# KIND_RETURNABLE_DEFAULTS seeds ``wms_is_returnable``. Only returnable
+# kinds get a non-zero default — a returnable tool / spare is expected
+# back within a fortnight, washable textile / reusable safety gear
+# within a week, and everything else is 0 (= fall back to the global
+# System Parameter ``wms_reports.default_return_days``).
+#
+# 0 is also the right default for the NON-returnable kinds (feed,
+# medicine, fluid, …): they never come back, so an SLA is meaningless.
+# The compute below only seeds a non-zero value when the kind is
+# returnable, so a kind absent from this map (or a non-returnable one)
+# simply stays at 0. Admin-overridable per product, exactly like the
+# returnable boolean.
+KIND_DEFAULT_RETURN_DAYS = {
+    "tool": 14,
+    "spare": 14,
+    "textile": 7,
+    "safety": 7,
+}
+
 # Kinds whose stock must be issued by **expiry date** (FEFO), not by
 # arrival date (FIFO). Trust workflow: veterinary medicine must leave
 # the shelf with the soonest-expiring batch first, cattle feed rots,
@@ -231,6 +252,38 @@ class ProductTemplate(models.Model):
         for p in self:
             if p.wms_product_kind:
                 p.wms_is_returnable = KIND_RETURNABLE_DEFAULTS.get(p.wms_product_kind, True)
+
+    expected_return_days = fields.Integer(
+        string="Expected return (days)",
+        compute="_compute_expected_return_days",
+        store=True,
+        readonly=False,  # admin can override the kind-derived default
+        tracking=True,
+        help="Days within which a returnable item is expected back. 0 = use "
+        "the global default (System Parameter wms_reports.default_return_days). "
+        "Advisory SLA — drives the overdue-returns alert, does not block "
+        "issuing. Auto-seeded from WMS Kind for returnable items "
+        "(tool/spare = 14, textile/safety = 7); the Admin can override per "
+        "product, exactly like the Returnable flag.",
+    )
+
+    @api.depends("wms_product_kind")
+    def _compute_expected_return_days(self):
+        """Seed the expected-return SLA from kind, mirroring
+        ``_compute_wms_is_returnable``. A returnable kind gets its per-kind
+        default (tool/spare = 14, textile/safety = 7, others 0); a
+        non-returnable or unset kind gets 0 (= fall back to the global
+        default). No fields.Integer ``default`` is declared on purpose:
+        a stored editable compute with an explicit default is treated as
+        user-supplied at create time and the compute would not seed. The
+        compute assigns in every branch so the stored value is always
+        concrete, and being store=True / readonly=False it only seeds —
+        an admin override afterwards persists."""
+        for p in self:
+            if p.wms_product_kind and KIND_RETURNABLE_DEFAULTS.get(p.wms_product_kind):
+                p.expected_return_days = KIND_DEFAULT_RETURN_DAYS.get(p.wms_product_kind, 0)
+            else:
+                p.expected_return_days = 0
 
     def _wms_default_uom_id(self):
         """Return the UoM id this product's WMS kind should default to.
@@ -772,4 +825,10 @@ class ProductProduct(models.Model):
         store=True,
         readonly=False,
         string="Returnable",
+    )
+    expected_return_days = fields.Integer(
+        related="product_tmpl_id.expected_return_days",
+        store=True,
+        readonly=False,
+        string="Expected return (days)",
     )

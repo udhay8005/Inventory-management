@@ -1,6 +1,6 @@
 {
     "name": "WMS — Reports & Dashboards",
-    "version": "19.0.4.1.0",
+    "version": "19.0.4.2.0",
     "summary": "Live SQL-view dashboards + backup/DR observability (health endpoint, backup audit).",
     "depends": ["wms_location", "wms_ai_forecast", "wms_repair_damage", "stock"],
     "author": "WMS",
@@ -36,6 +36,9 @@
         # Menus parented to menu_wms_reports_root + reuses the activity search
         # view defined earlier -> load after menus.xml.
         "views/wms_value_reports_views.xml",
+        # Returns-due report (F3): menu parented to menu_wms_reports_root ->
+        # load after menus.xml.
+        "views/wms_returns_due_views.xml",
         # Menu parented to wms_location.menu_wms_operations (a dependency).
         "views/find_template.xml",
         # Google Drive backup surfaces: Backup Now wizard (menu under the
@@ -45,6 +48,8 @@
         "views/wms_gdrive_views.xml",
         # Seeded wms_gdrive.* configuration parameters (noupdate).
         "data/gdrive_params.xml",
+        # Seeded wms_reports.default_return_days fallback SLA (F3, noupdate).
+        "data/wms_returns_params.xml",
         "data/cron.xml",
     ],
     "installable": True,

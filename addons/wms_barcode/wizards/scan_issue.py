@@ -294,6 +294,43 @@ class WmsScanIssue(models.TransientModel):
                         )
                     )
 
+    # ---- Returnable items (F3) ----------------------------------------------
+    def _expected_return_date(self):
+        """Compute the expected-return date for this issue, or False.
+
+        Returnable items are expected back within an SLA: today + the
+        product's ``expected_return_days``, falling back to the global
+        System Parameter ``wms_reports.default_return_days`` when the
+        product leaves it at 0. When more than one returnable product is
+        planned we take the LONGEST per-product window so the alert never
+        fires early on the slowest item.
+
+        Returns a ``date`` when at least one planned product is
+        returnable, or False otherwise (a non-returnable issue carries no
+        expected-return date). Advisory only — never blocks the issue.
+        """
+        self.ensure_one()
+        returnable = self.plan_line_ids.filtered(
+            lambda ln: ln.product_id and ln.product_id.wms_is_returnable
+        )
+        if not returnable:
+            return False
+        try:
+            fallback = int(
+                self.env["ir.config_parameter"]
+                .sudo()
+                .get_param("wms_reports.default_return_days", "7")
+                or 0
+            )
+        except (TypeError, ValueError):
+            fallback = 7
+        days = max((ln.product_id.expected_return_days or fallback) for ln in returnable)
+        if days <= 0:
+            return False
+        from datetime import timedelta
+
+        return fields.Date.context_today(self) + timedelta(days=days)
+
     def action_plan(self):
         self.ensure_one()
         if not self.last_scan:
@@ -468,6 +505,12 @@ class WmsScanIssue(models.TransientModel):
         if not picking_type.active:
             picking_type.sudo().active = True
 
+        # Returnable items (F3): when any planned product is returnable,
+        # stamp the date it's expected back so the overdue-returns alert
+        # and the Returns-due report can track it. wms_returned stays at
+        # its False default until Scan Return marks it back in.
+        expected_return_date = self._expected_return_date()
+
         # Group plan lines by source so we make one move per (product, source).
         picking = self.env["stock.picking"].create(
             {
@@ -478,6 +521,8 @@ class WmsScanIssue(models.TransientModel):
                 # Immutable marker the 24h daily-cap counter filters on
                 # (robust replacement for matching the origin string).
                 "wms_is_scan_issue": True,
+                # Returnable SLA (F3) — False on a non-returnable issue.
+                "wms_expected_return_date": expected_return_date,
                 # Audit-trail fields — who took it, who authorised it,
                 # which keeper was on duty.
                 "wms_taken_by": (self.taken_by or "").strip(),
