@@ -208,6 +208,17 @@ if ($AutoRestore -and -not $TargetDb) {
     Write-Host '-AutoRestore requires -TargetDb <database name> (use a scratch name like wms_restore_<stamp> for drills).' -ForegroundColor Red
     exit 1
 }
+# Identifier safety: -TargetDb is forwarded to restore-native.ps1 (-DbName,
+# which is interpolated into psql -c DROP/CREATE DATABASE) and to the psql -d
+# integrity probes. Reject anything that isn't a lowercase Postgres identifier
+# here so the orchestrator fails fast - BEFORE the production guard and the
+# 7-step flow - rather than passing an injection payload (e.g.
+# 'x; DROP DATABASE wms') downstream. -cnotmatch is case-SENSITIVE so uppercase
+# is rejected; 'wms' and 'wms_restore_<stamp>' still pass.
+if ($TargetDb -and ($TargetDb -cnotmatch '^[a-z_][a-z0-9_]{0,62}$')) {
+    Write-Host "Invalid -TargetDb '$TargetDb': must be a lowercase Postgres identifier (letters, digits, underscores; start with a letter or underscore; max 63 chars)." -ForegroundColor Red
+    exit 1
+}
 if (($AsTask -or $AtNextBoot) -and -not $SetStamp) {
     Write-Host '-AsTask / -AtNextBoot need -SetStamp (and usually -AutoRestore -TargetDb ...).' -ForegroundColor Red
     exit 1
