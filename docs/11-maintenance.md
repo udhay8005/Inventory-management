@@ -8,6 +8,8 @@
 | Weekly | `cd .odoo && git pull origin 19.0 && cd .. && .venv\Scripts\pip install -r .odoo\requirements.txt --upgrade` then `scripts\start-native.ps1` to pick up Odoo CE security patches |
 | Weekly (Sunday 03:00) | Restore drill — verify latest backup is recoverable: `scripts\restore-drill.ps1` (see `docs/18-restore-drill.md`) |
 | Monthly | Restore-drill from a recent backup into a scratch DB (`pg_restore` into `wms_drill` and start Odoo against it briefly) |
+| Monthly (if Google Drive backup is enabled) | Quota + token check: **WMS → Configuration** → Google Drive settings → **Test Connection** — shows the connected account and storage used/limit (health warns at 90%) |
+| As needed | Rotate the Google Drive token: re-run `scripts\setup-gdrive-auth.ps1` (one browser consent; replaces `config\gdrive-token.json.dpapi`) |
 | Quarterly | Review `wms.forecast` accuracy report; retune safety stock |
 | Yearly | Major Odoo CE upgrade (see below) |
 
@@ -96,6 +98,7 @@ Photos: Scan Receipt, Scan Issue, and Damage all accept an optional photo
 | Forecast empty | `statsmodels` installed in the venv? `.\.venv\Scripts\pip show statsmodels` |
 | PO suggestion missing | velocity_class = dead → suppressed by design |
 | Damage flow stuck | Confirm Damage location exists for that warehouse |
+| Health DEGRADED: "Google Drive auth expired" (`GDRIVE_AUTH_EXPIRED`) | Re-run `scripts\setup-gdrive-auth.ps1`; if it recurs every 7 days, the GCP OAuth consent screen is still in "Testing" — publish it to "In production". The local backup is unaffected. |
 
 ## Deprecation strategy
 

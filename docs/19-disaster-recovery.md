@@ -152,11 +152,11 @@ Get-ChildItem $src -Filter '*.gpg' |
 Expect to see two newest files with names like:
 
 ```
-wms-20260607-130000.dump.gpg
-wms-20260607-130000-filestore.zip.gpg
+wms-20260607-163000.dump.gpg
+wms-20260607-163000-filestore.zip.gpg
 ```
 
-The shared `20260607-130000` is the timestamp pair. If only one half exists for
+The shared `20260607-163000` is the timestamp pair. If only one half exists for
 the newest timestamp, step back to the next-newest pair where both halves are
 present.
 
@@ -166,8 +166,8 @@ If the off-site location was written by `scripts\backup-native.ps1` (the
 standard flow), a `.sha256` companion was also copied. Compare:
 
 ```powershell
-$dump = Join-Path $src 'wms-20260607-130000.dump.gpg'
-$sha  = Join-Path $src 'wms-20260607-130000.dump.gpg.sha256'
+$dump = Join-Path $src 'wms-20260607-163000.dump.gpg'
+$sha  = Join-Path $src 'wms-20260607-163000.dump.gpg.sha256'
 $expected = (Get-Content $sha).Split(' ')[0].Trim()
 $actual   = (Get-FileHash $dump -Algorithm SHA256).Hash.ToLower()
 if ($expected -eq $actual) { 'OK' } else { "MISMATCH expected=$expected actual=$actual" }
@@ -193,6 +193,29 @@ $psql
 Expect a path like `C:\Program Files\PostgreSQL\17\bin\psql.exe`. All later
 uses invoke it with the call operator: `& $psql ...`.
 
+### 3.5 Alternative: recover from Google Drive
+
+If the dead host ran the Google Drive integration (see
+[22-gdrive-backup.md](22-gdrive-backup.md)), the encrypted sets also live under
+`Inventory_Backups/YYYY/MM-MonthName/YYYY-MM-DD/` in the operator's My Drive —
+an alternative to §§ 3.1–3.3 when no other off-site medium survived. The token
+file from the dead host is DPAPI machine-scope and useless off-box by design,
+so re-consent on the new box, then download with built-in verification:
+
+```powershell
+# .env needs GDRIVE_CLIENT_ID / GDRIVE_CLIENT_SECRET (the same OAuth client as before)
+scripts\setup-gdrive-auth.ps1                              # one-time browser consent
+scripts\gdrive-restore.ps1 -List                           # browse Year > Month > Day
+scripts\gdrive-restore.ps1 -SetStamp <yyyyMMdd-HHmmss>     # download-only (no -AutoRestore)
+```
+
+The download triple-verifies SHA-256 (file bytes vs `SHA256.txt` vs
+`backup-info.json`), checks the GPG envelope, and renames the artifacts back to
+the local `wms-<stamp>.dump.gpg` naming — § 4.3 then proceeds unchanged. (No
+OAuth client at hand? The operator's Google account owns the files: download
+them manually from drive.google.com and rename per `backup-info.json`'s
+`local_name` map.)
+
 ---
 
 ## 4. Stop Odoo, run the restore (T+25 to T+45min)
@@ -215,14 +238,14 @@ local SSD first avoids mid-restore I/O stalls on flaky media:
 
 ```powershell
 mkdir backups -ErrorAction SilentlyContinue
-copy "$src\wms-20260607-130000.dump.gpg"            backups\
-copy "$src\wms-20260607-130000-filestore.zip.gpg"   backups\
+copy "$src\wms-20260607-163000.dump.gpg"            backups\
+copy "$src\wms-20260607-163000-filestore.zip.gpg"   backups\
 ```
 
 ### 4.3 Run the restore
 
 ```powershell
-scripts\restore-native.ps1 -BackupFile backups\wms-20260607-130000.dump.gpg -Force
+scripts\restore-native.ps1 -BackupFile backups\wms-20260607-163000.dump.gpg -Force
 ```
 
 **`-Force` is mandatory on a fresh-box DR rebuild.** Step 2.4
@@ -302,12 +325,13 @@ This creates the **`Odoo-WMS`** Windows service (NSSM-supervised) writing to
 # Register the Event Log source so the drill can write entries.
 New-EventLog -LogName Application -Source 'WMS_Backup_Drill'
 
-# Register BOTH "WMS Daily Backup" and "WMS Weekly Restore Drill".
+# Register "WMS Daily Backup", "WMS Weekly Restore Drill", and "WMS Manual Backup".
 scripts\install-backup-tasks.ps1
 ```
 
-This registers **"WMS Daily Backup"** (default 1:00 PM daily) and **"WMS Weekly
-Restore Drill"** (default 3:00 AM Sunday), both with
+This registers **"WMS Daily Backup"** (default 4:30 PM daily), **"WMS Weekly
+Restore Drill"** (default 3:00 AM Sunday), and **"WMS Manual Backup"**
+(trigger-less; run on demand by the in-app Backup Now wizard), all with
 `Principal=NT AUTHORITY\SYSTEM`, `LogonType=ServiceAccount`,
 `RunLevel=Highest`, `-StartWhenAvailable`, `ExecutionTimeLimit=2h`, and
 `MultipleInstances=IgnoreNew`.
@@ -554,7 +578,7 @@ exists. The restore-native.ps1 DB-exists guard then refuses to overwrite it
 unless you pass `-Force`. Re-run the § 4.3 command with `-Force` appended:
 
 ```powershell
-scripts\restore-native.ps1 -BackupFile backups\wms-20260607-130000.dump.gpg -Force
+scripts\restore-native.ps1 -BackupFile backups\wms-20260607-163000.dump.gpg -Force
 ```
 
 `-Force` will `DROP DATABASE wms;` (destroying the install-bootstrap shell)
@@ -611,7 +635,7 @@ health endpoint still reports HEALTHY.
 - `scripts\install-native.ps1` — one-shot bootstrap (PG, Python, venv, DB, config, health_token).
 - `scripts\restore-native.ps1` — production restore (this runbook § 4).
 - `scripts\install-odoo-service.ps1` — Odoo-WMS service registration (§ 5.1).
-- `scripts\install-backup-tasks.ps1` — Daily Backup + Weekly Restore Drill registration (§ 5.2).
+- `scripts\install-backup-tasks.ps1` — Daily Backup + Weekly Restore Drill + Manual Backup registration (§ 5.2).
 - `scripts\install-ai-worker-service.ps1` — optional Odoo-WMS-AIWorker service (§ 5.3).
 - `scripts\set-user-passwords.ps1` — post-restore rotation (§ 8.1).
 - [docs/INSTALLATION-GUIDE.md](INSTALLATION-GUIDE.md) — first-time install on a healthy box (longer-form than § 2 here).

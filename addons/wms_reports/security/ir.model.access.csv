@@ -12,6 +12,9 @@ access_wms_audit_mgr,wms.audit mgr,model_wms_audit,wms_location.group_wms_manage
 access_wms_audit_line_user,wms.audit.line user,model_wms_audit_line,wms_location.group_wms_can_submit_audit,1,1,1,0
 access_wms_audit_line_mgr,wms.audit.line mgr,model_wms_audit_line,wms_location.group_wms_manager,1,1,1,1
 access_wms_backup_audit_mgr,wms.backup.audit mgr,model_wms_backup_audit,wms_location.group_wms_manager,1,0,0,0
+access_wms_gdrive_backup_mgr,wms.gdrive.backup manager,model_wms_gdrive_backup,wms_location.group_wms_manager,1,0,0,0
+access_wms_gdrive_backup_now_user,wms.gdrive.backup.now keeper,model_wms_gdrive_backup_now,wms_reports.group_wms_backup_now,1,1,1,1
+access_wms_gdrive_settings_mgr,wms.gdrive.settings manager,model_wms_gdrive_settings,wms_location.group_wms_manager,1,1,1,1
 access_wms_self_diagnostics_mgr,wms.self.diagnostics mgr,model_wms_self_diagnostics,wms_location.group_wms_manager,1,1,1,1
 access_wms_stock_value_mgr,wms.stock.value.report mgr,model_wms_stock_value_report,wms_location.group_wms_manager,1,0,0,0
 access_wms_consumption_value_mgr,wms.consumption.value.report mgr,model_wms_consumption_value_report,wms_location.group_wms_manager,1,0,0,0

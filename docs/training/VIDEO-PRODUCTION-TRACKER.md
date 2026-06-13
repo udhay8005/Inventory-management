@@ -40,8 +40,9 @@ in-app infrastructure is already complete on **every** article:
 | 20 | Using reports (viewer) | readonly-path-using-reports | sop/10 | 🟡 recording-ready |
 | 21 | Searching inventory | readonly-path-searching-stock | sop/10 §search | 🟡 recording-ready |
 | 22 | Audit history (viewer) | readonly-path-audit-visibility | sop/10 §audit | 🟡 recording-ready |
+| 23 | Cloud backup (Backup Now + settings) | workflow-cloud-backup-now | sop/13 | 🟡 recording-ready |
 
-**Summary: 0 published · 0 uploaded · 22 recording-ready · 0 missing scripts.**
+**Summary: 0 published · 0 uploaded · 23 recording-ready · 0 missing scripts.**
 
 ## To publish a video
 1. Record per `docs/training/recording-kit.md` (1080p, narration from the SOP).

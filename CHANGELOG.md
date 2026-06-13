@@ -5,6 +5,147 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.17.0.0] — 2026-06-12 — Google Drive automated backup & restore
+
+Adds an off-site cloud tier on top of the existing local backup pipeline:
+every backup is encrypted locally (the unchanged GPG AES256 envelope), then
+uploaded to Google Drive with tiered retention, an in-app Backup Now wizard,
+a manager-only restore browser, and a scripted download/verify/restore
+orchestrator. The Drive stage is failure-safe — a Drive error never fails the
+local backup — and **local backup behavior is unchanged when Drive is
+disabled**. Setup, runbooks and troubleshooting: `docs/22-gdrive-backup.md`.
+
+Manifest bumps: `wms_reports` **19.0.2.17.0 → 19.0.3.0.0**; `wms_training`
+**19.0.1.7.0 → 19.0.1.8.0** (training content, carries a data migration —
+see *Docs + training*).
+
+### Scripts layer
+- `scripts/gdrive-lib.ps1` (new) — shared Drive REST library: OAuth token
+  handling, resumable uploads (8 MiB chunks for files > 5 MB), retry with
+  2/4/8 s backoff + jitter, upload verification against Drive's
+  `sha256Checksum`.
+- `scripts/setup-gdrive-auth.ps1` (new) — one-time browser consent; prints
+  the connected account + quota. Requires `GDRIVE_CLIENT_ID` /
+  `GDRIVE_CLIENT_SECRET` in `.env` (user-created GCP OAuth Desktop client;
+  the consent screen **must be published to "In production"** —
+  Testing-status refresh tokens expire in 7 days). Service accounts are
+  impossible on consumer Gmail (no storage quota).
+- `scripts/gdrive-test.ps1` (new) — connection / upload test harness; also
+  invoked by the Settings page's Test Connection / Test Upload buttons.
+- `scripts/backup-native.ps1` — new **Stage 5**: after local backup +
+  offsite copy, uploads the set to
+  `Inventory_Backups/YYYY/MM-MonthName/YYYY-MM-DD/` on Drive as
+  `WMS_DB_YYYY-MM-DD_HH-MM-SS.dump.gpg` + `WMS_FILESTORE_….zip.gpg` +
+  `SHA256.txt` + `backup-info.json`. Local filenames are **unchanged**
+  (`wms-<stamp>.dump.gpg`). Failure-safe: Drive errors warn
+  "(LOCAL backup is intact)" and never fail the local backup.
+- **Drive retention tiers**: daily 30 days / weekly 6 months / monthly
+  2 years (`wms_gdrive.retention_*` parameters); manual + emergency sets are
+  exempt unless `wms_gdrive.delete_manual=1`. Local retention unchanged (14).
+- `scripts/install-backup-tasks.ps1` — **"WMS Daily Backup" default moved
+  from 1:00 PM to 4:30 PM** (`-BackupAt` still overrides). Existing installs
+  keep their registered time until operators **re-run
+  `install-backup-tasks.ps1`** to adopt the new default. "WMS Weekly Restore
+  Drill" unchanged (Sun 3:00 AM). New third task **"WMS Manual Backup"** (no
+  trigger; run by the Backup Now wizard via `schtasks /Run`). All tasks
+  registered under `NT AUTHORITY\SYSTEM`.
+- **Failure handling**: offline / auth-expired / quota-full / interrupted
+  uploads keep the local backup, write a failed audit row + a pending
+  catalog row, ping the `/fail` heartbeat (`HEALTHCHECK_GDRIVE_URL`), and
+  are retried by the next run's pending sweep. Auth expiry raises
+  `GDRIVE_AUTH_EXPIRED` (health DEGRADED + manager notification); the fix is
+  to re-run `setup-gdrive-auth.ps1`.
+- Housekeeping: `.env.example` gains the `GDRIVE_*` keys, token artifacts
+  are gitignored, and CI's test invocation adds the `wms_gdrive` test tag.
+
+### Odoo layer (`wms_reports` 19.0.2.17.0 → 19.0.3.0.0)
+- **Backup Now** menu under the WMS root, gated by the new capability group
+  "WMS / Can Run Backup Now" (implied into Manager, grantable per keeper);
+  the success screen shows filename / size / upload time.
+- **Settings** (manager-only, WMS → Configuration): enable flags, backup
+  time (16:30), notify flags, retention tiers, folder name, plus Test
+  Connection / Test Upload buttons (subprocess `gdrive-test.ps1`).
+- **Restore browser** (manager-only): read-only catalog (Year > Month > Day)
+  with size / checksum / creator and a copy-paste `gdrive-restore.ps1`
+  command. Keepers see no restore surface.
+- **Health**: `/wms/health` + Self-Diagnostics now report `gdrive_enabled`,
+  `drive_connected`, `last_upload_age_hours`, storage used/limit MB, and
+  `next_backup_at`. Drive problems are **DEGRADED only, never CRITICAL**.
+- **Crons**: daily upload-freshness check at 08:05 (26 h stale threshold,
+  20 h notification dedupe) and an hourly event notifier at :25 delivering
+  to the manager Discuss inbox.
+- Every upload carries a `backup-info.json` manifest (schema version, set
+  stamp, timestamps, DB name, backup type auto|manual|emergency, creator,
+  hostname, WMS/Odoo versions, encryption metadata, TOC entry count,
+  local↔Drive filename map with sizes + SHA-256s, retention exemption flag,
+  restore hint).
+
+### Restore orchestrator (`scripts/gdrive-restore.ps1`, new)
+- `-List` prints the Drive backup tree; `-SetStamp <yyyyMMdd-HHmmss>` alone
+  is download-only mode — it downloads and verifies (triple SHA-256 check +
+  GPG envelope verification) and renames artifacts back to their local names
+  (`-DownloadTo` overrides the target directory).
+- `-AutoRestore -TargetDb <db>` runs the full chain: emergency backup first
+  (`backup-native -Source emergency -FilePrefix 'emergency-'`) →
+  download/verify → `pg_restore --list` ≥ 100 TOC gate → live-aware service
+  stop → `restore-native -Force` → probes → restart + health poll →
+  `restore_gdrive` audit row.
+- **Prod guard**: restoring over the live `wms` DB requires BOTH `-Force`
+  AND the literal `-ConfirmTarget wms`; anything less is refused with
+  exit 5 **before any side effect**.
+- One-shot **"WMS Restore Once"** SYSTEM task via `-AsTask` / `-AtNextBoot`.
+- Exit codes 0/1/2/3/4/5/6 (OK / SET_NOT_FOUND / DOWNLOAD_FAILED /
+  VERIFY_FAILED / RESTORE_FAILED / PROD_GUARD / AUTH_EXPIRED). Logs to
+  `.runtime\logs\gdrive-restore.log` + the `WMS_Backup_Drill` Event Log
+  source.
+
+### Security
+- OAuth scope is **`drive.file` only** — the app sees only files it created
+  (and needs no Google review). Operators must **not** manually reorganize
+  the `Inventory_Backups` tree in the Drive UI.
+- The refresh token is stored DPAPI machine-scope at
+  `config\gdrive-token.json.dpapi` — readable by SYSTEM on this box, useless
+  off-box, gitignored.
+- Drive only ever holds ciphertext: the existing GPG AES256 envelope and
+  SHA-256 sidecars are produced before upload; nothing is decrypted in the
+  cloud.
+- Restore remains manager-only end to end: the in-app catalog is read-only,
+  and the actual restore is the operator-run script behind the prod guard
+  above.
+
+### Docs + training
+- `docs/22-gdrive-backup.md` (new) — canonical guide: GCP project + OAuth
+  setup (including the publish-to-Production / 7-day-token trap),
+  `setup-gdrive-auth.ps1` walkthrough, Settings, Backup Now, restore
+  browser, `gdrive-restore.ps1` runbook, troubleshooting, security model.
+- `docs/training/sop/13-cloud-backup.md` (new) + visual-academy
+  `cloud-backup.svg` diagram + training-map / permissions-matrix updates.
+- `wms_training` 19.0.1.7.0 → 19.0.1.8.0 — two new Help-Center articles
+  ("Cloud backup (Google Drive)", "How to back up to Google Drive now"),
+  admin-tour step 7 "Cloud safety net" (Back Up Now), and a post-migration
+  that applies the `noupdate="1"` edits (4:30 PM wording + the tour step)
+  to existing databases; fresh installs get them from the XML.
+- Drive sections added or updated across `docs/INSTALLATION-GUIDE.md`,
+  `docs/18-restore-drill.md`, `docs/19-disaster-recovery.md`,
+  `docs/07-deployment.md`, `docs/ADMIN-QUICK-START.md`,
+  `docs/11-maintenance.md`, `docs/08-security.md`, `SECURITY.md`,
+  `README.md`; the 4:30 PM default propagated through all backup-time
+  references.
+
+### Also in this release
+- `scripts/install-native.ps1` — step 7.5 health-token block unbroken under
+  `Set-StrictMode -Version Latest` + PowerShell 5.1 (commit `b32950f`).
+
+### Verification status
+- **Mock-Drive E2E proven** on scratch DBs: a marker row survived
+  backup → upload → download → restore; a tampered artifact was rejected at
+  verify; the prod guard refused a live-`wms` restore without
+  `-ConfirmTarget wms`.
+- **Live Drive E2E pending** the user's GCP credentials (one-time setup in
+  `docs/22-gdrive-backup.md`).
+- **Supervised production restore drill pending** — schedule one after the
+  first live upload lands.
+
 ## [v19.0.16.5.0] — 2026-06-08 — Documentation & Training certification
 
 Doc-only patch release on top of v16.4. No code, schema, scripts, addons, or

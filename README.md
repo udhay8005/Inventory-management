@@ -29,6 +29,7 @@ Runs **natively on Windows** — no Docker required.
 - 📐 **Opt-in slot capacity enforcement** (`wms_location.enforce_capacity`)
 - 🤖 **Offline AI demand forecasting** — statsmodels-based, runs locally, no external API
 - 🛡️ **Off-site encrypted backup copy** — `BACKUP_OFFSITE_DIR` (USB, network share, OneDrive sync folder — all just paths), SHA-256 verified after copy
+- ☁️ **Google Drive cloud backup** (optional) — every encrypted backup set uploaded to an `Inventory_Backups` Drive folder (`drive.file` minimal scope, `sha256Checksum`-verified, tiered retention), plus an in-app **Backup Now** button
 
 ## Quickstart (Windows)
 
@@ -192,6 +193,7 @@ Architecture, design notes, and operational guides:
 - [`docs/16-hardware-guide.md`](docs/16-hardware-guide.md) — scanners + thermal printers
 - [`docs/17-ci-cd.md`](docs/17-ci-cd.md) — GitHub Actions pipeline + release flow
 - [`docs/20-end-to-end-flow.md`](docs/20-end-to-end-flow.md) — full lifecycle ASCII diagram
+- [`docs/22-gdrive-backup.md`](docs/22-gdrive-backup.md) — Google Drive off-site backup: setup, Backup Now, restore
 - [`docs/PRODUCTION-READINESS-v19.0.5.md`](docs/PRODUCTION-READINESS-v19.0.5.md) — historical sign-off record (v19.0.5)
 - [`docs/RUN-AS-SERVICE.md`](docs/RUN-AS-SERVICE.md) — run Odoo as an auto-starting Windows service
 - [`docs/LABEL-PRINTING.md`](docs/LABEL-PRINTING.md) — thermal 4×1 labels + printer gap calibration
@@ -239,6 +241,8 @@ scripts/restore-native.ps1 -BackupPath backups/wms-<timestamp>.dump.gpg
 ```
 
 A weekly restore drill (`scripts/restore-drill.ps1`) verifies the most recent encrypted backup is still recoverable - the drill never touches the production database. See `docs/18-restore-drill.md` for the runbook.
+
+Optionally, every encrypted backup set is also uploaded to Google Drive after the local backup completes (verified via Drive's `sha256Checksum`; failure-safe — a Drive error never fails the local backup). Setup + restore runbook: [docs/22-gdrive-backup.md](docs/22-gdrive-backup.md).
 
 ## CI / CD
 

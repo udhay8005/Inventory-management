@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 588" font-family="Segoe UI, Arial, sans-serif" role="img" aria-label="Cloud backup flow: local encrypted backup uploaded to Google Drive, verified, kept by retention tiers, with the restore path back">
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#64748b"/></marker><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0d9488"/></marker></defs>
+  <rect x="30" y="20" width="300" height="64" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+  <text x="180" y="48" text-anchor="middle" font-size="15" font-weight="600" fill="#14532d">Local backup</text>
+  <text x="180" y="68" text-anchor="middle" font-size="12" fill="#166534">daily 4:30 PM, or Back Up Now</text>
+  <line x1="180" y1="84" x2="180" y2="116" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="116" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="180" y="144" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">GPG encryption (AES256)</text>
+  <text x="180" y="164" text-anchor="middle" font-size="12" fill="#1e40af">files leave the computer unreadable</text>
+  <line x1="180" y1="180" x2="180" y2="212" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="212" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="180" y="240" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">SHA-256 checksums</text>
+  <text x="180" y="260" text-anchor="middle" font-size="12" fill="#1e40af">size + hash recorded per file</text>
+  <line x1="180" y1="276" x2="180" y2="308" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="308" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+  <text x="180" y="336" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">Upload to Google Drive</text>
+  <text x="180" y="356" text-anchor="middle" font-size="12" fill="#1e40af">Inventory_Backups / Year / Month / Day</text>
+  <line x1="180" y1="372" x2="180" y2="404" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="404" width="300" height="64" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+  <text x="180" y="432" text-anchor="middle" font-size="15" font-weight="600" fill="#713f12">Upload verified</text>
+  <text x="180" y="452" text-anchor="middle" font-size="12" fill="#854d0e">Drive checksum must match — else retry</text>
+  <line x1="180" y1="468" x2="180" y2="500" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="30" y="500" width="300" height="64" rx="10" fill="#ccfbf1" stroke="#0d9488" stroke-width="2"/>
+  <text x="180" y="528" text-anchor="middle" font-size="15" font-weight="600" fill="#134e4a">Retention tiers</text>
+  <text x="180" y="548" text-anchor="middle" font-size="11" fill="#115e59">daily 30 days / weekly 6 months / monthly 2 years</text>
+  <polyline points="330,340 388,340 388,52 336,52" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#b)"/>
+  <text x="404" y="196" text-anchor="middle" font-size="11" fill="#115e59" transform="rotate(-90 404 196)">Restore path: download + verify, back to the server</text>
+</svg>

@@ -1,8 +1,10 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Remove the WMS backup + restore-drill scheduled tasks created by
-    install-backup-tasks.ps1. Self-elevating.
+    Remove the WMS scheduled tasks created by install-backup-tasks.ps1
+    (daily backup, weekly restore drill, on-demand manual backup), plus any
+    stale one-shot "WMS Restore Once" task left behind by an interrupted
+    gdrive-restore.ps1 -AsTask run. Self-elevating.
 
 .EXAMPLE
     .\scripts\uninstall-backup-tasks.ps1
@@ -22,7 +24,7 @@ if (-not $isAdmin) {
     return
 }
 
-foreach ($name in @("WMS Daily Backup", "WMS Weekly Restore Drill")) {
+foreach ($name in @("WMS Daily Backup", "WMS Weekly Restore Drill", "WMS Manual Backup", "WMS Restore Once")) {
     $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
     if ($t) {
         Unregister-ScheduledTask -TaskName $name -Confirm:$false

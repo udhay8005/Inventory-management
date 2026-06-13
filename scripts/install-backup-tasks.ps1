@@ -1,19 +1,24 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Register the WMS scheduled tasks - daily encrypted backup + weekly restore
-    drill - reproducibly and idempotently (Critical #7).
+    Register the WMS scheduled tasks - daily encrypted backup, weekly restore
+    drill + on-demand manual backup - reproducibly and idempotently
+    (Critical #7).
 
 .DESCRIPTION
     Previously the daily backup was a hand-made Task Scheduler entry that did
-    not survive a host rebuild. This script creates both tasks from source so
+    not survive a host rebuild. This script creates the tasks from source so
     a rebuilt machine restores the exact schedule:
 
-      * "WMS Daily Backup"         - daily (default 13:00) -> backup-native.ps1
+      * "WMS Daily Backup"         - daily (default 16:30) -> backup-native.ps1
                                      (encrypted DB + filestore, retention, audit)
       * "WMS Weekly Restore Drill" - Sundays (default 03:00) -> restore-drill.ps1
                                      (decrypt + structural verify of the latest
                                      backup; never touches production)
+      * "WMS Manual Backup"        - NO trigger -> backup-native.ps1 -Source manual
+                                     (fired on demand by the WMS Backup Now screen
+                                     or schtasks /Run; same SYSTEM pipeline as the
+                                     daily task)
 
     Tasks run as the current user when logged on, with missed-run catch-up
     (StartWhenAvailable). Re-running REPLACES the tasks (idempotent).
@@ -21,7 +26,7 @@
     Needs Administrator rights; relaunches itself elevated if necessary.
 
 .PARAMETER BackupAt
-    Daily backup time. Default "1:00PM".
+    Daily backup time. Default "4:30PM".
 
 .PARAMETER DrillAt
     Weekly drill time (Sunday). Default "3:00AM".
@@ -31,7 +36,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$BackupAt = "1:00PM",
+    [string]$BackupAt = "4:30PM",
     [string]$DrillAt = "3:00AM"
 )
 $ErrorActionPreference = "Stop"
@@ -70,7 +75,7 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
 
 # --- Daily backup ---------------------------------------------------------
 $backupAction = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}"' -f $backupScript) `
+    -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -Source auto' -f $backupScript) `
     -WorkingDirectory $ProjectRoot
 Register-ScheduledTask -TaskName "WMS Daily Backup" -Action $backupAction `
     -Trigger (New-ScheduledTaskTrigger -Daily -At $BackupAt) `
@@ -90,9 +95,24 @@ Register-ScheduledTask -TaskName "WMS Weekly Restore Drill" -Action $drillAction
     -Force | Out-Null
 Write-Host "Registered 'WMS Weekly Restore Drill' (Sundays $DrillAt)" -ForegroundColor Green
 
+# --- Manual backup (on-demand) ---------------------------------------------
+# Deliberately NO trigger: fired exclusively via schtasks /Run (the WMS
+# Backup Now wizard, or an operator console). Same SYSTEM principal/settings
+# as the daily task, so there is no env/permission drift between scheduled
+# and on-demand backups; MultipleInstances IgnoreNew makes double-clicks
+# harmless.
+$manualAction = New-ScheduledTaskAction -Execute "powershell.exe" `
+    -Argument ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -Source manual' -f $backupScript) `
+    -WorkingDirectory $ProjectRoot
+Register-ScheduledTask -TaskName "WMS Manual Backup" -Action $manualAction `
+    -Settings $settings -Principal $principal `
+    -Description "On-demand backup triggered from the WMS Backup Now screen (or schtasks /run). Same pipeline as the daily task." `
+    -Force | Out-Null
+Write-Host "Registered 'WMS Manual Backup' (on-demand, no schedule)" -ForegroundColor Green
+
 # --- Verify ---------------------------------------------------------------
 Write-Host ""
-foreach ($name in @("WMS Daily Backup", "WMS Weekly Restore Drill")) {
+foreach ($name in @("WMS Daily Backup", "WMS Weekly Restore Drill", "WMS Manual Backup")) {
     $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
     if ($t) {
         $info = $t | Get-ScheduledTaskInfo

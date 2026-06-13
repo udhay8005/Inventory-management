@@ -27,7 +27,8 @@ between steps, and a fixed colour key.
 | `returns.svg` | Returning an item to its slot, with fluids and consumables refused at Validate. |
 | `damage-repair.svg` | Filing damage, choosing repair vs urgent buy, running the repair order, scrap if beyond repair. |
 | `cycle-count-audit.svg` | Cycle-count audit: count a slot, enter quantities, submit (locks), manager accepts or rejects. |
-| `backup-restore-health.svg` | Nightly backup, restore drill, and the /wms/health status (HEALTHY / DEGRADED / CRITICAL). |
+| `backup-restore-health.svg` | Daily backup (4:30 PM), restore drill, and the /wms/health status (HEALTHY / DEGRADED / CRITICAL). |
+| `cloud-backup.svg` | Cloud backup tier: local backup → GPG AES256 → SHA-256 → Google Drive (Inventory_Backups tree) → verified → retention tiers, plus the restore path back. |
 | `forecast-reorder.svg` | AI demand forecast feeding reorder suggestions and low-stock / dead-stock reports. |
 | `fifo-vs-fefo.svg` | Side-by-side comparison of FIFO (oldest in-date) vs FEFO (soonest-expiry). |
 | `roles-permissions.svg` | Who can do what: Manager, Store Keeper, and Read-only viewer. |

@@ -47,15 +47,17 @@ A weekly drill catches all three within 7 days of the bug landing.
 
 ### One-time setup as admin
 
-Both the daily backup and the weekly restore drill are registered from
-source by a single idempotent script — re-running it REPLACES the tasks,
-so a rebuilt host comes up with the exact same schedule:
+The daily backup, the weekly restore drill, and the on-demand manual-backup
+task are registered from source by a single idempotent script — re-running
+it REPLACES the tasks, so a rebuilt host comes up with the exact same
+schedule:
 
 ```powershell
 # Register the Event Log source so the drill can write entries.
 New-EventLog -LogName Application -Source 'WMS_Backup_Drill'
 
-# Register BOTH "WMS Daily Backup" and "WMS Weekly Restore Drill" at once.
+# Register "WMS Daily Backup", "WMS Weekly Restore Drill", and
+# "WMS Manual Backup" (trigger-less; run by the Backup Now wizard) at once.
 # Self-elevates via UAC; idempotent — safe to re-run after a host rebuild.
 scripts\install-backup-tasks.ps1
 ```
@@ -63,7 +65,7 @@ scripts\install-backup-tasks.ps1
 The installer sets `Principal=NT AUTHORITY\SYSTEM`,
 `LogonType=ServiceAccount`, `RunLevel=Highest`, with
 `-StartWhenAvailable`, `ExecutionTimeLimit=2h`, and
-`MultipleInstances=IgnoreNew`. Defaults are 1:00 PM daily for the backup
+`MultipleInstances=IgnoreNew`. Defaults are 4:30 PM daily for the backup
 and 3:00 AM Sunday for the drill (override with `-BackupAt` / `-DrillAt`).
 
 This pattern was introduced in v16.3 CR-1 — earlier versions used the
@@ -72,7 +74,7 @@ session locked, leaving DR untested for weeks while the health endpoint
 still reported HEALTHY. Running as SYSTEM ensures backups and drills
 fire regardless of console state (locked, logged-off, headless box).
 
-To remove both tasks (e.g. before decommissioning a host), use the
+To remove the tasks (e.g. before decommissioning a host), use the
 inverse:
 
 ```powershell
@@ -153,6 +155,19 @@ BACKUP_OFFSITE_DIR=C:\Users\<you>\OneDrive\wms-backups-offsite
 # or: BACKUP_OFFSITE_DIR=\\nas\wms-backups
 # or: BACKUP_OFFSITE_DIR=E:\wms-backups   # USB drive letter
 ```
+
+**Built-in cloud tier (optional):** with Google Drive configured (see
+[22-gdrive-backup.md](22-gdrive-backup.md)), every encrypted set is also
+uploaded to the `Inventory_Backups` Drive folder after the local backup,
+verified via Drive's `sha256Checksum`. To retrieve and verify a Drive copy:
+
+```powershell
+scripts\gdrive-restore.ps1 -List                                  # browse the Drive catalog
+scripts\gdrive-restore.ps1 -SetStamp <yyyyMMdd-HHmmss>            # download + SHA-256 + GPG envelope verify
+```
+
+The download is renamed back to the local `wms-<stamp>.dump.gpg` naming, so
+the drill command below works on it unchanged.
 
 **Optional second-tier** (a redundant copy reaches a completely separate sync window):
 

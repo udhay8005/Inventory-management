@@ -79,8 +79,9 @@ summary.
    the `.gpg` artefact is copied, the SHA-256 is re-verified at the
    destination, and a mirrored retention pass runs (`-Retain` defaults to
    14). Any off-site failure is logged but never fails the local backup.
-6. **Scheduled tasks run as SYSTEM.** `WMS Daily Backup` (1:00 PM daily)
-   and `WMS Weekly Restore Drill` (3:00 AM Sunday) run under
+6. **Scheduled tasks run as SYSTEM.** `WMS Daily Backup` (4:30 PM daily),
+   `WMS Weekly Restore Drill` (3:00 AM Sunday), and `WMS Manual Backup`
+   (no trigger; run on demand by the in-app Backup Now wizard) run under
    `NT AUTHORITY\SYSTEM` with `LogonType=ServiceAccount` and
    `RunLevel=Highest`. This means `BACKUP_OFFSITE_DIR`, if set, must be a
    path reachable by `SYSTEM` (local disk or a UNC share with a SYSTEM-level
@@ -90,3 +91,21 @@ summary.
    `admin`, `password`, and similar — before bootstrapping the database, so
    a fresh install cannot accidentally ship to production with a known-bad
    credential.
+8. **Google Drive uploads use the minimal `drive.file` scope.** The optional
+   Drive integration requests exactly one OAuth scope — the app can see and
+   touch only files it created (the `Inventory_Backups` tree), never the
+   rest of the Drive or the Google account. The artefacts it uploads remain
+   GPG AES256 ciphertext; the passphrase never leaves the box.
+9. **The Drive refresh token is DPAPI machine-scope.** The OAuth refresh
+   token is stored at `config\gdrive-token.json.dpapi`, encrypted with DPAPI
+   LocalMachine scope so the `NT AUTHORITY\SYSTEM` scheduled tasks can read
+   it but an exfiltrated copy is useless off-box. The file is gitignored;
+   rotate it by re-running `scripts\setup-gdrive-auth.ps1`.
+10. **Drive uploads are checksum-verified.** Every upload must report a
+    Drive-side `sha256Checksum` matching the local SHA-256 of the artefact
+    before it counts as success; a mismatch deletes the remote file and the
+    upload is retried. Drive errors never fail the local backup.
+11. **Drive restore into production is double-gated.** `gdrive-restore.ps1`
+    refuses to restore into the live `wms` database unless BOTH `-Force` AND
+    the literal `-ConfirmTarget wms` are passed — otherwise it exits 5
+    (PROD_GUARD) before any side effect.

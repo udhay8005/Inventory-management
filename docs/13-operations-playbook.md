@@ -245,7 +245,8 @@ Before you onboard anyone:
 - [ ] Train the Issuer: complete one Scan Issue end-to-end with FIFO.
 - [ ] Run one mock damage + repair cycle so the team has muscle memory.
 - [ ] Set a daily 9am calendar reminder: "Yesterday's stock moves match physical?"
-- [ ] Run `scripts\install-backup-tasks.ps1` once (registers **WMS Daily Backup** + **WMS Weekly Restore Drill** as `NT AUTHORITY\SYSTEM`; defaults 1:00 PM daily and Sunday 3:00 AM).
+- [ ] Run `scripts\install-backup-tasks.ps1` once (registers **WMS Daily Backup** + **WMS Weekly Restore Drill** + the on-demand **WMS Manual Backup** as `NT AUTHORITY\SYSTEM`; defaults 4:30 PM daily and Sunday 3:00 AM).
+- [ ] Optional: set up the Google Drive off-site tier — `GDRIVE_CLIENT_ID` / `GDRIVE_CLIENT_SECRET` in `.env`, then `scripts\setup-gdrive-auth.ps1` once (see [docs/22-gdrive-backup.md](22-gdrive-backup.md)).
 - [ ] Print the responsibility table.
 
 That's the bar. Everything beyond is optimisation.

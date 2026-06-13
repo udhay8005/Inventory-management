@@ -11,6 +11,11 @@
     Safety: by default refuses to overwrite an existing database. Pass
     -Force to drop + recreate.
 
+    Google Drive-sourced backups: scripts\gdrive-restore.ps1 downloads a
+    Drive set, verifies it (SHA-256 + GPG envelope), renames it back to
+    the local convention and can orchestrate this script end-to-end
+    (-AutoRestore: emergency backup, service stop/start, integrity probes).
+
 .PARAMETER BackupFile
     Path to the `*.dump.gpg` to restore. The matching
     `-filestore.zip.gpg` is auto-detected from the same folder.
