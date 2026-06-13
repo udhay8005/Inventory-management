@@ -1881,5 +1881,51 @@
                     <p><b>Trust example</b> A festival week ends with hundreds of receipts and issues entered by evening. The keeper clicks Back Up Now before locking up; two minutes later the success screen shows the file, its size, and the Drive upload time. The day's work is safe even if the PC fails overnight.</p>
             </div></field>
         </record>
+
+        <record id="help_workflow_cloud_backup_offline_queue" model="wms.help.article">
+            <field name="slug">workflow-cloud-backup-offline-queue</field>
+            <field name="name">Offline cloud backups &amp; the Disaster Recovery page</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">267</field>
+            <field name="keywords">offline queue pending upload waiting internet reconnect retry abandoned backup disaster recovery DR page google drive validate folder disconnect connect retry now backoff manager</field>
+            <field name="body" type="html"><div>
+                    <p><b>Who this is for</b> Managers and Admins. It explains what happens to a Google Drive backup when the internet is down, and how to use the <b>Backup &amp; Disaster Recovery</b> page. Store Keepers do not need this — their one job is <b>Back Up Now</b> (see "How to back up to Google Drive now"); the page below is Manager-only.</p>
+
+                    <p><b>The promise: the cloud copy can lag, but it can never lose.</b> The local encrypted backup is always made and always kept, whatever the internet is doing. If Google Drive cannot be reached, the day's set is not thrown away — it is <i>queued</i> and uploaded automatically the moment the connection comes back. Nobody has to remember to retry it.</p>
+
+                    <p><b>How the offline queue works</b></p>
+                    <ul>
+                    <li><b>Waiting for internet</b> — the local backup is safe on the computer; the Drive upload is parked. As soon as the box is back online, an hourly check sends it up. No action needed.</li>
+                    <li><b>Automatic retries with a cooling-off gap</b> — if an upload keeps failing, the system waits a little longer between each attempt (15 minutes, then 30, then an hour, and so on, up to once a day) so it never hammers a flaky line.</li>
+                    <li><b>Abandoned</b> — only after many attempts over about two weeks does a set give up and show as <i>abandoned</i>. That means a real, lasting problem (the Google sign-in expired, the Drive is full, or the internet was down for a long time). The system stays healthy-with-a-warning, never "critical": the local backup is still safe.</li>
+                    </ul>
+
+                    <p><b>The Backup &amp; Disaster Recovery page</b> Open <b>WMS &#8594; Configuration &#8594; Backup &amp; Disaster Recovery</b>. From top to bottom it shows:</p>
+                    <ul>
+                    <li><b>Connection</b> — whether the trust is signed in to Google Drive, and which Gmail account. It shows only <i>whether</i> the credentials are present ("configured" / "present"), <b>never the secret values themselves</b> — by design, the page cannot read or store a password or token.</li>
+                    <li><b>Backup folder</b> — paste a Google Drive folder link and press <b>Validate Folder</b> to confirm the system can write there.</li>
+                    <li><b>Schedule &amp; Retention</b> — the daily backup time and how long copies are kept.</li>
+                    <li><b>Offline upload queue</b> — how many sets are pending, waiting for internet, or abandoned, plus the last successful upload and the last error. This is your at-a-glance health for the cloud tier.</li>
+                    <li><b>Retry Now</b> — a button that tries the queued uploads immediately instead of waiting for the hourly check. Safe to press any time.</li>
+                    </ul>
+
+                    <p><b>What to do when something is wrong</b></p>
+                    <ul>
+                    <li><b>"Waiting for internet" sets</b> — usually nothing; they clear themselves when the line is back. Press <b>Retry Now</b> to test at once.</li>
+                    <li><b>"Auth expired"</b> — the Google sign-in lapsed. Ask the Admin to re-run the one-time sign-in at the server (<code>scripts\setup-gdrive-auth.ps1</code>); the backlog then uploads on its own. Connecting <i>cannot</i> be done from this web page — Google opens a browser on the server for it.</li>
+                    <li><b>"Abandoned" sets</b> — fix the cause (sign-in, full Drive, or a long outage), then click <b>Back Up Now</b>: a fresh copy uploads cleanly and the warning clears. Nothing was lost — the local encrypted copy is still on the computer.</li>
+                    </ul>
+
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>This page never restores anything. Bringing data <i>back</i> is a separate, console-only, Manager-supervised job (see the restore guide). The web app has no "restore" button on purpose.</li>
+                    <li>Do not paste any Google password, client secret, or token anywhere on this page — there is no field for it, and there should never be one.</li>
+                    <li>Do not "tidy" the <b>Inventory_Backups</b> folder in Google Drive; moving or renaming files there hides them from the system.</li>
+                    </ul>
+
+                    <p><b>Trust example</b> A monsoon storm knocks out the broadband for two days. Each afternoon the 4:30 PM backup still runs and is kept on the store-room PC; the Drive uploads queue as <i>waiting</i>. When the line is restored on the third morning, the hourly check quietly uploads all three days' sets within minutes — the Manager sees the queue empty itself and the last-upload time go green, with no lost data and nothing to do by hand.</p>
+            </div></field>
+        </record>
     </data>
 </odoo>
