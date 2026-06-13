@@ -220,6 +220,43 @@ DR_TOUR_STEP = (
     "</ol>"
 )
 
+# --- Gaushala issue-dimensions / approvals training updates (19.0.1.10.0) ---
+# guided_tours.xml is noupdate="1" and is NOT edited for the F1-F6 features, so
+# BOTH fresh installs and upgrades get the admin-tour step from the hook below
+# (apply_issue_dimensions_training is called from post_init_hook AND the
+# 19.0.1.10.0 migration). It appends step 9 right after the step-8 "Disaster
+# Recovery page" list. The NEW Department/Returns/Approvals help articles ship
+# in help_articles.xml and need no hook (new records load even under
+# noupdate=1).
+
+# Idempotency marker: present once the admin-tour issue-dimensions step exists.
+ISSUE_DIM_TOUR_MARKER = "Issue dimensions and approvals"
+
+# Admin-tour step 9, inserted after the step-8 "Disaster Recovery page" list.
+# Carries TWO action-PENDING placeholders (the Scan Issue screen that now shows
+# the Department field, and the manager-only Approvals queue); call
+# apply_tour_action_links() AFTER inserting so the links resolve on the target
+# database.
+ISSUE_DIM_TOUR_STEP = (
+    '<ol start="9">'
+    "<li><b>Issue dimensions and approvals</b> &#8212; every Scan Issue now "
+    "captures a <b>Department</b> (Gaushala / Cowshed, Veterinary Hospital, "
+    "Dairy, Kitchen, Temple / Pooja, and so on), a <b>Purpose</b>, and an "
+    "optional <b>Animal / Cow</b>, so the Consumption Value report splits "
+    "spend by department. The Department list lives under "
+    "<b>Configuration &#8594; Departments</b> (manager-only). Two rules can "
+    "hold an issue for your sign-off &#8212; a too-soon re-request of the same "
+    "item (minimum-life guard) and a high-value issue (default Rs 5,000) "
+    "&#8212; and held issues queue under <b>Operations &#8594; Approvals</b>, "
+    "a manager-only menu where you Approve (re-checks stock, then issues) or "
+    "Reject. Keepers can see a pending request but never self-approve.<br/>"
+    '<a href="/odoo/action-PENDING-wms_barcode.action_wms_scan_issue" '
+    'class="btn btn-primary btn-sm" target="_self">Open Scan Issue &#8594;</a> '
+    '<a href="/odoo/action-PENDING-wms_barcode.action_wms_issue_approval" '
+    'class="btn btn-primary btn-sm" target="_self">Open Approvals &#8594;</a></li>'
+    "</ol>"
+)
+
 # slug -> [(old text, new text)] — the daily backup moved from "nightly /
 # around 2am" to 4:30 PM when the Google Drive stage landed. Pure-text
 # replacements (no tags), so the Html sanitizer cannot have altered them.
@@ -422,14 +459,50 @@ def apply_offline_queue_training(env):
     return inserted
 
 
+def apply_issue_dimensions_training(env):
+    """Insert the admin-tour "Issue dimensions and approvals" step (19.0.1.10.0).
+
+    guided_tours.xml is noupdate="1" and is not edited for the F1-F6 gaushala
+    features, so this hook adds the step on BOTH fresh installs (via
+    post_init_hook) and upgrades (via migrations/19.0.1.10.0/post-migrate.py).
+    It appends step 9 right after the step-8 "Disaster Recovery page" list.
+
+    Idempotent: skipped once its marker is present. Call
+    apply_tour_action_links() afterwards so the step's two action-PENDING
+    placeholders resolve. (The NEW Department / Returns / Approvals help
+    articles need no handling here — new records load on upgrade even under
+    noupdate="1".)
+    """
+    Article = env["wms.help.article"]
+    inserted = False
+    tour = Article.search([("slug", "=", "tour-admin")], limit=1)
+    if tour and ISSUE_DIM_TOUR_MARKER not in str(tour.body or ""):
+        body = str(tour.body or "")
+        anchor = body.find('<ol start="8"')
+        close = body.find("</ol>", anchor) if anchor != -1 else -1
+        if close != -1:
+            pos = close + len("</ol>")
+            tour.body = body[:pos] + ISSUE_DIM_TOUR_STEP + body[pos:]
+            inserted = True
+        else:
+            _logger.warning(
+                "issue-dimensions training: admin tour found but no step-8 list "
+                "anchor - issue-dimensions tour step NOT inserted"
+            )
+    _logger.info("issue-dimensions training: tour step inserted: %s", inserted)
+    return inserted
+
+
 def post_init_hook(env):
-    """Fresh install: apply visual enrichment + the offline-queue DR tour step,
-    then resolve guided-tour links.
+    """Fresh install: apply visual enrichment + the offline-queue DR tour step +
+    the gaushala issue-dimensions tour step, then resolve guided-tour links.
 
     The cloud-backup tour step (start=7) ships in guided_tours.xml for fresh
-    installs, so apply_offline_queue_training finds its anchor; on upgrades the
-    migration calls apply_cloud_backup_training first.
+    installs, so apply_offline_queue_training finds its anchor; that adds the
+    step-8 DR list, which apply_issue_dimensions_training then anchors to. On
+    upgrades the migration calls apply_cloud_backup_training first.
     """
     apply_visual_enrichment(env)
     apply_offline_queue_training(env)
+    apply_issue_dimensions_training(env)
     apply_tour_action_links(env)

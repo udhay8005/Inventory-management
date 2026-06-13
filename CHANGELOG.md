@@ -5,6 +5,111 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.19.0.0] — 2026-06-14 — Gaushala issue controls (F1–F7)
+
+Tightens the outgoing-issue flow for the trust's gaushala operation: every
+Scan Issue now records *where* the stock went and *why*, the base unit follows
+the product Kind, returnable items are chased when overdue, and risky issues
+(too-soon re-requests, high value) route to a manager before any stock leaves.
+A folded-in fix corrects the measured-item photo gate, and the 4×1 in thermal
+label is hardened. Setup and operation: `docs/ISSUE-DIMENSIONS.md`,
+`docs/UOM-BY-KIND.md`, `docs/RETURNABLE-ITEMS.md`, `docs/ISSUE-APPROVALS.md`,
+and the updated `docs/LABEL-PRINTING.md`.
+
+Manifest bumps: `wms_location` **→ 19.0.3.14.0**, `wms_barcode`
+**→ 19.0.1.30.0**, `wms_reports` **→ 19.0.4.2.0**, and `wms_training`
+**19.0.1.9.0 → 19.0.1.10.0** (training content + docs; carries a data
+migration — see *Docs + training*). Existing databases converge via
+per-module migrations; fresh installs read everything from XML + field
+defaults.
+
+### F1 — Issue dimensions (Department / Purpose / Animal)
+- Every Scan Issue now captures a **Department** (required, defaults to
+  *Other*), an optional **Purpose / reason**, and an optional **Animal / cow**,
+  all stored on the resulting `stock.picking` alongside the unchanged audit
+  triplet (**Taken by / Ordered by / Store Keeper**).
+- New configurable masters under **WMS → Configuration** (manager-only):
+  **Departments**, **Purposes**, **Animals**. A fresh install seeds 11
+  departments (Gaushala / Cowshed, Veterinary Hospital, R&D / Panchgavya,
+  Dairy, Fodder & Agriculture, Kitchen / Bhojanalaya, Maintenance,
+  Construction / Project, Administration, Temple / Pooja, Other), a starter
+  purpose list, and an empty animal register. Departments / purposes are
+  **archived, not deleted**, so historical pickings stay readable.
+- The **Consumption Value** report now splits by **Department**; the legacy
+  *Issued for* grouping is retained as a secondary dimension.
+- The legacy six-value **Issued for** tag is kept and **auto-derived from the
+  department** on every new issue, so old reports and searches keep working;
+  historical values are left untouched. Existing pickings are back-filled to a
+  department via the legacy-code map (idempotent migration).
+
+### F2 — Unit of Measure by Kind
+- New products get the right base unit **from their Kind at onboarding**:
+  **fluid → Litre**, **feed → kg**, **everything else → Units**. The onboard
+  UoM column is now shown so an operator can override.
+- **Medicine defaults to Units** (counted vials / strips), deliberately — a
+  volume default would wrongly trip the measured-item photo gate.
+- **pipe / rope / cable / cloth** default to Units but are switchable to
+  **Metre** per product when stocked / issued by length (no special "length"
+  Kind added).
+- The UoM stays editable, and **existing products are never retrofitted** — no
+  migration rewrites the unit on already-classified products.
+
+### F3 — Returnable items + expected return + overdue alert + report
+- Products can be marked **returnable** with an **expected-return period**,
+  both **Kind-seeded** (tools / spares 14 days; textile / safety 7 days) and
+  editable, with a global fallback (`wms_reports.default_return_days`,
+  default 7).
+- Issuing a returnable item stamps an **expected return date** on the picking
+  (advisory — issuing is never blocked).
+- A **daily cron** notifies managers (Discuss inbox, optional email) about
+  overdue, not-yet-returned items; quiet when healthy; reversed issues are
+  ignored.
+- A new **Returns due / overdue** report under **WMS → Reports** lists
+  everything outstanding (read-only for keepers and managers).
+- **Scan Return** marks the matched issue returned, dropping it off the report
+  and the alert (best-effort match by product + department; never silently
+  reconciles a non-match).
+
+### F4 + F5 — Issue approvals (min-life guard + high-value)
+- **F4 min-life re-request guard**: products can carry a minimum re-request
+  interval (`wms_min_life_days`; sanitation / textile / safety seeded 7 days;
+  global fallback `wms_location.default_min_life_days`). The **same department**
+  re-requesting the **same product** inside that window must enter a reason and
+  get manager approval before it issues.
+- **F5 high-value approval**: an issue worth more than the configurable
+  threshold (`wms_barcode.high_value_threshold`, default Rs 5000) also requires
+  manager approval. The value is snapshotted at request time.
+- **Approval mechanism**: a held request becomes a **Pending Approval** under
+  **WMS → Approvals** (manager-only). The keeper can *see* it but **cannot
+  approve** — read + create only, no self-approval, no password handshake.
+  A manager **Approves** (re-checks live stock, then issues — idempotent, never
+  a half-picking) or **Rejects** (nothing issued); managers are notified in
+  Discuss. Master switch: `wms_barcode.issue_approval_enabled` (default `1`).
+
+### Folded fix — measured-item photo gate
+- Scan Issue now correctly **requires a photo when issuing a measured item**
+  (Litre / kg / Metre); counted **Units** items do not need one. (This also
+  motivates F2's Medicine-as-Units default.)
+
+### F6 — Label hardening (4×1 in thermal)
+- The 100×25 mm label keeps the **logo in the left 1 inch, barcode across the
+  right 3 inches**, with a minimum scannable barcode size enforced. Print at
+  **Actual size / 100% (not Fit-to-page)** on 100×25 mm Gap / die-cut stock at
+  **203 DPI**. A guarded migration realigns any saved logo-right profile.
+  `docs/LABEL-PRINTING.md` carries the actual-size + 203 DPI guidance.
+
+### F7 — Docs + training (`wms_training` 19.0.1.9.0 → 19.0.1.10.0)
+- New docs: `docs/ISSUE-DIMENSIONS.md`, `docs/UOM-BY-KIND.md`,
+  `docs/RETURNABLE-ITEMS.md`, `docs/ISSUE-APPROVALS.md`; `docs/LABEL-PRINTING.md`
+  updated for F6; the README docs index + feature list and
+  `docs/13-operations-playbook.md` (issue / approvals sections) updated to
+  point at them.
+- `wms_training` adds short in-app help articles + a Scan-Issue tour update for
+  the new Department / Purpose / Animal fields and the approval flow. Training
+  data is `noupdate=1`: fresh installs read the edited XML; existing databases
+  converge via the `19.0.1.10.0` migration delegating to the shared,
+  idempotent hooks (the established `post-migrate.py` → `hooks` pattern).
+
 ## [v19.0.17.0.0] — 2026-06-12 — Google Drive automated backup & restore
 
 Adds an off-site cloud tier on top of the existing local backup pipeline:
