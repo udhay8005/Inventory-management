@@ -145,6 +145,7 @@
                         <group string="Usage limits (0 = no cap)">
                             <field name="wms_max_per_issue"/>
                             <field name="wms_daily_cap"/>
+                            <field name="wms_min_life_days"/>
                         </group>
                         <div class="alert alert-info" role="alert"
                              invisible="not wms_product_kind">

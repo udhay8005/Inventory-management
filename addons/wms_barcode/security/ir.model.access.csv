@@ -11,3 +11,7 @@ access_wms_storekeeper_user,wms.storekeeper user,model_wms_storekeeper,wms_locat
 access_wms_storekeeper_mgr,wms.storekeeper mgr,model_wms_storekeeper,wms_location.group_wms_manager,1,1,1,0
 access_wms_label_config_user,wms.label.config user,model_wms_label_config,wms_location.group_wms_user,1,0,0,0
 access_wms_label_config_mgr,wms.label.config mgr,model_wms_label_config,wms_location.group_wms_manager,1,1,1,0
+access_wms_issue_approval_keeper,wms.issue.approval keeper,model_wms_issue_approval,wms_location.group_wms_can_scan_issue,1,0,1,0
+access_wms_issue_approval_mgr,wms.issue.approval mgr,model_wms_issue_approval,wms_location.group_wms_manager,1,1,1,0
+access_wms_issue_approval_line_keeper,wms.issue.approval.line keeper,model_wms_issue_approval_line,wms_location.group_wms_can_scan_issue,1,0,1,0
+access_wms_issue_approval_line_mgr,wms.issue.approval.line mgr,model_wms_issue_approval_line,wms_location.group_wms_manager,1,1,1,0

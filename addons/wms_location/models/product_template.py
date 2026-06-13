@@ -63,6 +63,29 @@ KIND_DEFAULT_RETURN_DAYS = {
     "safety": 7,
 }
 
+# Default minimum re-request interval (in days) per WMS kind, used to
+# SEED ``wms_min_life_days`` on product.template the same way
+# KIND_DEFAULT_RETURN_DAYS seeds ``expected_return_days``. Only the
+# kinds that genuinely warrant a "you asked for this too soon" guard
+# get a non-zero default; everything else stays 0 (= no per-product
+# guard, fall back to the global System Parameter
+# ``wms_location.default_min_life_days``).
+#
+# Sanitation / textile / safety items are durable, slow-burn supplies:
+# a fresh tin of disinfectant, a bundle of towels, or a refilled fire
+# extinguisher should comfortably last a department a week, so a repeat
+# request inside seven days is worth a manager glance (not a hard
+# block — Scan Issue asks for a reason and routes it for approval).
+# Consumed-daily kinds (feed, fluid) deliberately stay 0 here: a cow
+# shed legitimately draws feed every day, so a per-kind min-life guard
+# would only generate noise. The admin can still set a per-product
+# value on any product, exactly like the cap fields.
+KIND_DEFAULT_MIN_LIFE_DAYS = {
+    "sanitation": 7,
+    "textile": 7,
+    "safety": 7,
+}
+
 # Kinds whose stock must be issued by **expiry date** (FEFO), not by
 # arrival date (FIFO). Trust workflow: veterinary medicine must leave
 # the shelf with the soonest-expiring batch first, cattle feed rots,
@@ -284,6 +307,40 @@ class ProductTemplate(models.Model):
                 p.expected_return_days = KIND_DEFAULT_RETURN_DAYS.get(p.wms_product_kind, 0)
             else:
                 p.expected_return_days = 0
+
+    wms_min_life_days = fields.Integer(
+        string="Min re-request interval (days)",
+        compute="_compute_wms_min_life_days",
+        store=True,
+        readonly=False,  # admin can override the kind-derived default
+        tracking=True,
+        help="Minimum number of days the SAME department should wait before "
+        "re-requesting this product. 0 = no per-product guard (falls back to "
+        "the global System Parameter wms_location.default_min_life_days; 0 "
+        "there too means the guard is off). A too-soon request is NOT blocked "
+        "outright — Scan Issue asks the keeper for a reason and routes the "
+        "issue to a Manager for approval. Auto-seeded from WMS Kind "
+        "(sanitation/textile/safety = 7, others = 0); the Admin can override "
+        "per product, exactly like the Returnable flag and the usage caps.",
+    )
+
+    @api.depends("wms_product_kind")
+    def _compute_wms_min_life_days(self):
+        """Seed the min re-request interval from kind, mirroring
+        ``_compute_expected_return_days`` / ``_compute_wms_is_returnable``.
+        Durable slow-burn kinds (sanitation/textile/safety) get 7 days; every
+        other (or unset) kind gets 0 (= no per-product guard, fall back to the
+        global default). No fields.Integer ``default`` is declared on purpose:
+        a stored editable compute with an explicit default is treated as
+        user-supplied at create time and the compute would not seed. The
+        compute assigns in every branch so the stored value is always
+        concrete, and being store=True / readonly=False it only seeds — an
+        admin override afterwards persists."""
+        for p in self:
+            if p.wms_product_kind:
+                p.wms_min_life_days = KIND_DEFAULT_MIN_LIFE_DAYS.get(p.wms_product_kind, 0)
+            else:
+                p.wms_min_life_days = 0
 
     def _wms_default_uom_id(self):
         """Return the UoM id this product's WMS kind should default to.
@@ -831,4 +888,10 @@ class ProductProduct(models.Model):
         store=True,
         readonly=False,
         string="Expected return (days)",
+    )
+    wms_min_life_days = fields.Integer(
+        related="product_tmpl_id.wms_min_life_days",
+        store=True,
+        readonly=False,
+        string="Min re-request interval (days)",
     )

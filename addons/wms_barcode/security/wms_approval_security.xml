@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        F4 + F5 — Approve held issues capability group.
+
+        Manager-only by design. A dedicated capability group (rather than
+        gating purely on group_wms_manager) keeps the door open for a future
+        delegated "deputy approver" keeper at zero code cost, and matches the
+        house "one power = one sub-group" convention. It is implied into
+        group_wms_manager so the Admin auto-holds it, and is deliberately NOT
+        granted to any keeper sub-group — approval stays manager-only.
+
+        Defense in depth: the Approve/Reject buttons are gated on THIS group
+        in the view AND re-checked in-method against group_wms_manager
+        (wms.issue.approval._ensure_can_decide), and the keeper's ACL is
+        read+create only, so a keeper literally cannot approve.
+    -->
+    <data noupdate="0">
+
+        <record id="group_wms_can_approve_issue" model="res.groups">
+            <field name="name">WMS / Capability: Approve held issues</field>
+            <field name="implied_ids" eval="[(4, ref('wms_location.group_wms_user'))]"/>
+        </record>
+
+        <!--
+            Additive: add the new capability to the Manager role's implied
+            groups so an Admin auto-holds it. (4, ref(...)) is a link, not a
+            replace, so the existing five capability implications declared in
+            wms_location stay intact.
+        -->
+        <record id="wms_location.group_wms_manager" model="res.groups">
+            <field name="implied_ids" eval="[(4, ref('wms_barcode.group_wms_can_approve_issue'))]"/>
+        </record>
+
+    </data>
+</odoo>
