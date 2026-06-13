@@ -44,6 +44,19 @@ param(
     [string]$DbUser
 )
 
+# --- Identifier safety -----------------------------------------------------
+# $DbName is interpolated UNPARAMETERIZED into psql -c SQL (DROP/CREATE
+# DATABASE) further down, so it MUST be a safe Postgres identifier. Validate
+# it BEFORE any SQL is built: this blocks injection (e.g. a name containing
+# '; DROP DATABASE wms', which psql -c would run as extra statements) and the
+# silent breakage of unquoted identifiers (hyphens, uppercase folding to
+# lowercase). -cnotmatch is case-SENSITIVE so uppercase is rejected; valid
+# names like 'wms' and 'wms_restore_20260612_163000' still pass.
+if ($DbName -cnotmatch '^[a-z_][a-z0-9_]{0,62}$') {
+    Write-Host "Invalid -DbName '$DbName': must be a lowercase Postgres identifier (letters, digits, underscores; start with a letter or underscore; max 63 chars)." -ForegroundColor Red
+    exit 1
+}
+
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $DataDir     = Join-Path $ProjectRoot '.runtime\data'
