@@ -115,27 +115,31 @@ class StockQuant(models.Model):
         the _gather reservation hook so every removal path agrees. Pooling is
         always within one product/template (no cross-product substitution).
 
-        Order:
-          * If the template carries a wms_expiry_date OR its
-            wms_product_kind is in EXPIRY_SENSITIVE_KINDS (medicine, feed,
-            fluid, pooja), sort EARLIEST-EXPIRING FIRST (FEFO), falling back
-            to in_date when expiry is not set on a sibling quant.
-          * Otherwise sort OLDEST-ARRIVING FIRST (FIFO).
+        Ordering primitive:
+          * EXPIRY_SENSITIVE_KINDS (medicine / feed / fluid / pooja), or any
+            template carrying a wms_expiry_date -> EARLIEST-EXPIRING FIRST
+            (FEFO), tie-broken by in_date then id;
+          * otherwise OLDEST-ARRIVING FIRST (FIFO).
 
-        FPAT High: the wizard previously banner-printed "FEFO: earliest expiry
-        first" for medicine/feed/fluid/pooja but the actual sort never read
-        wms_expiry_date. A January-arrived batch with December expiry shipped
-        ahead of a March-arrived batch expiring next month, and the
-        expiring batch ended up thrown out. This makes the promise honest.
+        Effective behaviour in the Scan Issue path: the planner pools within
+        ONE template, and wms_expiry_date is a *template* field, so every
+        candidate quant in that call shares the same expiry and the FEFO key
+        collapses to plain FIFO (oldest arrival first). That is why the Scan
+        Issue feedback says "oldest stock first", not "earliest expiry first" -
+        a single issue is one product, so there is no batch to expiry-sort
+        against. Perishable-rotation risk is surfaced by the Expiry-Alert
+        report instead. The expiry sort below stays correct for any caller that
+        pools ACROSS templates (covered by test_fpat_fx2 / test_removal_engine);
+        true per-BATCH FEFO would require stock.lot expiry, which the trust does
+        not run today.
         """
         from datetime import date
 
         from .product_template import EXPIRY_SENSITIVE_KINDS
 
         far_future = date(9999, 12, 31)
-        # All quants in `self` share a template (the planner pools by template
-        # already) so we read the kind+expiry off the first one for the policy
-        # decision, then sort the whole recordset by per-quant expiry.
+        # All quants in `self` share a template in the planner path (pooled by
+        # template) so the policy decision off the first one is representative.
         if not self:
             return self
         tmpl = self[0].product_id.product_tmpl_id

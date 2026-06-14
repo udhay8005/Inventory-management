@@ -50,14 +50,19 @@
 
         <!--
             Cycle Count = Odoo's built-in stock.quant "Inventory Adjustments"
-            view. We just expose it under our WMS / Operations menu so a
-            warehouse user can find it without diving into the Inventory app.
-            The standard action lives in stock/views/stock_quant_views.xml.
+            view (raw quant editor with Apply / Clear). That is a direct
+            stock-adjustment back-door, so it is MANAGER-ONLY. Keepers do
+            their counting through the reviewed "Inventory audits" flow
+            (wms.audit: draft -> submit -> manager accepts), which applies
+            variances under manager sign-off rather than letting a keeper
+            overwrite quants directly. The standard action lives in
+            stock/views/stock_quant_views.xml.
         -->
         <menuitem id="menu_wms_cycle_count"
                   name="Cycle Count"
                   parent="menu_wms_operations"
                   action="stock.action_view_quants"
+                  groups="wms_location.group_wms_manager"
                   sequence="50"/>
 
         <menuitem id="menu_wms_rack_generator"

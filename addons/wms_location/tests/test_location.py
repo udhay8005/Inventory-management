@@ -564,3 +564,38 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(missing, 0)
         self.assertEqual(len(plan), 1)
         self.assertEqual(plan[0][0].product_id.id, tool_new.id, "Tools must not cross batches")
+
+
+@tagged("post_install", "-at_install", "wms")
+class TestCapabilityBackfill(TransactionCase):
+    """3C: the upgrade backfill grants legacy keepers the four daily-work
+    capabilities, but must NOT re-grant Manage Catalog (an Admin task) - so an
+    upgrade never silently re-widens a keeper's power."""
+
+    def test_backfill_grants_four_caps_not_manage_catalog(self):
+        keeper = self.env["res.users"].create(
+            {
+                "name": "BF Keeper",
+                "login": "bf_keeper",
+                "group_ids": [(6, 0, [self.env.ref("wms_location.group_wms_user").id])],
+            }
+        )
+        self.env["res.users"]._wms_backfill_capabilities()
+        keeper.invalidate_recordset()
+        granted = set(keeper.all_group_ids.ids)
+        for cap in (
+            "group_wms_can_scan_receive",
+            "group_wms_can_scan_issue",
+            "group_wms_can_file_damage",
+            "group_wms_can_submit_audit",
+        ):
+            self.assertIn(
+                self.env.ref("wms_location.%s" % cap).id,
+                granted,
+                "backfill must grant %s" % cap,
+            )
+        self.assertNotIn(
+            self.env.ref("wms_location.group_wms_can_manage_catalog").id,
+            granted,
+            "backfill must NOT re-grant Manage Catalog to a keeper",
+        )
