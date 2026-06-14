@@ -117,6 +117,22 @@ class CertRolesMixin:
         # A forecast row with reorder_qty>0 so the Reorder Summary SQL view
         # returns at least one row when opened.
         cls.env["wms.forecast"].create({"product_id": cls.cert_product.id, "reorder_qty": 7.0})
+
+        # A minimal real rack (1x1x1) so the /wms/rack/<id>/grid route can be
+        # certified per role (the route 404s on a non-rack id).
+        rack_wiz = cls.env["wms.rack.generator"].create(
+            {
+                "warehouse_id": cls.wh.id,
+                "rack_code": "CERTRACK",
+                "shelf_count": 1,
+                "column_count": 1,
+                "default_slot_count": 1,
+            }
+        )
+        rack_wiz.action_generate()
+        cls.cert_rack = cls.env["stock.location"].search(
+            [("wms_location_type", "=", "rack"), ("wms_rack_code", "=", "CERTRACK")], limit=1
+        )
         cls.env.flush_all()
 
     @classmethod

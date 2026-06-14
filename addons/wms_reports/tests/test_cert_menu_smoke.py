@@ -28,8 +28,11 @@ class TestCertMenuSmoke(CertRolesMixin, TransactionCase):
 
     def _open_act_window_menus(self, user):
         """Render every view + ACL-check every act_window action the user sees.
-        Returns [(xmlid, error_str), ...] for any that raise."""
+        Returns ([(xmlid, error_str), ...], n_opened) — the error list plus how
+        many actions were actually exercised (so 'all opened' can't pass
+        vacuously when a role's visible menu set has collapsed to zero)."""
         errors = []
+        opened = 0
         for m in self._menu_payload(user).values():
             if not isinstance(m, dict):
                 continue
@@ -63,19 +66,26 @@ class TestCertMenuSmoke(CertRolesMixin, TransactionCase):
                 # ACL read — catches a visible menu the user cannot actually read
                 # and SQL-view (_auto=False) CREATE/JOIN failures on open.
                 Model.search([], limit=1)
+                opened += 1
             except Exception as e:  # noqa: BLE001 — collect the offending menu + error
                 errors.append((xmlid, "%s: %s" % (type(e).__name__, e)))
-        return errors
+        return errors, opened
 
     def test_every_visible_menu_opens_for_each_role(self):
         problems = {}
+        empty_roles = []
         # PORTAL is not a backend UI user — it cannot even read ir.ui.menu
         # (correct security). Its unreachability is certified over HTTP in
         # test_cert_security_matrix, not here.
         for code in [c for c in self.ALL_ROLES if c != "PORTAL"]:
-            errs = self._open_act_window_menus(self.role(code))
+            errs, opened = self._open_act_window_menus(self.role(code))
             if errs:
                 problems[code] = errs
+            # Every WMS-bearing role must actually exercise >0 menus, so the
+            # "all opened" guarantee can't pass vacuously if a regression hid
+            # every menu. PLAIN (internal, no WMS group) legitimately sees none.
+            if code != "PLAIN" and opened == 0:
+                empty_roles.append(code)
         self.assertFalse(
             problems,
             "Visible menus failed to open for some roles:\n"
@@ -83,6 +93,35 @@ class TestCertMenuSmoke(CertRolesMixin, TransactionCase):
                 "  [%s] %s" % (code, "; ".join("%s -> %s" % e for e in errs))
                 for code, errs in problems.items()
             ),
+        )
+        self.assertFalse(
+            empty_roles,
+            "these WMS roles opened ZERO menus (vacuous-pass risk — a regression "
+            "may have hidden their whole menu set): %s" % empty_roles,
+        )
+
+    def test_buyer_and_repair_role_boundaries(self):
+        """Pin the two roles that otherwise ride only the generic loop."""
+        buyer_visible = self._visible_xmlids(self.role("BUYER"))
+        self.assertIn(
+            "wms_ai_forecast.menu_wms_forecast_list",
+            buyer_visible,
+            "the Buyer must see the Forecast / reorder list",
+        )
+        # Repair Tech: by current design the Repair Orders menu is manager-only
+        # (owner-decision flagged in the audit) — they reach repair orders via
+        # the handed record — but they MUST be able to read wms.repair.order.
+        repair = self.role("REPAIR")
+        self.assertNotIn(
+            "wms_repair_damage.menu_wms_repair",
+            self._visible_xmlids(repair),
+            "current design: Repair Orders menu is manager-only",
+        )
+        self.assertTrue(
+            self.env["ir.model.access"]
+            .with_user(repair)
+            .check("wms.repair.order", "read", raise_exception=False),
+            "a Repair Tech must be able to read repair orders",
         )
 
     def test_baseline_keeper_forbidden_menus_absent(self):

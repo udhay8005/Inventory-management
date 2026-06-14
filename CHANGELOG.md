@@ -5,6 +5,46 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.21.0.0] — 2026-06-14 — DR-catalog hardening, CI upgrade-path, multi-user UI certification
+
+Closes the two follow-ups flagged in v19.0.20.0.0 and adds an automated
+multi-user UI certification layer. Full suite **345 tests, 0 failures**.
+
+Manifest bumps: `wms_reports` **19.0.4.5.0 → 19.0.4.6.0** (carries a data
+migration — `migrations/19.0.4.6.0/`, idempotent + a no-op on the empty
+production catalog) and `wms_location` **19.0.3.16.0 → 19.0.3.17.0** (the
+barcode-gate below).
+
+**Google-Drive DR-catalog hardening**
+- The `wms.gdrive.backup` catalog can no longer accumulate duplicate
+  disaster-recovery rows under concurrent backups: a migration de-duplicates
+  any existing rows (newest-wins), then adds a partial-unique index on
+  `set_stamp` and a unique index on `name`; the PowerShell writer
+  (`gdrive-lib.ps1`) now uses an atomic `INSERT … ON CONFLICT` upsert.
+
+**CI hardening**
+- New **`odoo_upgrade`** job: installs the addons at the previous release tag,
+  then `-u all` to HEAD — so a migration that would break the live upgrade is
+  caught before it ships (PREV_TAG now `v19.0.20.0.0`).
+- **Fail-on-skip** guard (no silently-skipped `wms_*` tests) and **pylint-odoo +
+  flake8** promoted to hard gates.
+
+**Multi-user UI certification (`wms_ui_cert`)**
+- A per-role **menu smoke** drives every menu each role can see (Manager, every
+  keeper-capability variant, Buyer, Repair Tech, plain user) and asserts each
+  opens without error, with a non-vacuity guard and the visibility matrix
+  (forbidden-for-baseline / capability-gated).
+- A **controller route matrix** certifies the act_url gates per role over HTTP
+  (dashboard manager-only; find/map/rack-grid keepers-not-outsiders; backup/
+  restore refuse keepers).
+- **Label render + paperformat** (both thermal labels carry name + barcode on
+  the 100×25mm format; batch print) and the **Onboard → print** flow.
+- **Role actions + a fix the cert caught**: certified the Buyer's
+  forecast→draft-PO action; and **gated the bulk barcode-generate server action
+  to Manage Catalog** — it sudo-wrote product barcodes and was previously
+  runnable by any keeper from the product Action menu. Wired `wms_ui_cert` into
+  the CI test tags.
+
 ## [v19.0.20.0.0] — 2026-06-14 — Deep-audit hardening (correctness, permissions, UX)
 
 A full read-only audit of every addon drove this release. It fixes the few
@@ -82,7 +122,8 @@ deploy, run the forecast cron once so reorder history retrains on real data.
 DR-catalog unique index + `ON CONFLICT` upsert (the feature isn't live yet);
 CI hardening (an upgrade-path job, pylint-odoo as a hard gate, flake8 over the
 migrations); and a broad docs sweep of stale FEFO wording across the training
-material.
+material. **Update:** the first two shipped in **v19.0.21.0.0** (below); only
+the docs sweep remains deferred.
 
 ## [v19.0.19.0.0] — 2026-06-14 — Gaushala issue controls (F1–F7)
 
