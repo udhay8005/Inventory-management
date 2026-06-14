@@ -599,3 +599,44 @@ class TestCapabilityBackfill(TransactionCase):
             granted,
             "backfill must NOT re-grant Manage Catalog to a keeper",
         )
+
+
+@tagged("post_install", "-at_install", "wms")
+class TestFloorZoneBarcodeCollision(TransactionCase):
+    """2.5: two parent areas whose names compress to the same 4-char prefix
+    must not mint colliding floor-zone barcodes - that would hit the global
+    stock.location barcode-unique constraint and roll back the whole batch with
+    a cryptic error."""
+
+    def _generate_one_zone(self, parent_name):
+        wh = self.env["stock.warehouse"].search([], limit=1)
+        parent = self.env["stock.location"].create(
+            {
+                "name": parent_name,
+                "usage": "view",
+                "location_id": wh.view_location_id.id,
+                "company_id": wh.company_id.id,
+            }
+        )
+        wiz = self.env["wms.floor.zone.generator"].create(
+            {
+                "warehouse_id": wh.id,
+                "parent_location_id": parent.id,
+                "zone_prefix": "F",
+                "count": 1,
+                "start_number": 1,
+            }
+        )
+        wiz.action_generate()
+        return self.env["stock.location"].search(
+            [("location_id", "=", parent.id), ("wms_location_type", "=", "floor")]
+        )
+
+    def test_similar_parent_names_do_not_collide(self):
+        z1 = self._generate_one_zone("Pharmacy Building")  # -> "PHAR"
+        z2 = self._generate_one_zone("Pharma Store")  # also -> "PHAR"
+        self.assertTrue(z1 and z2, "both floor zones must be created without a crash")
+        self.assertTrue(z1.barcode and z2.barcode)
+        self.assertNotEqual(
+            z1.barcode, z2.barcode, "floor-zone barcodes must not collide across parents"
+        )
