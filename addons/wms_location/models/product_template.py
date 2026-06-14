@@ -1,5 +1,5 @@
 from odoo import _, api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessError, ValidationError
 
 # Default returnability per WMS kind. The Admin can still override
 # per-product on the form (`wms_is_returnable` is read/write — the
@@ -710,6 +710,18 @@ class ProductTemplate(models.Model):
         self to be empty and Odoo would treat the recordset ids as
         an extra positional argument.
         """
+        # Bulk barcode back-fill is a CATALOG operation: it writes product
+        # barcodes (via sudo in _wms_ensure_barcodes), so without this gate any
+        # keeper who can see the product list could trigger it from the Action
+        # menu. Require the Manage Catalog capability (managers imply it).
+        if not self.env.user.has_group("wms_location.group_wms_can_manage_catalog"):
+            raise AccessError(
+                _(
+                    "Generating barcodes edits the product catalog, so it needs "
+                    "the Manage Catalog capability. Ask a Manager (or a keeper "
+                    "with Manage Catalog) to run it."
+                )
+            )
         targets = self
         before = sum(1 for v in targets.mapped("product_variant_ids") if not v.barcode)
         targets._wms_ensure_barcodes()

@@ -43,3 +43,12 @@ class TestCertRouteMatrix(CertRolesMixin, HttpCase):
             self.assertEqual(
                 self._status("cert_keeper", url), 404, "keeper must NOT reach %s" % url
             )
+
+    def test_rack_grid_keepers_only(self):
+        # /wms/rack/<id>/grid sudo()-reads stock, gated on group_wms_user — a
+        # non-WMS user must not be able to enumerate a rack's stock.
+        url = "/wms/rack/%d/grid" % self.cert_rack.id
+        self.assertEqual(self._status("cert_keeper", url), 200, "keeper must reach the rack grid")
+        self.assertEqual(
+            self._status("cert_plain", url), 404, "a non-WMS user must NOT enumerate rack stock"
+        )

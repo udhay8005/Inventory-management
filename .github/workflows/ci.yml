@@ -327,8 +327,8 @@ jobs:
     env:
       # The last green release tag whose addons we install BEFORE upgrading to
       # HEAD. Bump this every release to the previous tag. Current release is
-      # v19.0.20.0.0, so the previous release tag is v19.0.19.0.0.
-      PREV_TAG: v19.0.19.0.0
+      # v19.0.21.0.0, so the previous release tag is v19.0.20.0.0.
+      PREV_TAG: v19.0.20.0.0
       # Same module list + order as the `-i` install in odoo_tests.
       ADDONS: wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training
 
@@ -454,8 +454,11 @@ jobs:
           fi
           # A failed migration normally aborts with rc!=0, but belt-and-braces:
           # fail on CRITICAL, or on an ERROR from the migration/loading/registry
-          # paths against the upgrade DB, or a Postgres error surfacing.
-          if grep -nE "CRITICAL wms_upgrade |ERROR wms_upgrade odoo\.(modules|sql_db|tools\.convert|addons\.base\.models\.ir_(model|module))|psycopg2\.(errors|.*Error)" odoo_upgrade.log; then
+          # paths against the upgrade DB (a Postgres/psycopg2 error during the
+          # upgrade surfaces as an `ERROR wms_upgrade odoo.sql_db` line, already
+          # matched below). A bare unanchored `psycopg2.*Error` clause was
+          # dropped — it false-failed on benign/rolled-back lines.
+          if grep -nE "CRITICAL wms_upgrade |ERROR wms_upgrade odoo\.(modules|sql_db|tools\.convert|addons\.base\.models\.ir_(model|module))" odoo_upgrade.log; then
             echo "::error::Migration/upgrade error detected in the -u all log (see matched lines above)."
             exit 1
           fi

@@ -6,6 +6,7 @@ from . import (
     test_cert_label_pdf,
     test_cert_menu_smoke,
     test_cert_onboard_print,
+    test_cert_role_actions,
     test_cert_security_matrix,
     test_dashboard,
     test_find,
