@@ -46,10 +46,13 @@ over-issue.**
 - **Scan Receipt** — the cursor stays in the scan field; every barcode is
   processed automatically and carton barcodes auto-fill their unit count. QC
   must be ticked and an on-duty Store Keeper chosen before Validate works.
-- **Scan Issue (FIFO)** — set the quantity **first**, then scan. FIFO pulls the
-  oldest stock; FEFO is used for items with an expiry (the **Expires** column is
-  highlighted when a batch is near its date). A photo is required for measured
-  items (liquids / weighed goods), and all four audit fields are mandatory.
+- **Scan Issue (FIFO)** — set the quantity **first**, then scan. The picker
+  always pulls the oldest stock first (FIFO) for every product, including
+  perishables — there is no FEFO at issue. The **Expires** column is highlighted
+  when a batch is near its date so the operator can spot it, but to deliberately
+  rotate soon-to-expire medicine/feed use the **Expiry Alerts** report (WMS ->
+  Reports -> Expiry alerts). A photo is required for measured items (liquids /
+  weighed goods), and all four audit fields are mandatory.
 - **Scan Return** — the same receipt wizard with return mode pre-set. Only
   products flagged **Returnable** are accepted; fluids and consumables are
   refused at Validate.

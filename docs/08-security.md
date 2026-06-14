@@ -33,7 +33,7 @@ WMS / Repair Tech (= base + repair)   group_wms_can_file_damage
 | Group | xml_id | Adds | Why it's separate |
 |---|---|---|---|
 | Can Scan Receipt / Return | `wms_location.group_wms_can_scan_receive` | Scan Receipt wizard + Scan Return | Two-step new-hire onboarding — receipts first, issues later. |
-| Can Scan Issue | `wms_location.group_wms_can_scan_issue` | Scan Issue wizard (FEFO planner) | Issues have a daily cap + per-issue cap + audit triplet — only granted to keepers trusted with the budget. |
+| Can Scan Issue | `wms_location.group_wms_can_scan_issue` | Scan Issue wizard (FIFO planner) | Issues have a daily cap + per-issue cap + audit triplet — only granted to keepers trusted with the budget. |
 | Can File Damage | `wms_location.group_wms_can_file_damage` | wms.damage form + action_confirm | Damage events drive the urgent-buy recommendation and lock the source slot. Limited per the trust's accountability policy. |
 | Can Submit Audit | `wms_location.group_wms_can_submit_audit` | wms.audit start + submit (Admin still accepts) | Auditors walk slots and submit counts; the Admin alone applies the variance delta. |
 | Can Manage Catalog | `wms_location.group_wms_can_manage_catalog` | wms.barcode.alias + carton-label / catalog maintenance | Aliases are barcode-to-product mappings; collisions silently route stock to the wrong product if mismanaged. All five sub-groups are defined in the `wms_location` addon (single source of truth), even though they gate features in `wms_barcode`, `wms_repair_damage`, and `wms_reports`. |

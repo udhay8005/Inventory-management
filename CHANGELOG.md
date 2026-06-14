@@ -5,6 +5,36 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.22.0.0] — 2026-06-15 — Docs & training accuracy (honest FIFO-at-issue)
+
+Brings the documentation and in-app training in line with the v19.0.20.0.0
+FEFO→FIFO behaviour change. The system pulls **oldest-arrived stock first
+(FIFO) at every issue, for every product** (a single issue is one product, and
+expiry is tracked per product, so there is nothing to expiry-sort at the
+picker); perishables are rotated via the **Expiry Alerts report**. The training
+previously taught "FEFO — earliest expiry first" at the picker, which no longer
+happens.
+
+Manifest bump: `wms_training` **19.0.1.10.0 → 19.0.1.11.0** (pre-migration).
+Docs-only files have no version.
+
+- **In-app help reframed** — 12 articles in `help_articles.xml` (incl. the
+  dedicated `what-is-fefo`, `faq-fifo-vs-fefo`, `admin-path-stock-flow-fifo-fefo`,
+  `safety-double-check-fefo-medicine`, and the Scan-Issue lessons) + the training
+  index now teach FIFO-at-issue and point perishable rotation at the Expiry
+  Alerts report. Slugs/xmlids preserved so links still resolve.
+- **Migration** — `help_articles.xml` is `noupdate=1`, so a pre-migration
+  deletes the 12 reframed articles and the corrected XML recreates them on `-u`
+  (raw SQL; nothing has an FK to `wms.help.article`, so it's safe).
+- **Docs reframed** — `03-fifo-issue.md` (worst offender: worked FEFO example +
+  the removed banner quote), the other training SOPs, `00-training-map.md`,
+  `STOREKEEPER-QUICK-START.md`, `08-security.md`, `INSTALLATION-GUIDE.md`,
+  `21-training-system.md`.
+- **Also fixed** — `06-reports.md`: Consumption Value is broken down **by
+  Department** (the F1 field), not "by purpose / Issued for".
+- **Still pending** — the 3 FIFO/FEFO teaching SVGs are captioned as conceptual
+  (issue is FIFO); a visual redraw remains a follow-up.
+
 ## [v19.0.21.0.0] — 2026-06-14 — DR-catalog hardening, CI upgrade-path, multi-user UI certification
 
 Closes the two follow-ups flagged in v19.0.20.0.0 and adds an automated

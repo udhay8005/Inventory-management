@@ -195,12 +195,12 @@ On submit it creates the product (auto-generating its SKU, Code128 barcode, and 
 
 **Prerequisites.**
 - Slots/floor areas must exist for rows with a starting quantity.
-- Know each product's **WMS Kind** (it drives the SKU prefix, returnability default, and FEFO behaviour — see §1 of product kinds in §4/§5).
+- Know each product's **WMS Kind** (it drives the SKU prefix, the returnability default, and whether the product is **expiry-sensitive** — medicine/feed/fluid/pooja, which then require an expiry date and appear on the Expiry alerts report; see §4/§5).
 
 **Common Mistakes.**
 - Leaving the **WMS Kind** blank → blocked; the system needs it to build the right SKU.
 - A row with a starting quantity but no slot → blocked. (Set quantity to 0 for a catalog-only row with no stock yet.)
-- Onboarding **Medicine** or **Feed** without an **expiry date** → blocked, because these drive FEFO and spoilage tracking.
+- Onboarding **Medicine** or **Feed** without an **expiry date** → blocked, because the expiry date powers the Expiry alerts report and spoilage tracking.
 - Double-submitting the no-print version → the wizard closes itself after success specifically to stop a double-click from creating duplicate SKUs.
 
 **Best Practices.**
@@ -258,11 +258,11 @@ If nothing exists at all, it errors and tells you to create racks/floor zones fi
 - Assuming auto-assign always uses an empty slot — it prefers to **cluster** with existing stock of the same product first.
 
 **Best Practices.**
-- For perishables, let clustering keep batches of the same product together so FEFO and counting are simpler.
+- For perishables, let clustering keep stock of the same product together so expiry-rotation (via the Expiry alerts report) and counting are simpler.
 - Keep a few empty slots free so auto-assign never has to mix products into an occupied slot.
 - Scan the destination slot deliberately when an item has a "home" location.
 
-**Related Workflows.** Scan Receipt (§2a); FIFO/FEFO issuing (§4); Slot Occupancy (§10).
+**Related Workflows.** Scan Receipt (§2a); FIFO issuing (§4); Slot Occupancy (§10).
 
 ---
 
@@ -273,8 +273,8 @@ If nothing exists at all, it errors and tells you to create racks/floor zones fi
 The destination defaults to the trust's **"Trust internal use"** location (because the trust uses, not sells). You scan a product and a quantity; the wizard shows a **plan** (which slot, how much, arrival date, expiry) *before* you commit, so a miscount can be fixed first. Then fill the required audit fields and Validate.
 
 **Picking rule:**
-- **FEFO (First-Expiry-First-Out)** for perishables — kinds **medicine, feed, fluid, pooja**, or any product with an expiry date. It pulls the soonest-to-expire batch first and even crosses to sibling batches of the same product so a fresh long-dated batch never ships ahead of an older one.
-- **FIFO (First-In-First-Out)** for everything else — oldest arrival date first.
+- **FIFO (First-In-First-Out) for every product** — oldest arrival date first, across all slots, perishable or not. A single Scan Issue is for one product, and expiry is tracked **per product** (not per physical batch/lot), so within an issue there is nothing to expiry-sort against — oldest-arrived *is* the rule. The plan shows the expiry date in the **Expires** column for awareness, but it doesn't change the pick order.
+- **Rotating perishables by expiry** is done through the **Expiry alerts** report (§10f), not the issue picker: the report lists medicine/feed/fluid/pooja by soonest expiry so a keeper can deliberately issue or move the soonest-to-expire stock first. (Expiry is required on Medicine/Feed at onboarding precisely so this report works — see §2b.)
 
 **Guard rails at Validate:**
 - **Stock-out / shortfall** is shown plainly ("⚠ STOCK OUT" or "only X on hand"); you can't validate while short.
@@ -294,7 +294,7 @@ The destination defaults to the trust's **"Trust internal use"** location (becau
 - Trying to validate while **short** → blocked; reduce the quantity or wait for a Scan Return.
 - Leaving **Taken by**, **Ordered by**, or the **Reason / usage note** blank → all are required; no issue goes through without accountability.
 - Forgetting the **photo** for a measured (kg/L) item → blocked.
-- Thinking the wizard "misread" you when FEFO pulls from a *different* batch — that's intentional; the feedback line tells you which batch it crossed to.
+- Thinking the wizard "misread" you when the plan pulls from a slot that isn't the nearest one — that's intentional; it's pulling the **oldest-arrived** stock (FIFO), and the feedback line says "oldest stock first". If the oldest slot can't cover the quantity, the plan tops up from the next-oldest slot.
 - Hitting a **daily cap** and retrying immediately — wait a few hours or ask a Manager to raise the cap.
 
 **Best Practices.**
@@ -510,7 +510,7 @@ All reports live under **WMS → Reports** (unless noted). Read-only viewers and
 **Purpose.** All validated stock moves (in/out/internal), grouped by product, with a pivot view. Menu: **Reports → Movement history**. **Who:** all readers. **Best practice:** use the pivot to compare receipts vs issues over time.
 
 ### 10f. Expiry alerts
-**Purpose.** Perishables (anything with an expiry date) bucketed into Expired / within 30 days / within 90 days / OK, with days-to-expiry and on-hand. Menu: **Reports → Expiry alerts**. A weekly digest is emailed to Managers. **Who:** all readers. **Best practice:** clear expired stock via Damage, and move soon-to-expire stock to the front (FEFO already prefers it).
+**Purpose.** Perishables (anything with an expiry date) bucketed into Expired / within 30 days / within 90 days / OK, with days-to-expiry and on-hand. Menu: **Reports → Expiry alerts**. A weekly digest is emailed to Managers. **Who:** all readers. **Best practice:** this is the trust's expiry-rotation tool — clear expired stock via Damage, and deliberately issue or move soon-to-expire stock to the front (the Scan Issue picker itself only knows oldest-arrived, so this report is how you act on expiry).
 
 ### 10g. Tool / Spare fleet
 **Purpose.** For tools and spares only: the peak number simultaneously checked out over 90 days, a recommended fleet size (peak + 1 spare), and the shortage to buy. Menu: **Reports → Tool / Spare fleet**. **Who:** all readers; buying is Admin. **Best practice:** use the shortage column to decide how many of a shared tool to own. **Common mistake:** treating the peak as gospel when there are very few movements — it's a lower bound.
@@ -627,7 +627,7 @@ See §9. **Who:** all readers; acting on them (buying) is Admin.
 | Build racks / zones / slots | Create, edit, archive | Read | Read |
 | Onboard Products | Yes | No | No |
 | Scan Receipt / Return | Yes | Yes (Scan Receipt+Return) | No |
-| Scan Issue (FIFO/FEFO) | Yes | Yes (Scan Issue) | No |
+| Scan Issue (FIFO) | Yes | Yes (Scan Issue) | No |
 | Damage | Yes | Yes (File Damage) | No |
 | Repair Orders | Yes (authorise) | Create from damage only | No |
 | Inventory Audit | Review/accept/reject | Create/count/submit (Submit Audit) | No |

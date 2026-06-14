@@ -5,7 +5,7 @@ This procedure explains how an Admin builds the physical storage map of the ware
 
 - **Generate Zone** — creates a named umbrella area (e.g. "1st Floor") and can create racks and/or floor zones inside it in one click.
 - **Create Rack** — creates a single shelving unit laid out as a grid of shelves × columns, with compartments and slots underneath.
-- **Generate Floor Zones** — creates open / pallet / yard storage areas that behave like a slot for receiving, FIFO/FEFO issue, and reports.
+- **Generate Floor Zones** — creates open / pallet / yard storage areas that behave like a slot for receiving, FIFO issue, and reports.
 
 Getting this right once means every later step — receiving, issuing, counting, damage, and reports — points to the correct shelf.
 
@@ -103,7 +103,7 @@ The trust is setting up its medicine room as a zone with two racks.
 - **Keep one slot per compartment unless you genuinely subdivide.** It keeps addresses simple. Add more slots only when a compartment physically holds separable sub-piles.
 - **Set capacity hints sparingly.** Capacity is a *soft* hint shown on the Slot Occupancy report; it is not a hard limit and won't block over-filling.
 - **Label immediately and verify against the real shed.** The system's value comes from the screen matching the shelves. Fix any mismatch the same day.
-- **Use Floor zones for anything that can't sit on a tiered rack** — sacks, drums, pallets, yard items. They still support FIFO/FEFO and all reports.
+- **Use Floor zones for anything that can't sit on a tiered rack** — sacks, drums, pallets, yard items. They still support FIFO issue and all reports (and their stock shows on the Expiry Alerts report just like rack stock).
 
 ## Related Help-Center Articles
 - `admin-path-warehouse-structure`
@@ -126,7 +126,7 @@ The trust is setting up its medicine room as a zone with two racks.
 - **[0:50]** "Under Racks, I'll set Rack Count to two. More fields appear: the prefix 'R', a start number of one, six shelves, three columns, and one slot per compartment. I'll leave Floor Count at zero — this room is all shelving."
 - **[1:12]** "Click Generate. The system creates the Pharmacy zone, then racks R-zero-one and R-zero-two inside it. Each rack now has eighteen compartments and eighteen slots, and every slot has its own barcode, like R-zero-one, dash, S-H-zero-one, dash, C-zero-one, dash, S-L-zero-one."
 - **[1:35]** "Need a single rack with a custom shape? Use Configuration, Create Rack. Fill in the Rack identity, then either use the Quick grid tab for a simple shelves-by-columns layout, or the Visual builder to merge cells into a tall compartment — for example one compartment spanning shelves one to three for tall bottles. Then click Create rack."
-- **[2:00]** "For sacks, drums, or pallet areas that don't fit on shelving, use Configuration, Generate Floor Zones. Set the Parent area, a prefix like F, a start number, and a count. Click Generate, and you get F-zero-one, F-zero-two, and so on. Floor zones behave just like slots for receiving, F-I-F-O issue, and reports."
+- **[2:00]** "For sacks, drums, or pallet areas that don't fit on shelving, use Configuration, Generate Floor Zones. Set the Parent area, a prefix like F, a start number, and a count. Click Generate, and you get F-zero-one, F-zero-two, and so on. Floor zones behave just like slots for receiving, F-I-F-O issue, and reports — including the Expiry Alerts report."
 - **[2:25]** "After generating, review your locations under Zones, Racks, Compartments, Slots, and Floor Zones. Print the barcodes, stick them where a hand can see them, and walk the floor to confirm the shelves match the screen."
 - **[2:45]** "And that's it. Plan your codes once, generate, label, and verify. Your warehouse now has a precise address for every item. Thank you."
 

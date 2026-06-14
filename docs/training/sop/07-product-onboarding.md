@@ -56,7 +56,7 @@ The trust just received a delivery and wants to onboard three items at once, two
 - **"Row N: product name is required."** — A row has a blank name.
 - **"Row '<name>' is missing a WMS Kind. Pick one (Tool, Consumable, Feed, Medicine, Pooja, Fluid)…"** — A row has no WMS Kind. The Kind is what generates the SKU prefix.
 - **"Row '<name>' has a starting quantity, so it needs a slot to live in. Scan the slot barcode, or pick it from the list. If you only want this product in the catalog (no stock yet), set the quantity to 0."** — Initial qty is greater than 0 but no Slot is set.
-- **"Row '<name>' is a <Kind> product, and you must enter an expiry date from the supplier's label…"** — A Medicine or Feed row has no Expiry date. This is mandatory to support FEFO and the Expiry Alert report.
+- **"Row '<name>' is a <Kind> product, and you must enter an expiry date from the supplier's label…"** — A Medicine or Feed row has no Expiry date. This is mandatory so the **Expiry Alerts report** can track the product and warn you before it spoils.
 - **"Row '<name>': initial quantity cannot be negative."** — A negative number was entered for Initial qty.
 - **"No internal location matches barcode '<code>'. Check the slot sticker, or pick from the dropdown."** — The barcode you scanned into **Scan slot** doesn't match any internal location. Verify the sticker or choose the slot from the dropdown.
 - **SKU prefix mismatch (`SKU '<code>' does not match WMS Kind '<kind>'…`)** — This appears if a product code is typed that contradicts its Kind. In the onboard wizard the SKU is auto-generated, so you normally won't see this; it can appear later when editing a product code by hand. Fix: start the code with the expected prefix (e.g. `TOOL-`), or clear it so the system regenerates it.
@@ -70,7 +70,7 @@ The trust just received a delivery and wants to onboard three items at once, two
 - **Kind-specific details (dosage, volume, serial number) aren't on the wizard.** The wizard captures name, kind, qty, slot, expiry, batch, litres, supplier, and price. Other kind-specific fields (dosage, container size, serial number, weight, voltage, etc.) are entered later on the product's **WMS Classification** tab.
 
 ## Best Practices
-- **Classify correctly the first time.** The WMS Kind sets the SKU prefix permanently and controls returnability and FEFO behaviour. Medicine/Feed/Fluid/Pooja are treated as expiry-sensitive.
+- **Classify correctly the first time.** The WMS Kind sets the SKU prefix permanently and controls returnability and whether the product is treated as **expiry-sensitive**. Medicine/Feed/Fluid/Pooja are expiry-sensitive, which means an expiry date is required (Medicine/Feed) and the product is tracked on the Expiry Alerts report for spoilage. (Issuing itself is plain FIFO — oldest-arrived first — for every Kind.)
 - **Always enter expiry for perishables.** Even where it isn't strictly required (Fluid, Pooja), entering expiry lets the Expiry Alert report protect the trust from spoilage.
 - **Never rename an existing SKU.** It breaks the history trail. If something genuinely changes, create a new product (new SKU) and archive the old one. See `what-is-a-sku`.
 - **Use Initial qty = 0 for catalog-only items.** Create the product now, receive stock later via Scan Receipt — no fake slot needed.

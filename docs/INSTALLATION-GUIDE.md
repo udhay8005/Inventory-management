@@ -516,7 +516,8 @@ Use the guided wizard so every product gets a SKU, barcode, and label in one go.
    (if applicable) an expiry date. Scanning the label finds the product.
 
 > Perishables: set `wms_expiry_date` so the **Expiry Alerts** report and the
-> weekly digest can warn you before stock expires (FEFO).
+> weekly digest can warn you before stock expires (it powers the spoilage
+> tracking — operators use that report to rotate the soonest-to-expire batch).
 
 `✅ CHECKPOINT` — the product exists with unique SKU + barcode; its label scans.
 `📸 CAPTURE` — the completed product form.
