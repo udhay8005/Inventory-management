@@ -48,6 +48,10 @@ class TestReturnsDue(TransactionCase):
         )
         cls.product.standard_price = 100.0
         cls.env["stock.quant"]._update_available_quantity(cls.product, cls.stock, 50.0)
+        # Pin the company timezone so the report's company-tz "today" matches the
+        # UTC base _stamp() uses below — makes days_overdue deterministic at any
+        # wall-clock hour, and exercises the new company-tz code path.
+        cls.env.company.partner_id.tz = "UTC"
         cls.env.flush_all()
 
     def _issue(self, qty=1.0):
@@ -70,7 +74,9 @@ class TestReturnsDue(TransactionCase):
 
     def _stamp(self, picking, days_offset, returned=False):
         """Stamp the F3 issue fields the sibling wizard commit sets."""
-        due = fields.Date.context_today(self) + timedelta(days=days_offset)
+        # UTC base to match the report's company-tz (UTC) reference, so the
+        # day-count assertions are deterministic at any hour.
+        due = fields.Date.today() + timedelta(days=days_offset)
         picking.write({"wms_expected_return_date": due, "wms_returned": returned})
         self.env.flush_all()
 

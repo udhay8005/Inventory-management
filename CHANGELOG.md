@@ -5,6 +5,39 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.23.0.0] — 2026-06-15 — Honest diagrams + returns-due timezone fix
+
+Finishes the FEFO-honesty work (the teaching diagrams) and fixes the minor
+returns-due day-count timezone edge — the last two deferred items.
+
+Manifest bumps: `wms_reports` **19.0.4.6.0 → 19.0.4.7.0** (SQL view recreated on
+`-u`; no migration) and `wms_barcode` **19.0.1.33.0 → 19.0.1.34.0** (onboard
+error-text fix below). The diagram SVGs are static assets (no version bump).
+
+- **Teaching diagrams redrawn** to match the honest behaviour (both the `docs/`
+  and `wms_training/static/img` copies):
+  - `fifo-vs-fefo.svg` → two panels, **"At issue: FIFO"** (oldest in-date first,
+    every product, no expiry-sort at the picker) vs **"Manage expiry: the Expiry
+    Alerts report"** (flags soonest-to-expire; you rotate perishables).
+  - `fifo-issue.svg` → the plan step now reads "FIFO — oldest in-date first,
+    every item" (was "FIFO … / FEFO soonest-expiry").
+  - `scan-issue.svg` → the banner now says FIFO pulls oldest first for every
+    item; use Expiry Alerts to rotate. Diagram README captions updated.
+- **Returns-due report timezone fix** — `days_overdue` / `state` are now computed
+  against *today in the company timezone* instead of raw `CURRENT_DATE` (the UTC
+  session date), so the count matches the trust's local calendar day. (Previously
+  off by one in the hours around UTC midnight on a non-UTC / IST deployment.) The
+  test is now timezone-deterministic.
+- **Two last FIFO/FEFO code mislabels fixed** — the Onboard "expiry required"
+  error said *"use the oldest stock first (FEFO)"* (oldest-first is FIFO); it now
+  explains the expiry date powers the Expiry Alerts report. And the
+  `EXPIRY_SENSITIVE_KINDS` code comment, which still described per-batch FEFO at
+  the picker, now states that removal is FIFO (the expiry-sort branch collapses
+  to FIFO in the single-template Scan Issue path) and rotation is via the report.
+
+With this, the FEFO→FIFO alignment is complete end to end — behaviour, docs,
+in-app help, diagrams, and the last user-facing/code strings.
+
 ## [v19.0.22.0.0] — 2026-06-15 — Docs & training accuracy (honest FIFO-at-issue)
 
 Brings the documentation and in-app training in line with the v19.0.20.0.0

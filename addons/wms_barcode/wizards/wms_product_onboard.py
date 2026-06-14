@@ -136,9 +136,9 @@ class WmsProductOnboard(models.TransientModel):
                 raise UserError(
                     _(
                         "Row %r is a %s product, and you must enter an "
-                        "expiry date from the supplier's label. This helps "
-                        "us use the oldest stock first (FEFO) and prevent "
-                        "spoilage."
+                        "expiry date from the supplier's label. It powers the "
+                        "Expiry Alerts report so soon-to-expire stock gets "
+                        "rotated out and used before it spoils."
                     )
                     % (
                         line.name,

@@ -42,9 +42,10 @@ class WmsReturnsDueReport(models.Model):
 
     One row per (picking, product) still out on loan: a done Scan Issue whose
     picking carries an expected return date, has not been marked returned, and
-    has not been reversed (Undo). ``days_overdue`` is ``CURRENT_DATE -
-    wms_expected_return_date`` (negative while still within the window);
-    ``state`` buckets the row into due-soon vs overdue for the list decoration.
+    has not been reversed (Undo). ``days_overdue`` is ``today -
+    wms_expected_return_date`` where *today* is the date in the **company
+    timezone** (negative while still within the window); ``state`` buckets the
+    row into due-soon vs overdue for the list decoration.
     """
 
     _name = "wms.returns.due.report"
@@ -84,14 +85,23 @@ class WmsReturnsDueReport(models.Model):
                 sp.wms_storekeeper_id AS wms_storekeeper_id,
                 sml.quantity AS qty,
                 sp.wms_expected_return_date AS wms_expected_return_date,
-                (CURRENT_DATE - sp.wms_expected_return_date) AS days_overdue,
+                -- "today" in the COMPANY timezone, not raw CURRENT_DATE (which is
+                -- the UTC session date). This keeps days_overdue aligned with the
+                -- trust's local calendar day and with the cron's
+                -- fields.Date.context_today logic; raw CURRENT_DATE was off by one
+                -- in the hours around UTC midnight on a non-UTC (e.g. IST) deploy.
+                ((now() AT TIME ZONE COALESCE(cpart.tz, 'UTC'))::date
+                    - sp.wms_expected_return_date) AS days_overdue,
                 CASE
-                    WHEN CURRENT_DATE > sp.wms_expected_return_date
+                    WHEN (now() AT TIME ZONE COALESCE(cpart.tz, 'UTC'))::date
+                            > sp.wms_expected_return_date
                         THEN 'overdue'
                     ELSE 'due_soon'
                 END AS state
             FROM stock_move_line sml
             JOIN stock_picking sp ON sp.id = sml.picking_id
+            LEFT JOIN res_company comp ON comp.id = sml.company_id
+            LEFT JOIN res_partner cpart ON cpart.id = comp.partner_id
             WHERE sp.wms_is_scan_issue = TRUE
                   AND sp.wms_expected_return_date IS NOT NULL
                   AND sp.wms_returned = FALSE

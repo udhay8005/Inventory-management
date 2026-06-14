@@ -10,7 +10,7 @@
   <line x1="180" y1="180" x2="180" y2="212" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
   <rect x="30" y="212" width="300" height="64" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
   <text x="180" y="240" text-anchor="middle" font-size="15" font-weight="600" fill="#713f12">System plans pick</text>
-  <text x="180" y="260" text-anchor="middle" font-size="12" fill="#854d0e">FIFO oldest in-date / FEFO soonest-expiry</text>
+  <text x="180" y="260" text-anchor="middle" font-size="12" fill="#854d0e">FIFO &#8212; oldest in-date first, every item</text>
   <line x1="180" y1="276" x2="180" y2="308" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
   <rect x="30" y="308" width="300" height="64" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
   <text x="180" y="336" text-anchor="middle" font-size="15" font-weight="600" fill="#1e3a8a">Take from shown slot(s)</text>
