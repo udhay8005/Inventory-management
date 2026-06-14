@@ -497,6 +497,10 @@ class WmsAuditLine(models.Model):
         """
         locked = self.filtered(lambda ln: ln.audit_id.state not in ("draft", False))
         if locked:
+            # Intentional ORM-level delete guard: raising in unlink() (rather
+            # than via @api.ondelete) is deliberate so it also fires on sudo()
+            # and manager unlink paths and mirrors perm_unlink=0. See docstring.
+            # pylint: disable=no-raise-unlink
             raise UserError(
                 _(
                     "Cannot delete audit line(s) on a submitted or reviewed "

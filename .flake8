@@ -4,14 +4,19 @@ extend-ignore =
     E203,
     W503,
     E501
+# NOTE: `migrations/` is deliberately NOT excluded. The raw-SQL pre/post
+# migration scripts are the highest-blast-radius code in the repo (they run
+# once, unattended, against the live DB during `-u`), so they get the same
+# F821/undefined-name + pyflakes linting as everything else. E501 is already
+# globally ignored above, and no migration line exceeds max-line-length, so
+# the long SQL string literals need no per-file ignore.
 exclude =
     .git,
     .venv,
     venv,
     docs,
     backups,
-    __pycache__,
-    migrations
+    __pycache__
 per-file-ignores =
     # Odoo manifests use Python literal syntax with no imports.
     __manifest__.py:E501

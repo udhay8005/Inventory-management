@@ -34,6 +34,8 @@ from odoo.addons.wms_reports.wizard import wms_gdrive_backup_now as backup_now_w
 from odoo.addons.wms_reports.wizard import wms_gdrive_settings as settings_wizard
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import HttpCase, TransactionCase, tagged
+from odoo.tools import mute_logger
+from psycopg2 import IntegrityError
 
 # The column contract paired with Write-GDriveCatalogRow in
 # scripts/gdrive-lib.ps1. The script UPSERTs these columns via psql,
@@ -153,8 +155,11 @@ class TestGdriveCatalogModel(TransactionCase):
             self.assertFalse(field.related, "contract column %r must not be related" % col)
 
     def test_ordering_newest_backup_first(self):
+        # Distinct name per set: the wms_gdrive_backup_name_uniq index now
+        # forbids two rows sharing a name (one row per local artifact).
         old = self.Catalog.record_set(
             self._set_vals(
+                name="wms-20260611-163000.dump.gpg",
                 set_stamp="20260611-163000",
                 backup_time=fields.Datetime.now() - timedelta(days=1),
             )
@@ -162,6 +167,74 @@ class TestGdriveCatalogModel(TransactionCase):
         new = self.Catalog.record_set(self._set_vals())
         found = self.Catalog.search([("id", "in", (old | new).ids)])
         self.assertEqual(found[0], new, "_order must put the newest backup first")
+
+    # --- Concurrent-write race guard (19.0.4.6.0) -------------------------
+    # The daily backup task and the hourly pending-retry sweep are two
+    # out-of-process psql writers; before this the catalog had no UNIQUE key
+    # and the script did a non-atomic SELECT-then-INSERT, so a race left two
+    # rows for one backup set on the manager's DR page. init() (and the
+    # paired post-migration) now de-dup + add the unique indexes, and
+    # Write-GDriveCatalogRow upserts with ON CONFLICT (name).
+
+    def test_two_writes_same_set_collapse_to_one_row(self):
+        # The headline guarantee: two catalog writes for the SAME set produce
+        # exactly ONE row. Mirrors Write-GDriveCatalogRow's atomic upsert
+        # (INSERT ... ON CONFLICT (name) DO UPDATE) — psql bypasses the ORM,
+        # so we exercise the same SQL the script runs. Writer A records the
+        # pending set; writer B (the racing retry sweep) records it uploaded.
+        upsert = (
+            "INSERT INTO wms_gdrive_backup "
+            "(name, set_stamp, uploaded, create_uid, create_date, write_uid, write_date) "
+            "VALUES (%s, %s, %s, 1, NOW(), 1, NOW()) "
+            "ON CONFLICT (name) DO UPDATE SET set_stamp = EXCLUDED.set_stamp, "
+            "uploaded = EXCLUDED.uploaded, write_uid = 1, write_date = NOW()"
+        )
+        name, stamp = "wms-20260612-163000.dump.gpg", "20260612-163000"
+        self.env.cr.execute(upsert, (name, stamp, False))  # daily task: pending
+        self.env.cr.execute(upsert, (name, stamp, True))  # retry sweep: uploaded
+        self.env.cr.execute(
+            "SELECT COUNT(*), bool_and(uploaded) FROM wms_gdrive_backup WHERE set_stamp = %s",
+            (stamp,),
+        )
+        count, uploaded = self.env.cr.fetchone()
+        self.assertEqual(count, 1, "two writes for one set must leave a single DR row")
+        self.assertTrue(uploaded, "the later (uploaded) write must win via DO UPDATE")
+
+    def test_partial_unique_index_blocks_duplicate_set_stamp(self):
+        # DB-level backstop: even a writer that bypasses ON CONFLICT cannot
+        # leave two rows for one set_stamp (the restore browser groups by it).
+        self.Catalog.record_set(self._set_vals())  # set_stamp 20260612-163000
+        with mute_logger("odoo.sql_db"), self.assertRaises(IntegrityError):
+            with self.env.cr.savepoint():
+                self.env.cr.execute(
+                    "INSERT INTO wms_gdrive_backup "
+                    "(name, set_stamp, create_uid, create_date, write_uid, write_date) "
+                    "VALUES (%s, %s, 1, NOW(), 1, NOW())",
+                    ("wms-different-name.dump.gpg", "20260612-163000"),
+                )
+
+    def test_partial_index_allows_many_null_set_stamps(self):
+        # Pending 'created' rows carry no Drive set id yet; the PARTIAL
+        # predicate (WHERE set_stamp IS NOT NULL) must let many NULL-set_stamp
+        # rows coexist (distinct local artifacts).
+        a = self.Catalog.record_set({"name": "wms-null-a.dump.gpg"})
+        b = self.Catalog.record_set({"name": "wms-null-b.dump.gpg"})
+        self.assertFalse(a.set_stamp)
+        self.assertFalse(b.set_stamp)
+        self.assertNotEqual(a.id, b.id)
+
+    def test_unique_index_blocks_duplicate_name(self):
+        # One row per local artifact — the stable id the queue lifecycle keys
+        # on and the conflict target Write-GDriveCatalogRow upserts against.
+        self.Catalog.record_set({"name": "wms-dup-name.dump.gpg"})
+        with mute_logger("odoo.sql_db"), self.assertRaises(IntegrityError):
+            with self.env.cr.savepoint():
+                self.env.cr.execute(
+                    "INSERT INTO wms_gdrive_backup "
+                    "(name, create_uid, create_date, write_uid, write_date) "
+                    "VALUES (%s, 1, NOW(), 1, NOW())",
+                    ("wms-dup-name.dump.gpg",),
+                )
 
 
 @tagged("post_install", "-at_install", "wms", "wms_gdrive")
