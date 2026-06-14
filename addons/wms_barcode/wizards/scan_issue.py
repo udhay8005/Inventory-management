@@ -209,24 +209,49 @@ class WmsScanIssue(models.TransientModel):
 
     @api.depends("plan_line_ids.product_id")
     def _compute_photo_required(self):
-        # A product is "measured" (issued by weight / volume / length, e.g.
-        # Litre / kg / Metre) when its UoM is NOT the Units UoM. Counted
-        # Units items stay photo-free.
+        # Arm the photo gate for "measured, not counted" products — those
+        # issued by weight / volume / length (kg, Litre, Metre) rather than
+        # by the whole piece.
         #
         # Why not category_id != Units category? Odoo 19 CE dropped UoM
         # categories — ``uom.product_uom_categ_unit`` resolves to None — so
         # the old category test was always falsy and the photo gate was
-        # INERT (no measured product ever required a photo). Comparing the
-        # UoM record directly against ``uom.product_uom_unit`` restores the
-        # gate: a Litre / kg / Metre product requires a photo again, while a
-        # Units product does not.
-        units_uom = self.env.ref("uom.product_uom_unit", raise_if_not_found=False)
+        # INERT (no measured product ever required a photo). UoMs are now
+        # organised as ``relative_uom_id`` parent chains, so we classify by
+        # walking each UoM to its chain root (see ``_uom_is_measured``):
+        # anything rooted in the Units UoM — Units itself AND bundles of it
+        # (Pack of 6, Dozens, or a custom child) — is COUNTED and stays
+        # photo-free; everything else (Volume / Weight / Length / ... chains)
+        # is MEASURED and requires a photo.
         for wiz in self:
-            wiz.photo_required = (
-                any(ln.product_id.uom_id != units_uom for ln in wiz.plan_line_ids if ln.product_id)
-                if units_uom
-                else False
+            wiz.photo_required = any(
+                self._uom_is_measured(ln.product_id.uom_id)
+                for ln in wiz.plan_line_ids
+                if ln.product_id
             )
+
+    def _uom_is_measured(self, uom):
+        """True when ``uom`` measures by weight / volume / length (kg, Litre,
+        Metre, ...) rather than counting whole pieces.
+
+        Counted UoMs are the Units chain — the ``uom.product_uom_unit`` root
+        plus any bundle of it (Pack of 6, Dozens, or a custom child) —
+        identified by walking ``relative_uom_id`` to the root and checking it
+        is the Units UoM. Returns False (gate disarmed, fail-open) when the
+        Units UoM can't be resolved or the product carries no UoM, matching
+        the prior "never block on an un-classifiable product" behaviour.
+        """
+        units_root = self.env.ref("uom.product_uom_unit", raise_if_not_found=False)
+        if not units_root or not uom:
+            return False
+        node = uom
+        seen = set()  # cycle guard — the FK can't loop, but stay defensive
+        while node and node.id not in seen:
+            if node == units_root:
+                return False  # rooted in Units -> counted, no photo
+            seen.add(node.id)
+            node = node.relative_uom_id
+        return True  # rooted outside the Units chain -> measured, photo required
 
     def on_barcode_scanned(self, barcode):
         """Auto-plan FIFO deduction when a scan is detected.
@@ -267,9 +292,14 @@ class WmsScanIssue(models.TransientModel):
             by_product.setdefault(line.product_id, 0.0)
             by_product[line.product_id] += line.take
 
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
-        now = datetime.now()
+        # UTC, to align with the UTC `create_date` column. datetime.now() is
+        # server-LOCAL; on the IST (UTC+5:30) deploy it shrank the rolling
+        # "24h" window by the offset (~18.5h), so issues 18.5-24h ago dropped
+        # out and the cap failed OPEN. fields.Datetime.now() keeps the cutoff
+        # in UTC so the window is a true 24h regardless of server timezone.
+        now = fields.Datetime.now()
         cutoff = now - timedelta(hours=24)
 
         for product, requested_qty in by_product.items():
@@ -444,9 +474,12 @@ class WmsScanIssue(models.TransientModel):
         except (TypeError, ValueError):
             global_default = 0
 
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
-        now = datetime.now()
+        # UTC — same reason as _enforce_overuse_caps: server-local time vs the
+        # UTC create_date column shrank the min-life window by the TZ offset,
+        # letting a too-soon re-request slip the approval gate near the edge.
+        now = fields.Datetime.now()
         # One product per planned product (FEFO can split across siblings).
         products = self.plan_line_ids.mapped("product_id")
         for product in products:
