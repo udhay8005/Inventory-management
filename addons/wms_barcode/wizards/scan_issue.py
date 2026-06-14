@@ -28,14 +28,15 @@ class WmsScanIssue(models.TransientModel):
     )
     destination_id = fields.Many2one(
         "stock.location",
+        string="Used by / area",
         required=True,
         domain=[("usage", "in", ("customer", "production", "internal"))],
         default=lambda s: s._default_destination_id(),
         help="Where the issued stock goes. Defaults to the trust's "
         "'Trust internal use' location since the trust uses inventory "
-        "internally rather than selling it. Admin can pick any other "
-        "internal location (Cow Shed, Pooja Room, etc.) on the day "
-        "without changing the default.",
+        "internally rather than selling it. Most issues leave this as-is; "
+        "change it only to charge a specific area (Cow Shed, Pooja Room, "
+        "etc.) on the day, without changing the default.",
     )
 
     @api.model
@@ -79,20 +80,31 @@ class WmsScanIssue(models.TransientModel):
     )
     ordered_by = fields.Char(
         string="Ordered by",
-        required=True,
-        help="Name of the person who authorised this issue "
-        "(the Manager / cow-care lead / project owner).",
+        help="Optional — name of the person who authorised this issue "
+        "(the Manager / cow-care lead / project owner). Leave blank if it's "
+        "the same as the keeper or not tracked for this issue.",
     )
     storekeeper_id = fields.Many2one(
         "wms.storekeeper",
         string="Store Keeper on duty",
         required=True,
         domain=[("active", "=", True)],
-        help="The actual human running the desk right now. Pick from the "
-        "roster the Admin maintains under Configuration → Store Keepers. "
-        "If the name you want isn't here, ask the Admin to add it before "
-        "validating.",
+        default=lambda s: s._default_storekeeper_id(),
+        help="The actual human running the desk right now. Defaults to the "
+        "roster entry linked to your login. Pick from the roster the Admin "
+        "maintains under Configuration → Store Keepers. If the name you want "
+        "isn't here, ask the Admin to add it before validating.",
     )
+
+    @api.model
+    def _default_storekeeper_id(self):
+        """Pre-select the roster entry linked to the logged-in user so the
+        keeper doesn't re-pick themselves on every issue. Empty when the user
+        isn't on the roster (e.g. the shared desk login) - then the keeper
+        picks who is at the desk, exactly as before."""
+        return self.env["wms.storekeeper"].search(
+            [("user_id", "=", self.env.uid), ("active", "=", True)], limit=1
+        )
 
     # Mandatory free-text reason for taking the stock. The taken_by /
     # ordered_by fields capture WHO; this captures WHY. The trust uses
@@ -589,15 +601,6 @@ class WmsScanIssue(models.TransientModel):
             parent_location_id=self.warehouse_id.lot_stock_id.id,
         )
 
-        # Was FEFO used? Decide the same way find_oldest_quants_for_product
-        # does, so the feedback text matches the planner's behaviour.
-        from odoo.addons.wms_location.models.product_template import EXPIRY_SENSITIVE_KINDS
-
-        kind = product.product_tmpl_id.wms_product_kind
-        used_fefo = (kind in EXPIRY_SENSITIVE_KINDS) or bool(
-            product.product_tmpl_id.wms_expiry_date
-        )
-
         # Clear previous plan
         self.plan_line_ids.unlink()
         for quant, take in plan:
@@ -618,11 +621,11 @@ class WmsScanIssue(models.TransientModel):
             )
         self.short_qty = missing
 
-        # Build a clear feedback line. When the warehouse can't satisfy
-        # the requested quantity, surface a STOCK OUT message so the
-        # operator knows immediately to wait for a return or alert the
+        # Build a clear feedback line. The planner removes OLDEST stock first
+        # (FIFO — see stock.quant._wms_sorted_for_removal). When the warehouse
+        # can't satisfy the requested quantity, surface a STOCK OUT message so
+        # the operator knows immediately to wait for a return or alert the
         # Admin — not a cryptic "short by 5".
-        rule = "FEFO" if used_fefo else "FIFO"
         if not plan and missing:
             self.feedback = (
                 "⚠ STOCK OUT — no %s available anywhere in the warehouse. "
@@ -631,30 +634,12 @@ class WmsScanIssue(models.TransientModel):
             ) % product.display_name
         elif missing:
             self.feedback = (
-                "⚠ Only %s × %s on hand (%s plan) — that's %s less than "
-                "you asked for. Reduce the quantity, or wait for the rest "
+                "⚠ Only %s × %s on hand (oldest stock first) — that's %s less "
+                "than you asked for. Reduce the quantity, or wait for the rest "
                 "to come back via Scan Return."
-            ) % (qty - missing, product.display_name, rule, missing)
-        elif used_fefo:
-            # Make it obvious when the planner has crossed batches so the
-            # keeper doesn't think the wizard misread their scan.
-            picked_names = {ln.product_id.display_name for ln in self.plan_line_ids}
-            if len(picked_names) > 1 or (picked_names and product.display_name not in picked_names):
-                self.feedback = (
-                    "FEFO: planned %s × %s — taking from earlier-expiring "
-                    "batch(es): %s. Pick from the slot(s) below."
-                ) % (qty, product.display_name, ", ".join(sorted(picked_names)))
-            else:
-                self.feedback = (
-                    "FEFO: planned %s × %s across %d slot(s) — earliest expiry first."
-                    % (
-                        qty,
-                        product.display_name,
-                        len(plan),
-                    )
-                )
+            ) % (qty - missing, product.display_name, missing)
         else:
-            self.feedback = "Planned %s × %s across %d slot(s)." % (
+            self.feedback = "Planned %s × %s across %d slot(s) — oldest stock first." % (
                 qty,
                 product.display_name,
                 len(plan),
@@ -987,10 +972,9 @@ class WmsScanIssue(models.TransientModel):
 
 class WmsScanIssuePlan(models.TransientModel):
     _name = "wms.scan.issue.plan"
-    _description = "Planned deduction line (FIFO / FEFO)"
-    # No fixed _order: when the wizard does FEFO, lines are written in
-    # expiry order; for plain FIFO they're written in in_date order.
-    # Sorting in SQL by either column would re-shuffle the wrong cases.
+    _description = "Planned deduction line (FIFO — oldest arrival first)"
+    # No fixed _order: lines are written in the planner's removal order
+    # (in_date / FIFO). Sorting in SQL would re-shuffle that intended order.
 
     wizard_id = fields.Many2one("wms.scan.issue", ondelete="cascade", required=True)
     product_id = fields.Many2one("product.product", required=True)
@@ -999,9 +983,9 @@ class WmsScanIssuePlan(models.TransientModel):
     in_date = fields.Datetime()
     expiry_date = fields.Date(
         string="Expires",
-        help="Batch expiry date for medicine / feed / fluid / pooja. "
-        "When set, the planner sorts by this date (FEFO) — earliest "
-        "expiry first — instead of arrival date.",
+        help="The product's expiry date, shown for awareness. Removal order "
+        "is oldest-arrival-first (FIFO); watch the Expiry-Alert report for "
+        "items nearing expiry.",
     )
     available = fields.Float()
     take = fields.Float()

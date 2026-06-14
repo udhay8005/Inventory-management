@@ -1,5 +1,5 @@
 from markupsafe import Markup
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 
@@ -76,9 +76,21 @@ class WmsScanReceipt(models.TransientModel):
         string="Store Keeper on duty",
         required=True,
         domain=[("active", "=", True)],
-        help="The on-duty Store Keeper who took the delivery. Picked from "
-        "the roster the Admin maintains under Configuration → Store Keepers.",
+        default=lambda s: s._default_storekeeper_id(),
+        help="The on-duty Store Keeper who took the delivery. Defaults to the "
+        "roster entry linked to your login. Picked from the roster the Admin "
+        "maintains under Configuration → Store Keepers.",
     )
+
+    @api.model
+    def _default_storekeeper_id(self):
+        """Pre-select the roster entry linked to the logged-in user so the
+        keeper doesn't re-pick themselves on every receipt. Empty for the
+        shared desk login (no linked roster entry)."""
+        return self.env["wms.storekeeper"].search(
+            [("user_id", "=", self.env.uid), ("active", "=", True)], limit=1
+        )
+
     delivered_by = fields.Char(
         string="Delivered by",
         help="Name of the person / vendor who handed the goods over "
