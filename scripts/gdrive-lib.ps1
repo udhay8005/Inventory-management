@@ -1372,10 +1372,21 @@ function New-BackupInfoJson {
 # === psql catalog / config bridge =========================================
 
 function Write-GDriveCatalogRow {
-    # UPSERT one row into wms_gdrive_backup via psql (SELECT id by name ->
-    # UPDATE, else INSERT). FAILURE-SAFE (Write-BackupAudit pattern): any
-    # psql/DB problem degrades to a DarkGray note - the backup never fails
-    # over bookkeeping. Single quotes doubled; create_uid/write_uid = 1;
+    # UPSERT one row into wms_gdrive_backup via psql, ATOMICALLY:
+    # INSERT ... ON CONFLICT (name) DO UPDATE (mirrors Set-WmsGdriveParam in
+    # backup-native.ps1). The old SELECT-id-by-name-then-UPDATE/INSERT was a
+    # read-modify-write race: the daily backup task and the hourly pending
+    # sweep are two out-of-process writers, so both could SELECT-miss and
+    # INSERT a duplicate DR row. ON CONFLICT collapses that into one write.
+    # 'name' is the conflict key (not set_stamp) because it is the only
+    # column present in EVERY caller - the 'created' / 'uploading' /
+    # 'abandoned' transitions pass name alone - and it is 1:1 with set_stamp
+    # for a real set. Backed by the wms_gdrive_backup_name_uniq index that
+    # wms_reports >= 19.0.4.6.0 creates (init() + post-migration); on an
+    # older module the upsert simply no-ops with the DarkGray warn below
+    # (the local backup is unaffected - catalog bookkeeping is best-effort).
+    # FAILURE-SAFE (Write-BackupAudit pattern): any psql/DB problem degrades
+    # to a DarkGray note. Single quotes doubled; create_uid/write_uid = 1;
     # NOW() stamps create/write_date.
     # COLUMN CONTRACT: keys below mirror addons/wms_reports/models/
     # wms_gdrive_backup.py - any field rename/addition must update both in
@@ -1423,31 +1434,31 @@ function Write-GDriveCatalogRow {
             $colSql['upload_time'] = 'NOW()'
         }
 
-        $escName = ($Row['name'] -replace "'", "''")
-        $sel = & psql -U $conn.DbUser -h $conn.DbHost -p $conn.DbPort -d $conn.DbName -w -t -A `
-            -v ON_ERROR_STOP=1 -c "SELECT id FROM wms_gdrive_backup WHERE name = '$escName' ORDER BY id DESC LIMIT 1;" 2>$null
-        $rowId = ''
-        if ($LASTEXITCODE -eq 0 -and $sel) {
-            $rowId = [string](@($sel) | Where-Object { "$_" -match '^\s*\d+\s*$' } | Select-Object -First 1)
-            $rowId = $rowId.Trim()
+        # Atomic upsert: INSERT every supplied column (plus the audit stamps)
+        # and, on a name collision, UPDATE each supplied column to the value
+        # we tried to insert (EXCLUDED.*). create_uid/create_date are written
+        # only on INSERT - the DO UPDATE leaves the original creator intact and
+        # refreshes write_uid/write_date. 'name' is the conflict key, so it is
+        # never in the SET list (it would be a no-op assignment anyway). The
+        # SQL is piped over stdin, NOT passed via -c, so it carries no embedded
+        # double-quotes and tokenizes cleanly on Windows PowerShell 5.1.
+        $insCols = @($colSql.Keys) + @('create_uid', 'create_date', 'write_uid', 'write_date')
+        $insVals = @($colSql.Values) + @('1', 'NOW()', '1', 'NOW()')
+        $updates = @()
+        foreach ($col in $colSql.Keys) {
+            if ($col -eq 'name') { continue }
+            $updates += "$col = EXCLUDED.$col"
         }
-
-        if ($rowId -match '^\d+$') {
-            $assignments = @()
-            foreach ($col in $colSql.Keys) { $assignments += "$col = $($colSql[$col])" }
-            $assignments += 'write_uid = 1'
-            $assignments += 'write_date = NOW()'
-            $sql = "UPDATE wms_gdrive_backup SET $($assignments -join ', ') WHERE id = $rowId;"
-        } else {
-            $cols = @($colSql.Keys) + @('create_uid', 'create_date', 'write_uid', 'write_date')
-            $vals = @($colSql.Values) + @('1', 'NOW()', '1', 'NOW()')
-            $sql = "INSERT INTO wms_gdrive_backup ($($cols -join ', ')) VALUES ($($vals -join ', '));"
-        }
+        $updates += 'write_uid = 1'
+        $updates += 'write_date = NOW()'
+        $sql = "INSERT INTO wms_gdrive_backup ($($insCols -join ', ')) " +
+               "VALUES ($($insVals -join ', ')) " +
+               "ON CONFLICT (name) DO UPDATE SET $($updates -join ', ');"
         $sql | & psql -U $conn.DbUser -h $conn.DbHost -p $conn.DbPort -d $conn.DbName -w -v ON_ERROR_STOP=1 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
             Write-Host "    [audit] recorded catalog row in wms_gdrive_backup" -ForegroundColor DarkGray
         } else {
-            Write-Host "    [warn] gdrive catalog row not recorded (is wms_reports >= 19.0.3.0.0 installed?)" -ForegroundColor DarkGray
+            Write-Host "    [warn] gdrive catalog row not recorded (is wms_reports >= 19.0.4.6.0 installed?)" -ForegroundColor DarkGray
         }
     } catch {
         Write-Host "    [warn] gdrive catalog write failed (ignored): $($_.Exception.Message)" -ForegroundColor DarkGray

@@ -23,12 +23,89 @@ therefore:
     update ``Write-GDriveCatalogRow`` in scripts/gdrive-lib.ps1 in the
     same commit.
 
+UNIQUENESS / RACE GUARD (19.0.4.6.0)
+====================================
+The daily backup task and the hourly pending-retry sweep are two
+SEPARATE out-of-process psql writers, so they can race on the same set
+and leave duplicate DR-page rows — the one screen a non-technical
+manager relies on after a disaster. ``init()`` (and the paired
+19.0.4.6.0 post-migration) de-duplicate any historical rows and then
+create two unique indexes:
+
+  * a PARTIAL ``UNIQUE(set_stamp) WHERE set_stamp IS NOT NULL`` — one
+    catalog row per Drive backup set (the restore browser groups by it);
+    the partial predicate lets many pending rows keep a NULL set_stamp.
+  * ``UNIQUE(name)`` — one row per local artifact, the stable id the
+    whole queue lifecycle keys on.
+
+``Write-GDriveCatalogRow`` upserts atomically via
+``INSERT ... ON CONFLICT (name) DO UPDATE``. ``name`` (not ``set_stamp``)
+is the conflict key because it is the ONLY column present in every write
+— the created / uploading / abandoned transitions carry no set_stamp —
+and it is 1:1 with set_stamp for a real set, so the set_stamp index
+still collapses any same-set duplicate. The de-dup MUST run before the
+indexes or ``CREATE UNIQUE INDEX`` aborts on a dirty DB. (Indexes are
+built in ``init()`` rather than a ``models.Constraint`` because a partial
+unique index cannot be expressed as a Postgres table constraint, and
+because ``init()`` runs on a FRESH install too — migrations do not.)
+
 No secrets are ever stored here — filenames, Drive file ids, sizes,
 checksums and human-readable metadata only (the GPG passphrase never
 leaves the box and the artifacts on Drive are ciphertext).
 """
 
+import logging
+
 from odoo import api, fields, models
+
+_logger = logging.getLogger(__name__)
+
+
+def _harden_gdrive_catalog(cr):
+    """De-duplicate the catalog, then enforce one-row-per-set in the DB.
+
+    Shared by ``WmsGdriveBackup.init`` (every install/upgrade, incl. fresh
+    installs that skip migrations) and the 19.0.4.6.0 post-migration (the
+    documented upgrade path). Idempotent and ordering-safe: the de-dup runs
+    first so ``CREATE UNIQUE INDEX`` never trips over an existing duplicate.
+
+    "Newest wins" is resolved by ``id`` (a serial, so the highest id is the
+    most recently written row); for a real set ``name`` and ``set_stamp``
+    are 1:1, so the two passes keep the same survivor.
+    """
+    # 1a. One row per Drive set id. NULL set_stamp rows are pending 'created'
+    #     markers with no set id yet — the partial predicate leaves them be.
+    cr.execute(
+        """
+        DELETE FROM wms_gdrive_backup t
+              USING wms_gdrive_backup newer
+              WHERE t.set_stamp IS NOT NULL
+                AND t.set_stamp = newer.set_stamp
+                AND t.id < newer.id
+        """
+    )
+    # 1b. One row per local artifact name (the queue-lifecycle key).
+    cr.execute(
+        """
+        DELETE FROM wms_gdrive_backup t
+              USING wms_gdrive_backup newer
+              WHERE t.name = newer.name
+                AND t.id < newer.id
+        """
+    )
+    # 2. Partial-unique on set_stamp + unique on name (backs ON CONFLICT).
+    cr.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS wms_gdrive_backup_set_stamp_uniq
+            ON wms_gdrive_backup (set_stamp) WHERE set_stamp IS NOT NULL
+        """
+    )
+    cr.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS wms_gdrive_backup_name_uniq
+            ON wms_gdrive_backup (name)
+        """
+    )
 
 
 class WmsGdriveBackup(models.Model):
@@ -140,6 +217,16 @@ class WmsGdriveBackup(models.Model):
                 if rec.set_stamp
                 else False
             )
+
+    def init(self):
+        # Runs on every install AND upgrade, after _auto_init has built the
+        # table — so a FRESH install (which never runs the migrations/ folder)
+        # still gets the de-dup + unique indexes that stop concurrent psql
+        # writers leaving duplicate DR rows. See the module docstring's
+        # UNIQUENESS / RACE GUARD note; the 19.0.4.6.0 post-migration mirrors
+        # this for the documented upgrade path.
+        super().init()
+        _harden_gdrive_catalog(self.env.cr)
 
     # --- Helpers -----------------------------------------------------------
     @api.model
