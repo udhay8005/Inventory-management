@@ -77,41 +77,26 @@ jobs:
         # config drive, so local lint matches CI exactly.
         run: flake8 addons/
 
-      - name: Pylint-Odoo (security + deprecated-API checks — BASELINE)
+      - name: Pylint-Odoo (security + deprecated-API gates)
+        # Hard gate. Replaces the old blanket `odoolint` group (too noisy to
+        # gate on) with a curated set, all confirmed 0-findings on a baseline
+        # run before this `|| true`-free version was armed. Two buckets:
+        #   security/integrity : sql-injection, invalid-commit,
+        #                        external-request-timeout, no-raise-unlink,
+        #                        manifest-behind-migrations
+        #   deprecated Odoo API: deprecated-name-get, odoo-exception-warning,
+        #                        attribute-deprecated, renamed-field-parameter,
+        #                        deprecated-odoo-model-method, bad-builtin-groupby
+        # Tighten by ADDING symbols here as the codebase is cleaned — never by
+        # switching back to the whole group. (The one intentional no-raise-unlink
+        # case carries an inline `# pylint: disable` with a documented reason.)
         run: |
-          set +e
-          # Curated hard-fail candidates (replaces the old blanket `odoolint`
-          # group, which was too noisy to gate on). Two buckets:
-          #   security/integrity : sql-injection, invalid-commit,
-          #                        external-request-timeout, no-raise-unlink,
-          #                        manifest-behind-migrations
-          #   deprecated Odoo API: deprecated-name-get, odoo-exception-warning,
-          #                        attribute-deprecated, renamed-field-parameter,
-          #                        deprecated-odoo-model-method, bad-builtin-groupby
-          # Baselined here (non-failing) so a clean run is confirmed BEFORE the
-          # gate is armed (see the hard-fail variant that drops this wrapper).
-          CHECKS="sql-injection,invalid-commit,external-request-timeout,no-raise-unlink,manifest-behind-migrations,deprecated-name-get,odoo-exception-warning,attribute-deprecated,renamed-field-parameter,deprecated-odoo-model-method,bad-builtin-groupby"
           pylint --load-plugins=pylint_odoo \
                  --disable=all \
-                 --enable="$CHECKS" \
+                 --enable=sql-injection,invalid-commit,external-request-timeout,no-raise-unlink,manifest-behind-migrations,deprecated-name-get,odoo-exception-warning,attribute-deprecated,renamed-field-parameter,deprecated-odoo-model-method,bad-builtin-groupby \
                  --score=n \
-                 --output-format=text \
-                 addons/ | tee pylint_targeted.log
-          rc=${PIPESTATUS[0]}
-          echo "=== pylint exit bitmask: $rc (0 == clean) ==="
-          {
-            echo "## Pylint-Odoo targeted baseline"
-            echo ""
-            echo "Enabled checks: \`$CHECKS\`"
-            echo ""
-            echo "Exit bitmask: \`$rc\` (0 == clean)"
-            echo ""
-            echo '```'
-            cat pylint_targeted.log
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "(baseline only — not failing the build yet)"
-          true
+                 --output-format=colorized \
+                 addons/
 
       - name: XML well-formedness
         run: |
@@ -283,24 +268,27 @@ jobs:
             exit 1
           fi
 
-          # --- WMS skipped-test diagnostic (BASELINE, non-failing) -----------
+          # --- WMS fail-on-skip guard ----------------------------------------
           # A silently skipped wms_* test is lost coverage. The full-install CI
           # run installs every addon + base UoM data, so the environment-
           # conditional skips (test_min_life_days when wms_barcode is absent;
-          # test_issue_approval litre/kg defensive skips) must NOT trigger here.
-          # Odoo logs a skip via the *test's own module* logger as
-          # "...<test_module>: skipped <desc> : <reason>", so scoping the grep
-          # to `odoo.addons.wms_*` keeps this to wms_* tests only. Baseline the
-          # count first; once a clean run shows 0 this flips to a hard failure.
+          # test_issue_approval litre/kg defensive skips) MUST NOT trigger here
+          # — a baseline run confirmed 0. Odoo logs a skip via the *test's own
+          # module* logger as "...<test_module>: skipped <desc> : <reason>", so
+          # scoping the grep to `odoo.addons.wms_*` keeps this to wms_* tests.
           WMS_SKIPS=$(grep -cE "odoo\.addons\.wms_[A-Za-z0-9_.]+: skipped " odoo_test.log || true)
           echo "=== wms_* skipped tests: ${WMS_SKIPS:-0} ==="
-          grep -nE "odoo\.addons\.wms_[A-Za-z0-9_.]+: skipped " odoo_test.log || echo "(no wms_* skips)"
           {
-            echo "### WMS skip diagnostic"
-            echo "wms_* skipped tests: ${WMS_SKIPS:-0}"
+            echo "### WMS skip guard"
+            echo "wms_* skipped tests: ${WMS_SKIPS:-0} (gate: must be 0)"
           } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${WMS_SKIPS:-0}" -ne 0 ]; then
+            echo "::error::${WMS_SKIPS} wms_* test(s) were skipped — CI requires 0. Offending lines:"
+            grep -nE "odoo\.addons\.wms_[A-Za-z0-9_.]+: skipped " odoo_test.log
+            exit 1
+          fi
 
-          echo "✔ WMS test suite passed."
+          echo "✔ WMS test suite passed (0 skipped)."
 
       - uses: actions/upload-artifact@v4
         if: always()
