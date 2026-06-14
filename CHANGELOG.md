@@ -5,6 +5,85 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.20.0.0] — 2026-06-14 — Deep-audit hardening (correctness, permissions, UX)
+
+A full read-only audit of every addon drove this release. It fixes the few
+things that genuinely mattered, tightens the real-world Admin-vs-Storekeeper
+permission model, and removes daily friction for non-technical staff. The
+production database was still empty (configured, not yet in daily use), so the
+correctness fixes land before go-live. ~330 tests, 0 failures in CI.
+
+Manifest bumps: `wms_ai_forecast` **→ 19.0.1.4.0**, `wms_barcode`
+**→ 19.0.1.33.0**, `wms_location` **→ 19.0.3.16.0**, `wms_repair_damage`
+**→ 19.0.1.15.0**, `wms_reports` **→ 19.0.4.5.0**. No new data migrations —
+existing databases converge on the per-module `-u` upgrade (SQL report views
+are recreated, ACLs/menus reloaded, the capability backfill re-runs). After
+deploy, run the forecast cron once so reorder history retrains on real data.
+
+**Correctness**
+- **Forecast & low-stock alerts now see the trust's consumption (Critical).**
+  The forecast engine only counted moves to customer/production locations, but
+  every Scan Issue routes stock into the *internal* "Trust internal use" sink —
+  so it observed zero outflow and reported every product "dead", silencing the
+  AI buying recommendations and the daily out-of-stock alert. It now counts
+  done Scan-Issue move-lines (the same signal the Consumption-Value report
+  uses) and excludes the consumed-goods sink from on-hand. `wms_ai_forecast`
+  now depends on `wms_barcode`.
+- **24h daily-cap & min-life windows fixed for IST (High).** Both used
+  server-local time against the UTC `create_date` column, shrinking the rolling
+  window by the timezone offset and letting the abuse caps fail *open*. Now
+  computed in UTC.
+- **Reorder Summary no longer double-counts** a product across multiple
+  vendors, and no longer drops variant-level suppliers (picks one preferred
+  supplier per product before aggregating).
+- **Oldest-Stock (FIFO age) report now includes floor-zone stock** (the INNER
+  joins silently dropped every floor quant).
+- **Floor-zone generator** no longer mints a duplicate barcode when two parent
+  areas share a 4-character name prefix (was rolling back the whole batch).
+- **Inventory-audit line populator** counts warehouse storage only, excluding
+  the consumed-goods sink and Damage/Repair locations that bloated the count
+  list with bogus variances.
+- **Photo gate** now classifies by the UoM `relative_uom_id` chain: counted
+  bundles (Pack of 6, Dozens) stay photo-free; only measured items
+  (kg/Litre/Metre) require a photo.
+
+**Permissions — real-world Admin vs Storekeeper**
+- **Audit accept/reject are now Manager-only at the method layer** (the buttons
+  were only hidden in the view, so a keeper could self-accept their own count
+  over RPC and overwrite live stock).
+- **Finalised records are frozen against keeper edits** (defence-in-depth): a
+  submitted/reviewed/rejected audit and a confirmed damage can no longer be
+  revised by a keeper over RPC; managers bypass, and the keeper's normal
+  file→confirm / draft→submit flow and repair-order linking still work.
+- **The upgrade backfill no longer re-grants "Manage Catalog"** to keepers
+  (catalog/label editing is an Admin task) — it now matches the four-cap set
+  the roster's Create-login action grants.
+- **Raw Cycle Count (the quant editor) is now Manager-only**; keepers count
+  through the reviewed Inventory-audit flow.
+- **The Returns-due report is now keeper-visible** (read-only) — the people who
+  do the returns can self-serve the due/overdue list.
+
+**Usability**
+- Scan Issue/Receipt **default the on-duty Store Keeper from the logged-in
+  user** (no re-picking yourself every time; empty for the shared desk login).
+- "Ordered by" on Scan Issue is **optional** (was forced free-text); the
+  destination field is relabelled **"Used by / area"**.
+- Held issues now raise a **systray To-Do activity on managers** (a reliable
+  badge), cleared on approve/reject — not just a missable Discuss ping.
+
+**Honesty**
+- The Scan Issue banner no longer promises "FEFO: earliest expiry first": a
+  single issue is one product (one template-level expiry), so removal is
+  oldest-arrival-first (FIFO). Perishable rotation is surfaced by the
+  Expiry-Alert report. The expiry sort engine is retained for any future
+  cross-product caller.
+
+**Deferred to focused follow-ups** (flagged, not forgotten): the Google-Drive
+DR-catalog unique index + `ON CONFLICT` upsert (the feature isn't live yet);
+CI hardening (an upgrade-path job, pylint-odoo as a hard gate, flake8 over the
+migrations); and a broad docs sweep of stale FEFO wording across the training
+material.
+
 ## [v19.0.19.0.0] — 2026-06-14 — Gaushala issue controls (F1–F7)
 
 Tightens the outgoing-issue flow for the trust's gaushala operation: every

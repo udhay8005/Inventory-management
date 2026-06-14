@@ -143,7 +143,7 @@ replace the old single "Issued for" tag (auto-derived for back-compat). See
 An issue that re-requests the same product for the same department too soon
 (min-life guard), or is worth more than the high-value threshold, is **held for
 a manager's approval** instead of issuing immediately — the keeper types a
-reason and a manager Approves/Rejects under **WMS → Approvals**. See
+reason and a manager Approves/Rejects under **WMS → Operations → Approvals**. See
 [docs/ISSUE-APPROVALS.md](ISSUE-APPROVALS.md).
 
 Tools and spares can be marked **returnable** with an expected-return date; a
