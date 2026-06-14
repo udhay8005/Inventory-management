@@ -89,3 +89,25 @@ class TestAuditAcceptReconcile(TransactionCase):
             [("product_id", "=", product.id), ("location_id", "=", slot.id)]
         )
         self.assertEqual(sum(quant.mapped("quantity")), 0.0)
+
+    def test_populate_excludes_trust_use_sink(self):
+        """2.3: the audit line populator snapshots warehouse storage only, NOT
+        the 'Trust internal use' sink (already-consumed goods) - otherwise every
+        batch ever issued shows up as an expected line to physically find,
+        generating bogus negative variances and bloating the count list."""
+        wh = self.env["stock.warehouse"].search([], limit=1)
+        stock = wh.lot_stock_id
+        sink = self.env.ref("wms_location.stock_location_trust_use")
+        product = self.env["product.product"].create(
+            {"name": "Aud Sink Probe", "is_storable": True}
+        )
+        self.env["stock.quant"]._update_available_quantity(product, stock, 5.0)
+        self.env["stock.quant"]._update_available_quantity(product, sink, 3.0)
+        keeper = self.env["wms.storekeeper"].search([], limit=1) or self.env[
+            "wms.storekeeper"
+        ].create({"name": "Aud Sink Keeper"})
+        audit = self.env["wms.audit"].create({"storekeeper_id": keeper.id})
+        audit.action_start()  # populates lines from warehouse storage quants
+        locs = audit.line_ids.mapped("location_id")
+        self.assertIn(stock, locs, "shelf stock must be counted in the audit")
+        self.assertNotIn(sink, locs, "the consumed-goods sink must NOT be an audit line")

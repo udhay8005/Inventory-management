@@ -89,3 +89,44 @@ class TestValueReports(TransactionCase):
             places=2,
             msg="an undone issue must not count as consumption",
         )
+
+
+@tagged("post_install", "-at_install", "wms", "wms_value")
+class TestReorderSummaryVendor(TransactionCase):
+    """1.4: the Reorder Summary must count each product's reorder_qty under
+    exactly ONE preferred vendor - not fan it into every vendor's total when a
+    product carries more than one supplierinfo row (the old template join did,
+    over-stating the buyer's shopping list)."""
+
+    def test_two_vendor_product_not_double_counted(self):
+        v1 = self.env["res.partner"].create({"name": "RS Vendor One"})
+        v2 = self.env["res.partner"].create({"name": "RS Vendor Two"})
+        product = self.env["product.product"].create(
+            {
+                "name": "RS Two-Vendor Feed",
+                "type": "consu",
+                "is_storable": True,
+                "wms_product_kind": "consumable",
+            }
+        )
+        # Two suppliers on the same template; v1 has the lower (preferred) sequence.
+        self.env["product.supplierinfo"].create(
+            [
+                {"product_tmpl_id": product.product_tmpl_id.id, "partner_id": v1.id, "sequence": 1},
+                {"product_tmpl_id": product.product_tmpl_id.id, "partner_id": v2.id, "sequence": 2},
+            ]
+        )
+        self.env["wms.forecast"].create({"product_id": product.id, "reorder_qty": 5.0})
+        self.env.flush_all()
+
+        rows = self.env["wms.reorder.summary"].search([("partner_id", "in", [v1.id, v2.id])])
+        by_partner = {r.partner_id.id: r.total_qty for r in rows}
+        self.assertIn(
+            v1.id, by_partner, "reorder must land under the preferred (lowest-sequence) vendor"
+        )
+        self.assertNotIn(
+            v2.id, by_partner, "the same product must not also be counted under the second vendor"
+        )
+        self.assertAlmostEqual(
+            by_partner[v1.id], 5.0, places=3, msg="reorder_qty must be counted once, not per-vendor"
+        )

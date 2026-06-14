@@ -76,3 +76,51 @@ class TestAuditDecisionManagerOnly(TransactionCase):
         # A real manager can still decide.
         audit.with_user(mgr).action_review_accept()
         self.assertEqual(audit.state, "reviewed")
+
+
+@tagged("post_install", "-at_install", "wms", "wms_acl")
+class TestAuditFinalisedWriteGuard(TransactionCase):
+    """Chunk 4 (§3B): a finalised audit is frozen against keeper edits, while
+    the keeper's normal draft -> in_progress -> submit flow still works and a
+    manager can still decide."""
+
+    def _user(self, xmlid, login):
+        return self.env["res.users"].create(
+            {"name": login, "login": login, "group_ids": [(6, 0, [self.env.ref(xmlid).id])]}
+        )
+
+    def setUp(self):
+        super().setUp()
+        self.keeper = self._user("wms_location.group_wms_can_submit_audit", "wg_keeper")
+        self.mgr = self._user("wms_location.group_wms_manager", "wg_mgr")
+        self.roster = self.env["wms.storekeeper"].search([], limit=1) or self.env[
+            "wms.storekeeper"
+        ].create({"name": "WG Roster"})
+        wh = self.env["stock.warehouse"].search([], limit=1)
+        self.slot = wh.lot_stock_id
+        self.product = self.env["product.product"].create(
+            {"name": "WG Audit Probe", "is_storable": True}
+        )
+        self.env["stock.quant"]._update_available_quantity(self.product, self.slot, 6.0)
+
+    def test_keeper_flow_works_then_locks_after_submit(self):
+        # Keeper drives the full happy path - none of it may be over-blocked.
+        audit = (
+            self.env["wms.audit"].with_user(self.keeper).create({"storekeeper_id": self.roster.id})
+        )
+        audit.action_start()  # draft -> in_progress + populate lines (allowed)
+        line = audit.line_ids.filtered(lambda ln: ln.product_id == self.product)
+        self.assertTrue(line, "audit should have a line for the seeded product")
+        line.counted_qty = 4.0  # keeper enters a count while in_progress (allowed)
+        audit.action_submit()  # in_progress -> submitted (single write, allowed)
+        self.assertEqual(audit.state, "submitted")
+
+        # Now the keeper is frozen out of both the audit and its lines.
+        with self.assertRaises(AccessError):
+            audit.write({"storekeeper_id": self.roster.id})
+        with self.assertRaises(AccessError):
+            line.write({"counted_qty": 99.0})
+
+        # A manager can still finalise it.
+        audit.with_user(self.mgr).action_review_accept()
+        self.assertEqual(audit.state, "reviewed")
