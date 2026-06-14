@@ -32,23 +32,23 @@
                     <p>When you issue an item, the system looks at <i>when each batch arrived</i> (its "in-date") and gives you the oldest one first.</p>
                     <p><b>Why it matters</b> Stock that sits too long goes stale, rusts, or gets forgotten at the back of a rack. FIFO keeps things moving in the order they came in, so nothing rots while newer stock gets used.</p>
                     <p><b>Real trust example</b> You have two sacks of cattle feed: one received in January, one in March. When a helper does a Scan Issue, the system points them to the <b>January</b> sack first. The older feed gets used while it's still good, and the March sack waits its turn.</p>
-                    <p><b>Good to know</b> FIFO is the normal rule for most items. For things that can expire (medicine, feed, fluids, pooja items), the system uses a smarter rule called <b>FEFO</b> instead — see that article.</p>
+                    <p><b>Good to know</b> FIFO is the rule for <i>every</i> issue — the wizard always points you to the oldest-arrived stock. For things that can expire (medicine, feed, fluids, pooja items), also watch the <b>Expiry Alerts</b> report so you rotate the soonest-to-expire batch out before it spoils — see <b>Expiry &amp; rotation</b>.</p>
             </div></field>
         </record>
 
         <record id="help_what_is_fefo" model="wms.help.article">
             <field name="slug">what-is-fefo</field>
-            <field name="name">FEFO — First Expiry, First Out</field>
+            <field name="name">Expiry &amp; rotation — issue oldest-first, watch Expiry Alerts</field>
             <field name="category">terminology</field>
             <field name="audience">all</field>
             <field name="sequence">102</field>
-            <field name="keywords">fefo, first expiry first out, expiry, medicine, feed, pooja, expiry date</field>
+            <field name="keywords">fefo, expiry, rotation, first expiry, oldest first, fifo, expiry alert, medicine, feed, pooja, expiry date</field>
             <field name="body" type="html"><div>
-                    <p><b>FEFO means the item that expires soonest leaves the shelf first</b> — even if a different batch arrived earlier.</p>
-                    <p>The system uses FEFO automatically for anything that can go bad: <b>medicine, feed, fluids, and pooja items</b>, or any product that has an expiry date set.</p>
-                    <p><b>Why it matters</b> With ordinary FIFO you ship the <i>oldest-arrived</i> item. But a batch that arrived first might expire <i>later</i> than a batch that arrived second. FEFO fixes that: the soonest-to-expire goes out first, so medicine and feed are never wasted sitting on the shelf past their date.</p>
-                    <p><b>Real trust example</b> FEFO means the bottle of calcium that expires first leaves the shelf first — so medicine never expires unused. If you have one calcium batch expiring December 2026 and a newer-looking batch expiring June 2027, FEFO still hands you the <b>December</b> batch first.</p>
-                    <p><b>Clever detail</b> FEFO even looks across <i>different batches of the same product name</i>. If two deliveries of "Calcium Bolus" sit in different slots, the wizard will pull from the earlier-expiring slot first and tell you which slot to pick from.</p>
+                    <p><b>When you issue stock, the system always gives you the oldest-arrived batch first (FIFO)</b> — for every product, including things that can expire. A single issue is for one product, so there is nothing to "expiry-sort" within it.</p>
+                    <p><b>So how do we avoid medicine and feed expiring on the shelf?</b> Use the <b>Expiry Alerts</b> report (Reports → Expiry alerts). It lists everything by how soon it expires — <b>red = expired, amber = within 30 days, blue = within 90 days</b> — so you can deliberately issue or set aside the soonest-to-expire batch before it spoils.</p>
+                    <p><b>Real trust example</b> You have one calcium batch expiring December 2026 and a newer one expiring June 2027. The Expiry Alerts report shows the <b>December</b> batch first (red/amber) — issue from that slot next, so the medicine is used while it's still good.</p>
+                    <p><b>Set the expiry date</b> on medicine and feed when you onboard them — that is what powers the Expiry Alerts report.</p>
+                    <p><i>(You may still hear the term "FEFO — First Expiry, First Out". This trust manages expiry through the Expiry Alerts report rather than at the issue picker, because stock is tracked per product, not per physical batch.)</i></p>
             </div></field>
         </record>
 
@@ -126,7 +126,7 @@
             <field name="body" type="html"><div>
                     <p><b>A Floor location is open-area storage</b> — a pallet spot, a floor stack, or an outside yard bay where stock sits directly on the ground, <i>not</i> on rack shelving.</p>
                     <p><b>Why it matters</b> Not everything fits in a neat rack compartment. Big sacks of feed, drums of fluid, or bulky tools often live on the floor or on a pallet. A floor location lets the system track that stock just like a slot does.</p>
-                    <p><b>Real trust example</b> Twenty sacks of cattle feed arrive and won't fit on a shelf, so they go on a pallet in the feed store. That pallet is a <b>Floor</b> location. When a helper receives or issues feed, the system can point to the floor area exactly the way it points to a rack slot — and FIFO/FEFO still work.</p>
+                    <p><b>Real trust example</b> Twenty sacks of cattle feed arrive and won't fit on a shelf, so they go on a pallet in the feed store. That pallet is a <b>Floor</b> location. When a helper receives or issues feed, the system can point to the floor area exactly the way it points to a rack slot — and FIFO (oldest-first issuing) still works.</p>
                     <p><b>Good to know</b> Floor locations behave the same as slots for receiving, issuing, counting (cycle count), damage, and repair. The difference is only that there's no compartment/shelf/column above them — stock lands there directly.</p>
             </div></field>
         </record>
@@ -192,7 +192,7 @@
                     <p><b>Good to know</b></p>
                     <ul>
                     <li>You don't type the in-date yourself; it's set when stock is received.</li>
-                    <li>For items that expire, the system prefers the <b>expiry date</b> over the in-date (that's FEFO). The in-date is the tie-breaker when two batches share an expiry.</li>
+                    <li>Issuing always goes by in-date (oldest first), for every product. For items that expire, the separate <b>Expiry date</b> drives the <b>Expiry Alerts</b> report so you can rotate the soonest-to-expire batch out before it spoils — see <b>Expiry &amp; rotation</b>.</li>
                     </ul>
             </div></field>
         </record>
@@ -254,12 +254,12 @@
             <field name="category">terminology</field>
             <field name="audience">all</field>
             <field name="sequence">115</field>
-            <field name="keywords">scan issue, issue, take out, fifo, fefo, withdraw, usage note, taken by</field>
+            <field name="keywords">scan issue, issue, take out, fifo, oldest first, withdraw, usage note, taken by</field>
             <field name="body" type="html"><div>
                     <p><b>Scan Issue is the screen you use to take stock out for use.</b> Since the trust uses inventory itself (it never sells), this is how feed, medicine, ghee, and tools leave the store for the cows, the pooja room, or a repair job.</p>
-                    <p><b>How it works</b> 1. Scan the product and enter how many you need. 2. The system <b>plans the pick using FIFO</b> (oldest first) — or <b>FEFO</b> (soonest-to-expire first) for medicine/feed/fluid/pooja — and shows you the exact slot(s) to take from <i>before</i> anything is finalised. 3. Fill in <b>who is taking it</b>, <b>who authorised it</b>, the <b>on-duty Store Keeper</b>, and a short <b>reason</b> (e.g. "morning feed for shed B"). A photo is required for liquids or weighed items. 4. Validate.</p>
+                    <p><b>How it works</b> 1. Scan the product and enter how many you need. 2. The system <b>plans the pick using FIFO</b> (oldest stock first) — for every product, including medicine, feed, fluids, and pooja — and shows you the exact slot(s) to take from <i>before</i> anything is finalised. 3. Fill in <b>who is taking it</b>, <b>who authorised it</b>, the <b>on-duty Store Keeper</b>, and a short <b>reason</b> (e.g. "morning feed for shed B"). A photo is required for liquids or weighed items. 4. Validate.</p>
                     <p><b>Why it matters</b> This is the heart of the audit trail: every issue records who, why, and which keeper — so usage can be checked against the monthly cow-care plan.</p>
-                    <p><b>Real trust example</b> A helper needs 2 calcium bottles. The wizard says "take 2 from the December-expiry batch in slot PHARM01 / SH01 / C01" (FEFO). They enter taken-by, ordered-by, reason, validate — done, and it's all logged.</p>
+                    <p><b>Real trust example</b> A helper needs 2 calcium bottles. The wizard says "take 2 from the oldest-arrived batch in slot PHARM01 / SH01 / C01". They enter taken-by, ordered-by, reason, validate — done, and it's all logged. (To rotate a soon-to-expire medicine batch out first, check the <b>Expiry Alerts</b> report before issuing — see <b>Expiry &amp; rotation</b>.)</p>
                     <p><b>If stock is short</b> The screen clearly warns "STOCK OUT" or "only N on hand" so you know to wait for a return or ask an Admin to receive more — it won't let you over-issue.</p>
             </div></field>
         </record>
@@ -533,23 +533,23 @@
 
         <record id="help_admin_path_stock_flow_fifo_fefo" model="wms.help.article">
             <field name="slug">admin-path-stock-flow-fifo-fefo</field>
-            <field name="name">Admin Path 5: How stock flows in and out (FIFO and FEFO)</field>
+            <field name="name">Admin Path 5: How stock flows in and out (FIFO and expiry rotation)</field>
             <field name="category">role</field>
             <field name="audience">admin</field>
             <field name="sequence">40</field>
-            <field name="keywords">admin stock flow fifo fefo expiry in_date receipt issue return removal oldest earliest</field>
+            <field name="keywords">admin stock flow fifo expiry in_date receipt issue return removal oldest expiry alerts rotation perishable</field>
             <field name="body" type="html"><div>
-                    <p><b>You will learn:</b> the in-and-out flow and the two rules the system uses to pick which stock leaves first.</p>
+                    <p><b>You will learn:</b> the in-and-out flow, the one rule the system uses at issue, and how you keep perishables from expiring on the shelf.</p>
                     <p><b>The flow:</b> stock comes in via <b>Scan Receipt</b>, sits in a slot or floor zone, and leaves via <b>Scan Issue</b>. Returns of reusable items come back via <b>Scan Return</b>.</p>
-                    <p><b>FIFO — First In, First Out:</b> the stock that arrived earliest leaves first. The system stamps an arrival time (<code>in_date</code>) on every receipt and, when you issue, automatically picks the oldest first across all slots. The keeper never has to remember which sack is oldest.</p>
-                    <p><b>FEFO — First Expiry, First Out:</b> for things that spoil, arrival order is not enough. For the kinds <b>medicine, feed, fluid, and pooja</b> (and anything with an expiry date set), the system switches to picking the <b>soonest-to-expire</b> batch first. So a new medicine batch expiring in 2027 is never handed out while an older one expiring next month still sits on the shelf.</p>
-                    <p><b>Steps to confirm it works:</b> 1. Open <b>Reporting &gt; Oldest Stock First (FIFO)</b> and check the aging buckets. 2. Open the <b>Expiry Alert</b> report to see what is close to expiry. 3. Set an <b>Expiry date</b> on perishable products so FEFO and the alert can do their job.</p>
-                    <p><b>Why it matters:</b> FIFO stops old stock rotting forgotten at the back; FEFO stops the trust handing out a medicine or feed that expires first while keeping a fresher one.</p>
+                    <p><b>FIFO — First In, First Out (the issue rule for everything):</b> the stock that arrived earliest leaves first. The system stamps an arrival time (<code>in_date</code>) on every receipt and, when you issue, automatically picks the oldest first across all slots — for <i>every</i> product, including medicine, feed, fluid, and pooja. The keeper never has to remember which sack is oldest. A single Scan Issue is for one product, and expiry is tracked per product (not per physical batch), so there is nothing to expiry-sort at the picker.</p>
+                    <p><b>Stopping perishables from expiring — the Expiry Alerts report:</b> arrival order alone won't catch a batch that's close to its date, so for things that spoil you watch the <b>Expiry Alerts</b> report (Reporting → Expiry alerts). It lists items by how soon they expire — <b>red = expired, amber = within 30 days, blue = within 90 days</b> — so you can deliberately issue or set aside the soonest-to-expire batch before it goes bad. That is how a medicine expiring next month gets used up instead of sitting while a fresher one is handed out.</p>
+                    <p><b>Steps to confirm it works:</b> 1. Open <b>Reporting &gt; Oldest Stock First (FIFO)</b> and check the aging buckets. 2. Open the <b>Expiry Alert</b> report to see what is close to expiry. 3. Set an <b>Expiry date</b> on perishable products so the Expiry Alerts report can do its job.</p>
+                    <p><b>Why it matters:</b> FIFO stops old stock rotting forgotten at the back; the Expiry Alerts report stops the trust letting a medicine or feed expire on the shelf while a fresher one is used first.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
-                    <li>Leaving expiry dates blank on medicine/feed/fluid/pooja — FEFO then has nothing to sort by.</li>
-                    <li>Telling a keeper to "grab any one" — let the scan plan choose for them.</li>
-                    <li>Assuming FIFO covers perishables; for those kinds, FEFO is the rule.</li>
+                    <li>Leaving expiry dates blank on medicine/feed/fluid/pooja — the Expiry Alerts report then has nothing to sort by.</li>
+                    <li>Telling a keeper to "grab any one" — let the scan plan choose the oldest for them.</li>
+                    <li>Assuming the issue picker rotates perishables for you — it issues oldest-arrived; you rotate by expiry using the Expiry Alerts report.</li>
                     </ul>
             </div></field>
         </record>
@@ -789,14 +789,14 @@
             <field name="category">role</field>
             <field name="audience">keeper</field>
             <field name="sequence">51</field>
-            <field name="keywords">keeper issue scan issue fifo fefo oldest expiry plan validate photo short shortage audit taken by</field>
+            <field name="keywords">keeper issue scan issue fifo oldest plan validate photo short shortage audit taken by expiry alerts</field>
             <field name="body" type="html"><div>
-                    <p><b>You will learn:</b> how to hand out stock so the oldest (or soonest-to-expire) goes first, automatically.</p>
-                    <p><b>Steps:</b> 1. Open <b>WMS &gt; Operations &gt; Scan Issue (FIFO)</b>. 2. <b>Scan the product</b> and enter how many are needed. 3. The system builds a <b>plan</b> showing exactly which slots to take from — <b>oldest first</b> (FIFO). For medicine, feed, fluid, and pooja items it picks the <b>soonest-to-expire</b> first (FEFO). You do not have to decide which batch. 4. Fill the <b>audit panel</b>: who is taking it, who ordered/approved it, and the on-duty Store Keeper. 5. If the product is measured (litres, kg), you must <b>attach a photo</b> of the dispensed amount before you can finish. 6. Press <b>Validate</b>. The stock leaves and the move is recorded with your audit details.</p>
-                    <p><b>Why it matters:</b> You do not have to remember which sack is oldest — the plan tells you. This stops old stock rotting at the back and stops a soon-to-expire medicine sitting while a fresher one is handed out.</p>
+                    <p><b>You will learn:</b> how to hand out stock so the oldest arrived goes first, automatically.</p>
+                    <p><b>Steps:</b> 1. Open <b>WMS &gt; Operations &gt; Scan Issue (FIFO)</b>. 2. <b>Scan the product</b> and enter how many are needed. 3. The system builds a <b>plan</b> showing exactly which slots to take from — <b>oldest first</b> (FIFO), for every product including medicine, feed, fluid, and pooja. You do not have to decide which batch. 4. Fill the <b>audit panel</b>: who is taking it, who ordered/approved it, and the on-duty Store Keeper. 5. If the product is measured (litres, kg), you must <b>attach a photo</b> of the dispensed amount before you can finish. 6. Press <b>Validate</b>. The stock leaves and the move is recorded with your audit details.</p>
+                    <p><b>Why it matters:</b> You do not have to remember which sack is oldest — the plan tells you. This stops old stock rotting at the back. To keep a soon-to-expire medicine or feed from sitting while a fresher one is handed out, check the <b>Expiry Alerts</b> report (Reports → Expiry alerts) and rotate the soonest-to-expire batch out first.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
-                    <li>Picking from a different slot than the plan shows "because it is closer" — that breaks FIFO/FEFO.</li>
+                    <li>Picking from a different slot than the plan shows "because it is closer" — that breaks FIFO.</li>
                     <li>Skipping the required photo for measured items (Validate will stop you).</li>
                     <li>If the system says <b>short</b> (not enough stock), do <b>not</b> part-issue and hope — tell the Admin so it can be bought.</li>
                     <li>Taking material first and planning to log it later — always scan at the moment you hand it out.</li>
@@ -907,7 +907,7 @@
             <field name="keywords">keeper daily routine checklist habit same day scan first golden rules end of day spot check</field>
             <field name="body" type="html"><div>
                     <p><b>You will learn:</b> a simple daily rhythm that keeps the whole system accurate.</p>
-                    <p><b>Steps — a typical day:</b> 1. <b>Log in</b> and glance at <b>Operations</b> for anything pending. 2. <b>Receive</b> every delivery the moment it arrives — count, quality check, <b>Scan Receipt</b>, then shelve it. 3. <b>Issue</b> items only through <b>Scan Issue (FIFO)</b> — follow the plan, oldest/soonest-expiry first. 4. <b>Take back</b> reusable items through <b>Scan Return</b>. 5. <b>Report</b> anything broken or expired through <b>Damages</b> straight away. 6. Do a small <b>spot count</b> of a few high-value slots (a quick cycle count). 7. At the end of the day, ask: <b>does the screen match the shelves?</b> If not, flag it.</p>
+                    <p><b>Steps — a typical day:</b> 1. <b>Log in</b> and glance at <b>Operations</b> for anything pending. 2. <b>Receive</b> every delivery the moment it arrives — count, quality check, <b>Scan Receipt</b>, then shelve it. 3. <b>Issue</b> items only through <b>Scan Issue (FIFO)</b> — follow the plan, oldest stock first. 4. <b>Take back</b> reusable items through <b>Scan Return</b>. 5. <b>Report</b> anything broken or expired through <b>Damages</b> straight away. 6. Do a small <b>spot count</b> of a few high-value slots (a quick cycle count). 7. At the end of the day, ask: <b>does the screen match the shelves?</b> If not, flag it.</p>
                     <p><b>The golden rules:</b></p>
                     <ul>
                     <li><b>Scan first, shelve second.</b> Stock never touches a shelf before it is scanned in.</li>
@@ -1142,9 +1142,9 @@
             <field name="category">workflow</field>
             <field name="audience">keeper</field>
             <field name="sequence">257</field>
-            <field name="keywords">issue scan issue fifo fefo take out give out outbound use stock oldest first expiry photo reason taken by</field>
+            <field name="keywords">issue scan issue fifo take out give out outbound use stock oldest first expiry alerts photo reason taken by</field>
             <field name="body" type="html"><div>
-                    <p><b>What this is for</b> Use Scan Issue whenever stock leaves the store for use: feed for the shed, medicine for a calf, ghee for pooja, a tool for a job. The system automatically takes the oldest stock first (FIFO), or the soonest-to-expire first (FEFO) for medicine, feed, fluids, and pooja items.</p>
+                    <p><b>What this is for</b> Use Scan Issue whenever stock leaves the store for use: feed for the shed, medicine for a calf, ghee for pooja, a tool for a job. The system automatically takes the oldest stock first (FIFO) — for every product, including medicine, feed, fluids, and pooja. To rotate a soon-to-expire perishable out first, check the <b>Expiry Alerts</b> report before you issue.</p>
                     <p><b>Step by step</b> 1. Open <b>WMS -&gt; Operations -&gt; Scan Issue (FIFO)</b>. 2. Set <b>Requested Qty</b>, then scan the product barcode. The system shows a plan of which slot(s) it will take from, before anything moves. 3. Check the plan rows. If a slot is actually empty, reduce that row. 4. Fill the audit panel (all required): <b>Taken by</b> (who is carrying it away), <b>Ordered by</b> (who authorised it), <b>Store Keeper on duty</b> (you), and a <b>Reason / usage note</b> (for example 'morning feed for shed B'). 5. If the item is measured by weight or volume (kg, litres), snap the required <b>Item photo</b>. 6. Click <b>Validate</b>.</p>
                     <p><b>Why this workflow exists</b> It forces older stock out first so nothing rots at the back, and it records who took what and why, which is how a non-profit proves its inventory was used honestly.</p>
                     <p><b>Risks / what NOT to do</b></p>
@@ -1154,7 +1154,7 @@
                     <li>A measured item will not validate without a photo.</li>
                     </ul>
                     <p><b>Best practice</b> Issue at the moment of handover, not later from memory. Trust the plan; the system already knows the oldest batch.</p>
-                    <p><b>Trust example</b> The keeper needs 5 calcium boluses. He scans them; FEFO plans them from the batch expiring this December, not next June. He types Taken by 'Dr Rao', Ordered by 'Farm lead', reason 'vaccination round for calves', and clicks Validate.</p>
+                    <p><b>Trust example</b> The keeper needs 5 calcium boluses. He scans them; the plan points to the oldest-arrived slot. (Earlier that morning he checked the Expiry Alerts report and saw a December-expiry batch in amber, so he knows that older stock is the one to use up first.) He types Taken by 'Dr Rao', Ordered by 'Farm lead', reason 'vaccination round for calves', and clicks Validate.</p>
             </div></field>
         </record>
 
@@ -1589,23 +1589,23 @@
 
         <record id="help_safety_double_check_fefo_medicine" model="wms.help.article">
             <field name="slug">safety-double-check-fefo-medicine</field>
-            <field name="name">SAFETY: Double-check expiry on medicine and feed (FEFO)</field>
+            <field name="name">SAFETY: Double-check expiry on medicine and feed</field>
             <field name="category">safety</field>
             <field name="audience">all</field>
             <field name="sequence">127</field>
-            <field name="keywords">safety FEFO expiry medicine feed fluid pooja earliest first check date expired batch</field>
+            <field name="keywords">safety expiry medicine feed fluid pooja expiry alerts report check date expired batch rotation</field>
             <field name="body" type="html"><div>
                     <p><b>Warning: giving out expired medicine or feed can harm the cows.</b> Always take a moment to check the expiry date with your own eyes.</p>
-                    <p>For medicine, feed, fluids, and pooja items, the system uses <b>FEFO</b> — First Expiry, First Out. When you issue, it automatically picks the batch that expires <b>soonest</b>, not just the oldest by arrival date. It will even pull from a different batch of the same item if that batch expires earlier.</p>
-                    <p><b>What you must still do:</b></p>
+                    <p>At the issue picker the system plans by <b>arrival order (FIFO — oldest first)</b>, the same as every other product. It does <b>not</b> hunt for the soonest-to-expire batch for you. So for medicine, feed, fluids, and pooja items, <b>you</b> are the one who keeps expiry safe — by watching the Expiry Alerts report and reading the date on the item in your hand.</p>
+                    <p><b>What you must do:</b></p>
                     <ul>
-                    <li><b>Read the slot the wizard tells you to pick from</b>, and take from exactly that slot. The plan lists the right batch for a reason.</li>
+                    <li><b>Watch the Expiry Alerts report</b> (WMS → Reports → Expiry alerts) — <b>red = expired, amber = within 30 days, blue = within 90 days</b>. Deliberately issue or set aside the soonest-to-expire batch first so it gets used while it is still good.</li>
                     <li><b>Check the expiry date printed on the item</b> before it leaves your hands. If it has already passed, do <b>not</b> issue it.</li>
                     <li>An expired item should go through the <b>Damage</b> flow (reason: Expired), not out to the cows.</li>
                     </ul>
-                    <p><b>Example:</b> you scan a calcium bolus. The wizard says take from the slot holding the batch expiring this December, not the fresh one expiring next year. That is FEFO doing its job, follow it.</p>
-                    <p><b>If the system points you at one slot but you grabbed from another,</b> the counts will drift, tell the Admin so it can be corrected.</p>
-                    <p><b>Why it matters:</b> the software gets the order right, but only you can see the actual date on the actual item in your hand. The two together keep the animals safe.</p>
+                    <p><b>Example:</b> the Expiry Alerts report shows a calcium batch expiring this December in amber, and a fresher one expiring next year. You go to the December slot and issue from it first, so the soon-to-expire stock is used up before it spoils.</p>
+                    <p><b>If you take stock from a slot the issue plan didn't point to,</b> the counts will drift, tell the Admin so it can be corrected.</p>
+                    <p><b>Why it matters:</b> the issue picker only knows arrival order — only you, with the Expiry Alerts report and your own eyes on the date, can make sure the soonest-to-expire batch goes out first and nothing expired reaches the animals.</p>
             </div></field>
         </record>
 
@@ -1702,7 +1702,7 @@
             <field name="body" type="html"><div>
                     <p>You don't need to walk the floor hunting for an item, let the system tell you where it is.</p>
                     <p><b>Steps:</b></p>
-                    <p>1. Go to <b>WMS → Reports → Where is product X?</b> 2. Search by the product name or its SKU code. 3. The list shows <b>every slot</b> that holds it, with the quantity in each. 4. The slot the system would pick next (oldest stock, or earliest expiry for medicine/feed) is marked <b>"Next to pick"</b>.</p>
+                    <p>1. Go to <b>WMS → Reports → Where is product X?</b> 2. Search by the product name or its SKU code. 3. The list shows <b>every slot</b> that holds it, with the quantity in each. 4. The slot the system would pick next (the oldest-arrived stock — FIFO, for every product) is marked <b>"Next to pick"</b>.</p>
                     <p>Click any row to open that slot. From the rack you can open the <b>visual grid</b> to see the slot highlighted on a picture of the rack, handy for guiding a new helper to the right shelf.</p>
                     <p><b>Example:</b> a vet asks for dewormer. You search it, see it's in two slots, and the report marks the older batch as "Next to pick". You go straight there instead of opening every drawer.</p>
                     <p><b>Tip:</b> the "Next to pick" slot matches what Scan Issue will choose, so following it keeps your physical picking and the system in step.</p>
@@ -1716,21 +1716,20 @@
             <field name="category">faq</field>
             <field name="audience">all</field>
             <field name="sequence">383</field>
-            <field name="keywords">fifo fefo difference oldest earliest expiry first in out medicine feed order picking rotation</field>
+            <field name="keywords">fifo fefo difference oldest expiry first in out medicine feed order picking rotation expiry alerts</field>
             <field name="body" type="html"><div>
-                    <p>When you issue stock, the system decides which units to take first, you don't have to choose. It uses one of two rules:</p>
+                    <p>When you issue stock, the system decides which units to take first, you don't have to choose. <b>At the issue picker there is only one rule:</b></p>
                     <ul>
-                    <li><b>FIFO (First In, First Out)</b> — takes the <b>oldest arrival</b> first. Used for most items. It stops stock sitting forgotten at the back until it goes bad.</li>
-                    <li><b>FEFO (First Expiry, First Out)</b> — takes the batch that <b>expires soonest</b> first. Used for medicine, feed, fluids, and pooja items, anything where the expiry date matters more than the arrival date.</li>
+                    <li><b>FIFO (First In, First Out)</b> — takes the <b>oldest arrival</b> first. Used for <b>every</b> product, including medicine, feed, fluids, and pooja items. It stops stock sitting forgotten at the back until it goes bad.</li>
                     </ul>
-                    <p>For FEFO items, the system can even reach across different batches of the same product to grab the one expiring earliest, so a fresh batch never gets used up before an older one that's about to expire.</p>
+                    <p><b>What about FEFO (First Expiry, First Out)?</b> You may hear that term — it means "issue the soonest-to-expire batch first". This trust does <b>not</b> apply it at the Scan Issue picker: a single issue is for one product, and expiry is tracked <i>per product</i> (not per physical batch), so there is nothing to expiry-sort inside an issue. Instead, you manage expiry with the <b>Expiry Alerts</b> report (WMS → Reports → Expiry alerts), which lists items by how soon they expire — <b>red = expired, amber = within 30 days, blue = within 90 days</b> — so you can deliberately rotate the soonest-to-expire batch out before it spoils.</p>
                     <p><b>Example:</b></p>
                     <ul>
-                    <li><i>FIFO:</i> you issue cleaning cloths, the system takes the pack that arrived first.</li>
-                    <li><i>FEFO:</i> you issue calcium bolus, the system takes the batch expiring this December even if a newer batch arrived more recently.</li>
+                    <li><i>At issue (FIFO):</i> you issue cleaning cloths — or calcium boluses — and the system takes the batch that arrived first.</li>
+                    <li><i>Expiry rotation:</i> the Expiry Alerts report flags a calcium batch expiring this December in amber, so you go to that slot and issue from it first, even if a newer batch arrived more recently.</li>
                     </ul>
-                    <p><b>What you do:</b> follow the slot the wizard tells you to pick from, and still eyeball the expiry date on medicine/feed (see the FEFO safety note).</p>
-                    <p><b>Why it matters:</b> the right order means less waste for ordinary stock, and no expired medicine reaching the cows.</p>
+                    <p><b>What you do:</b> follow the slot the wizard tells you to pick from, watch the Expiry Alerts report for medicine/feed, and still eyeball the expiry date on the item (see the expiry safety note).</p>
+                    <p><b>Why it matters:</b> oldest-first issuing means less waste for ordinary stock, and watching the Expiry Alerts report keeps expired medicine from reaching the cows.</p>
             </div></field>
         </record>
 

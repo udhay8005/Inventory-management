@@ -53,8 +53,8 @@ capability sub-groups (all 5   │
 The mental model of the target user: *"I scan things in, I scan things out, I count shelves. I am scared of breaking something. I am on a tablet with one hand while holding a feed bag."* Strategy points:
 
 1. **One primary action per screen.** The scan wizards already do this well (big scan field + one blue *Validate* button). Extend it: in Beginner Mode every form gets a one-line plain-English "What this screen is for" banner at the very top.
-2. **Progressive disclosure.** Advanced fields (lot numbers, overuse caps, FEFO internals) stay collapsed/optional for beginners and only surface for Managers or when Beginner Mode is off. Use `optional="hide"` on list columns (already used for `lot_id`) and `invisible="context.get('wms_beginner_mode')"` on advanced notebook pages.
-3. **Show the consequence before the action, not after.** This is *already* the design of Scan Issue (the FIFO/FEFO plan table shows which slot the stock will leave *before* Validate). Make this a stated principle and apply it to Damage and Audit too.
+2. **Progressive disclosure.** Advanced fields (lot numbers, overuse caps, FIFO internals) stay collapsed/optional for beginners and only surface for Managers or when Beginner Mode is off. Use `optional="hide"` on list columns (already used for `lot_id`) and `invisible="context.get('wms_beginner_mode')"` on advanced notebook pages.
+3. **Show the consequence before the action, not after.** This is *already* the design of Scan Issue (the FIFO plan table shows which slot the stock will leave *before* Validate). Make this a stated principle and apply it to Damage and Audit too.
 4. **Explain in terms of the physical world.** "Scan the **shelf label**" not "set `location_dest_id`". "The system takes the **oldest stock first** so nothing expires on the shelf" not "FIFO removal strategy".
 5. **Forgiveness over prevention where data is recoverable; hard stops only where it is not.** A wrong scan is fixable (remove the line). Stock walking out unscanned is not. Beginner Mode therefore adds *confirmations* (reversible-but-annoying) rather than *blocks*, except on the genuinely destructive actions (delete location, scrap, accept audit, download/restore backup).
 6. **The empty state is a teacher.** Every list action gets a friendly `help=""` empty-state message (Odoo 19 renders the action's `help` as the no-records placeholder) that says what the screen is and links the matching tour. Example for the Audits list: *"No stock counts yet. A stock count is where you walk the racks and check the real amount against the computer. Press **New** to start one, or open **Help & Training → Getting Started** for a walk-through."* (Adding these action-level empty states is roadmap — see §13 Phase 2.)
@@ -99,7 +99,7 @@ The security model explicitly supports this: a user in `group_wms_user` alone "c
 |---|---|---|---|---|---|
 | Orientation tour ("Find your way around") | Yes (auto) | Yes | Yes | Yes | Yes |
 | Scan Receipt / Return tour | — | If `can_scan_receive` | — (not their job) | — | Yes |
-| Scan Issue (FIFO/FEFO) tour | — | If `can_scan_issue` | — (not their job) | — | Yes |
+| Scan Issue (FIFO) tour | — | If `can_scan_issue` | — (not their job) | — | Yes |
 | File Damage tour | — | If `can_file_damage` | Yes (reads the damage queue) | — | Yes |
 | Stock Count (Audit) tour | — | If `can_submit_audit` | — | — | Yes |
 | Repair Orders / bench workflow tour | — | — | Yes (primary tour) | — | Yes |
@@ -132,7 +132,7 @@ Four HTML-article tours ship today, each gated by article record rules so the he
 Each step is one `<a href="/odoo/action-PENDING-&lt;xmlid&gt;">` link inside the article body; `hooks.apply_tour_action_links` rewrites those placeholders at install. Adding a new tour = adding a `wms.help.article` data record with PENDING links and re-running `-u wms_training`. Future-roadmap tours (per-capability scan tours, find-product, admin-review) are tracked under §13 Phase 3 and not in this release.
 
 ### 4.3 Step content style (example, storekeeper rhythm)
-> Step linking to Scan Issue: *"This screen is the computer telling you **which shelves to take from**. It always picks the **oldest stock first** (for medicine and feed, the **soonest-to-expire** first) so nothing goes bad on the shelf. Take from the shelves shown — even if a fuller shelf is closer."*
+> Step linking to Scan Issue: *"This screen is the computer telling you **which shelves to take from**. It always picks the **oldest stock first**. Take from the shelves shown — even if a fuller shelf is closer. (For medicine and feed, check **Reports → Expiry alerts** so you deliberately use up the soonest-to-expire batch before it goes bad.)"*
 
 Each tour's source: the verbatim human script in `docs/15-onboarding-script.md` is the content seed — the four shipped tours turn that proven 30-minute script into linked HTML steps, keeping its exact phrasing and "3 rules of scanning".
 
@@ -152,7 +152,7 @@ Each tour's source: the verbatim human script in `docs/15-onboarding-script.md` 
 ### 5.2 Tooltip writing rules
 - One short sentence + one concrete example. Example for `taken_by`: *"Who is physically taking these items — e.g. the worker, a department lead, or a visitor."* (already this good in code).
 - Never reference Odoo internals. Replace any remaining "picking", "quant", "UoM" wording in help strings with "delivery / receipt note", "shelf stock", "unit (kg, litre, piece)".
-- For FIFO/FEFO fields, always restate *why*: "oldest leaves first so nothing expires."
+- For FIFO fields, always restate *why*: "oldest leaves first, so stock keeps rotating." (To avoid spoilage, point operators at the Expiry Alerts report, which lists items by soonest expiry.)
 - Beginner-only deep tooltips: where a one-liner isn't enough for a novice, attach a **"Learn more"** link in the banner that opens the matching help article (see §7) instead of bloating the `help=` string.
 
 ### 5.3 Coverage checklist (delivered as part of the addon)
@@ -279,7 +279,7 @@ Dangerous = irreversible **or** stock-affecting at scale. In Beginner Mode these
 | Accept/Apply a stock-count audit (creates adjustments) | Hidden for keepers (already manager-gated); confirmation-wrapped for managers in beginner mode |
 | Download encrypted backup / Restore | Hidden (already manager-only; extra-hidden in beginner mode) |
 | Inventory adjustment power-edits, bulk delete on lists | Hidden / list `delete="0"` while beginner |
-| Override a FIFO/FEFO plan line | Discouraged: show the line read-only-ish with a warning; full override needs Beginner Mode off or Manager |
+| Override a FIFO plan line | Discouraged: show the line read-only-ish with a warning; full override needs Beginner Mode off or Manager |
 
 ### 9.4 Behaviour 3 — stronger confirmations (ON)
 For reversible-but-consequential actions, Beginner Mode inserts an **explicit confirm step** the expert doesn't get:

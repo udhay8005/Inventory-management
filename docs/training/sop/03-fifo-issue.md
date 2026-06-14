@@ -8,10 +8,13 @@
 
 Use **Scan Issue** whenever stock leaves the store **for use**. Because the trust uses inventory itself and never sells, this is how feed goes to the shed, medicine goes to a calf, ghee goes to the pooja room, and a tool goes out to a job. You scan the product and say how many you need; the system **plans the pick for you** and shows the exact slot(s) to take from **before** anything moves.
 
-The picking rule is automatic:
+The picking rule is automatic and simple — it is the **same for every product**, perishable or not:
 
-- **FIFO — First In, First Out:** ordinary stock leaves **oldest-arrived first** (by in-date), so nothing rots forgotten at the back.
-- **FEFO — First Expiry, First Out:** for **medicine, feed, fluid, and pooja** items (and anything with an expiry date set), the system instead pulls the **soonest-to-expire batch first** — even looking across different batches of the same product name — so a medicine expiring this month is never left on the shelf while a fresher one is handed out.
+- **FIFO — First In, First Out:** stock leaves **oldest-arrived first** (by in-date), across all slots, so nothing rots forgotten at the back. This applies to **everything** — tools, feed, medicine, fluid, pooja items, all of it.
+
+There is no separate "expiry-sorted" picking at the Scan Issue picker. A single Scan Issue is for **one product**, and expiry is tracked **per product** (not per physical batch), so within an issue there is nothing to expiry-sort against — oldest-arrived *is* the rule.
+
+To stop medicine or feed expiring on the shelf, you don't rely on the issue wizard — you use the **Expiry Alerts** report (WMS → Reports → Expiry alerts). It lists items by soonest expiry (red = expired, amber = within 30 days, blue = within 90 days) so you can deliberately go and issue or rotate the soonest-to-expire stock first. See SOP 10.
 
 Issuing is the heart of the audit trail. Every issue records **who took it, who authorised it, which keeper was on duty, and why** — so usage can be checked against the monthly cow-care plan. That is also why a **photo is required** for measured items (liquids and weighed goods): proof of the amount actually dispensed.
 
@@ -51,11 +54,11 @@ Open the wizard: **WMS → Operations → Scan Issue (FIFO)**. It opens as a pop
 
 5. **Read the plan in the lines table.** Columns are **Product | Slot | In Date | Expires | Available | Take**:
    - **Slot** — the exact location to pick from.
-   - **In Date** — when that batch arrived (the FIFO key).
-   - **Expires** — the batch expiry; it is **colour-flagged** (red within ~30 days, amber within ~90) so near-expiry stock stands out.
+   - **In Date** — when that stock arrived (the FIFO key — this is what the pick order is based on).
+   - **Expires** — the product's expiry date, shown **for awareness only**; it is **colour-flagged** (red within ~30 days, amber within ~90) so near-expiry stock stands out. It does **not** change the pick order — that's always oldest-arrived first. Use the Expiry Alerts report to act on it.
    - **Available** — free quantity in that slot (on-hand minus reserved).
    - **Take** — how many the plan will pull from that slot.
-   The grey **feedback** line summarises the plan, e.g. *"Planned 5 × Cow Calcium Bolus across 1 slot(s)."* For perishables it announces FEFO, e.g. *"FEFO: planned 5 × … — earliest expiry first."* The plan may cross **several slots or batches** for one product — that's correct.
+   The grey **feedback** line summarises the plan, e.g. *"Planned 5 × Cow Calcium Bolus across 1 slot(s) — oldest stock first."* The plan may cross **several slots** for one product when the oldest slot can't cover the whole quantity — that's correct.
 
 6. **Check the "Short qty" field.** If the warehouse can't fully supply your request, this shows the shortfall and the feedback warns **"STOCK OUT"** or **"only N on hand"**. **The Validate button disappears while there is a shortfall** — you cannot over-issue. Reduce the quantity, or stop and tell the Admin to buy/await a return.
 
@@ -81,19 +84,23 @@ Open the wizard: **WMS → Operations → Scan Issue (FIFO)**. It opens as a pop
 
 ## Worked Example
 
-A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has two calcium batches: **BATCH-B expiring December 2026** and a newer batch expiring June 2027.
+A vet needs **5 Cow Calcium Bolus** for a calf vaccination round.
+
+**First, a quick rotation check (do this before you issue perishables).** Open **WMS → Reports → Expiry alerts**. Cow Calcium Bolus shows up with the **soonest-expiring stock at the top** — say it's the stock that arrived earliest and is now closest to its expiry date, flagged amber (within 90 days). That tells you the stock to clear first. Good news: because that's also the **oldest-arrived** stock, plain FIFO at the issue picker will pull it for you. (If the report ever showed a *newer* arrival expiring sooner than an older one, you'd issue the soonest-to-expire deliberately — but for one product tracked at one expiry date, oldest-arrived and soonest-to-expire are the same stock.)
+
+Now the issue:
 
 1. **WMS → Operations → Scan Issue (FIFO).**
 2. Warehouse defaults; destination stays **Trust internal use**.
 3. **Requested Qty = 5.**
 4. Scan the **Cow Calcium Bolus** barcode.
-5. Because medicine is expiry-sensitive, the system uses **FEFO**. The plan shows it pulling from the **December-2026 (BATCH-B)** slot first — say `R01 / SH04 / C01 / SL01` — *not* the June-2027 batch. The **Expires** cell on that row is red (within 90 days). Feedback: *"FEFO: planned 5 × Cow Calcium Bolus — earliest expiry first."* **Short qty = 0**, so the **Validate** button is showing.
+5. The system plans the pick **oldest-arrived first (FIFO)**. The plan shows it pulling from the slot holding the oldest calcium stock — say `R01 / SH04 / C01 / SL01`. The **Expires** cell on that row is colour-flagged (amber/red) **for awareness**, but it isn't what chose the slot — the **In Date** is. Feedback: *"Planned 5 × Cow Calcium Bolus across 1 slot(s) — oldest stock first."* **Short qty = 0**, so the **Validate** button is showing.
 6. Calcium boluses are counted in **units**, so **no photo is required** (the "* required" marker is absent). (Contrast: if this were 5 litres of ghee, the photo would be mandatory.)
 7. AUDIT TRAIL: **Taken by = "Dr Rao"**; **Ordered by = "Farm lead"**; **Store Keeper on duty = Suresh** (your roster name); **Reason = "monthly vaccination round for calves"**. Optional **Issued for = "Cows / Gaushala"** so the Consumption Value report attributes this spend to the herd.
-8. **Validate.** Five bottles leave the December batch; the delivery opens showing the move and your audit note.
-9. You hand Dr Rao exactly the five bottles the plan named — from the December slot, not whichever was nearest.
+8. **Validate.** Five bottles leave the oldest slot; the delivery opens showing the move and your audit note.
+9. You hand Dr Rao exactly the five bottles the plan named — from the oldest slot, not whichever was nearest. Because you checked the Expiry Alerts report first, you also know this is the stock that most needed clearing.
 
-*Tool example:* issuing **1 E2E Hammer** for a fence repair works the same, but uses plain **FIFO** (a tool has no expiry), needs **no photo** (it's a counted item), and you'd type a reason like *"fence repair, north paddock"*. Remember a hammer is **returnable** — when the job is done, bring it back via Scan Return (SOP 04).
+*Tool example:* issuing **1 E2E Hammer** for a fence repair works exactly the same way — plain **FIFO** (a hammer has no expiry, and there's no Expiry Alerts entry to check), needs **no photo** (it's a counted item), and you'd type a reason like *"fence repair, north paddock"*. Remember a hammer is **returnable** — when the job is done, bring it back via Scan Return (SOP 04).
 
 ---
 
@@ -115,8 +122,8 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 
 ## Troubleshooting
 
-- **The plan pulled from a slot that isn't the closest / isn't the one I expected.** That's deliberate — it's the **oldest** (FIFO) or **soonest-to-expire** (FEFO) batch. Pick from the slot the plan names, not the convenient one, or you break rotation.
-- **The plan crossed two different batches/slots for one product.** Normal under FEFO when the soonest-expiring batch can't cover the whole quantity. Pick from each slot the plan lists, in order.
+- **The plan pulled from a slot that isn't the closest / isn't the one I expected.** That's deliberate — it's the **oldest-arrived** stock (FIFO). Pick from the slot the plan names, not the convenient one, or you break rotation.
+- **The plan crossed two different slots for one product.** Normal under FIFO when the oldest slot can't cover the whole quantity — it tops up from the next-oldest slot. Pick from each slot the plan lists, in order.
 - **I can't see the Validate button.** There's a shortfall (**Short qty > 0**) — the button is intentionally hidden. Reduce the quantity to what's available, or wait for more stock.
 - **A slot the plan named is actually empty on the shelf.** Don't force it. Cancel, do a quick count, and if the shelf truly differs from the system, flag it for a cycle count (SOP 05). Issuing against phantom stock corrupts the records.
 - **The camera didn't open on my phone.** Use the file picker that appears and select a photo; or take the photo in your camera app first and upload it.
@@ -128,11 +135,11 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 ## Best Practices
 
 - **Issue at the moment of handover**, never "log it later from memory". Memory issues are how counts drift.
-- **Trust the plan.** The system already knows the oldest / soonest-to-expire batch. Don't second-guess it by grabbing from another slot.
+- **Trust the plan.** The system already knows the oldest-arrived stock. Don't second-guess it by grabbing from another slot.
 - **Never part-issue during a stock-out.** The system refuses on purpose so you escalate to the Admin instead of quietly half-filling a request.
 - **Write a real reason.** "morning feed for shed B" is useful; "stuff" is not. The reason is what reconciles usage against the cow-care plan.
 - **Pick your own name** as Store Keeper on duty — the human actually at the desk.
-- **For medicine and perishables, double-check the Expires column.** If it's red, that's the batch going out first — exactly right.
+- **For medicine and perishables, run the Expiry Alerts report regularly** (WMS → Reports → Expiry alerts) and rotate the soonest-to-expire stock to the front. The Scan Issue picker always pulls oldest-arrived; the report is what tells you *which* perishables are getting close, so you can clear them before they spoil. The **Expires** column on the issue plan is just an at-a-glance flag, not the picking rule.
 - **Photograph measured items honestly** — frame the actual amount dispensed (the jug, the weighed bag). It's the trust's proof.
 
 ---
@@ -142,14 +149,14 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 - `workflow-fifo-issuing` — How to issue stock (Scan Issue, FIFO)
 - `keeper-path-issuing-fifo` — Keeper Path 5: Issuing stock the FIFO way
 - `what-is-scan-issue` — Scan Issue (taking stock out)
-- `what-is-fifo` — FIFO — First In, First Out
-- `what-is-fefo` — FEFO — First Expiry, First Out
+- `what-is-fifo` — FIFO — First In, First Out (the issue picking rule)
+- `what-is-fefo` — FEFO — First Expiry, First Out (the principle; at this trust it's applied via the Expiry Alerts report, not the issue picker)
 - `faq-fifo-vs-fefo` — FIFO vs FEFO
 - `stock-out-message` — What the STOCK OUT message means
 - `why-photo-required-on-issue` — Why a photo is required on issue
 - `issue-blocked-daily-limit` — Issue blocked by the daily limit
 - `why-record-who-took-stock` — Why we record who took stock
-- `safety-double-check-fefo-medicine` — Double-check FEFO for medicine
+- `safety-double-check-fefo-medicine` — Rotate medicine by expiry: use the Expiry Alerts report
 
 ---
 
@@ -159,9 +166,11 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 
 **[0:18]** "From the WMS menu I open Operations, then Scan Issue, FIFO. Read the blue banner: set the quantity first, then scan. FIFO pulls the oldest stock first across all slots."
 
-**[0:35]** "Our vet needs five calcium boluses for a vaccination round. The warehouse defaults are fine, and the destination is Trust internal use. I set Requested Qty to five."
+**[0:35]** "Our vet needs five calcium boluses for a vaccination round. Because calcium is a perishable, I first take a quick look at Reports, Expiry alerts — it lists products by soonest expiry, so I can see which stock to clear first. The calcium that arrived earliest is closest to expiry. That's good: it's also the oldest stock, so plain FIFO at the issue picker will pull exactly that for me."
 
-**[0:55]** "Now I scan the calcium barcode. Instantly the system builds a plan in the table — Product, Slot, In Date, Expires, Available, and Take. Calcium is medicine, so the system uses FEFO: first expiry, first out. Notice it's pulling from the batch expiring this December, not the newer June batch — and that Expires cell is highlighted red because it's close."
+**[0:48]** "Back to Operations, Scan Issue. The warehouse defaults are fine, and the destination is Trust internal use. I set Requested Qty to five."
+
+**[0:55]** "Now I scan the calcium barcode. Instantly the system builds a plan in the table — Product, Slot, In Date, Expires, Available, and Take. The pick is oldest-arrived first — that's FIFO, and it's the same rule for every product. The In Date column is what chose the slot. The Expires cell is colour-flagged so near-expiry stock stands out, but it's just for awareness — it isn't what picked the slot."
 
 **[1:25]** "I check the Short qty field — it's zero, so there's enough, and the Validate button is showing. If we were short, that button would disappear on purpose, so I could never over-issue."
 
@@ -169,23 +178,24 @@ A vet needs **5 Cow Calcium Bolus** for a calf vaccination round. The trust has 
 
 **[2:05]** "Now the audit trail, and all four are required. Taken by — Doctor Rao. Ordered by — the farm lead. Store Keeper on duty — that's me, I pick my name from the roster. And the Reason — 'monthly vaccination round for calves'. No issue goes through without that explanation. I'll also pick 'Issued for — Cows / Gaushala' from the optional category dropdown so the Consumption Value report attributes this to the herd."
 
-**[2:35]** "I press Validate. The five bottles leave the December batch, the delivery record opens, and my audit note is saved. I hand over exactly the five bottles the plan named — from the December slot, not whichever was nearest."
+**[2:35]** "I press Validate. The five bottles leave the oldest slot, the delivery record opens, and my audit note is saved. I hand over exactly the five bottles the plan named — from the oldest slot, not whichever was nearest. And because I checked Expiry alerts first, I know this is the stock that most needed clearing."
 
-**[2:55]** "And that's a FIFO issue. The system chose the right batch, blocked any over-issue, and recorded who, why, and which keeper. If this had been a tool, remember to bring it back later with Scan Return."
+**[2:55]** "And that's a FIFO issue. The system pulled the oldest stock, blocked any over-issue, and recorded who, why, and which keeper. For perishables, remember the rhythm: check Expiry alerts to see what's getting close, then issue — the picker handles the oldest-first part. And if this had been a tool, remember to bring it back later with Scan Return."
 
 ---
 
 ## Recording Checklist (exact click path to perform on camera)
 
-1. Open **WMS → Operations → Scan Issue (FIFO)**.
-2. Point at the **blue banner**; read "set qty, then scan".
-3. Show **warehouse** and **destination** (Trust internal use).
-4. Set **Requested Qty = 5**.
-5. Click into **"Last Scan"** and scan **Cow Calcium Bolus**.
-6. On the plan table, point to **Slot**, **In Date**, the red **Expires** cell, **Available**, and **Take**; read the **FEFO** feedback line.
-7. Show **Short qty = 0** and that the **Validate** button is present.
-8. Note the **Item photo** label has **no "* required"** marker (counted item).
-9. Fill **Taken by**, **Ordered by**, **Store Keeper on duty** (roster name), and the **Reason / usage note**. Optionally set **Issued for** (e.g. *Cows / Gaushala*) so the Consumption Value report can break spend down by purpose.
-10. Click **Validate**.
-11. Show the resulting **delivery form** with the move and the audit note in its history.
-12. (Optional contrast shot) Scan a measured item (e.g. ghee in litres) to show the **"* required"** photo marker appearing; or attempt an over-quantity to show the **Validate** button vanishing with a STOCK OUT message.
+1. (Perishable preliminary) Open **WMS → Reports → Expiry alerts**; show calcium near the top, soonest-expiry first; note this is the stock to clear, and that it's also the oldest-arrived.
+2. Open **WMS → Operations → Scan Issue (FIFO)**.
+3. Point at the **blue banner**; read "set qty, then scan".
+4. Show **warehouse** and **destination** (Trust internal use).
+5. Set **Requested Qty = 5**.
+6. Click into **"Last Scan"** and scan **Cow Calcium Bolus**.
+7. On the plan table, point to **Slot**, **In Date** (the pick key), the colour-flagged **Expires** cell (awareness only), **Available**, and **Take**; read the **"oldest stock first"** feedback line.
+8. Show **Short qty = 0** and that the **Validate** button is present.
+9. Note the **Item photo** label has **no "* required"** marker (counted item).
+10. Fill **Taken by**, **Ordered by**, **Store Keeper on duty** (roster name), and the **Reason / usage note**. Optionally set **Issued for** (e.g. *Cows / Gaushala*) so the Consumption Value report can break spend down by purpose.
+11. Click **Validate**.
+12. Show the resulting **delivery form** with the move and the audit note in its history.
+13. (Optional contrast shot) Scan a measured item (e.g. ghee in litres) to show the **"* required"** photo marker appearing; or attempt an over-quantity to show the **Validate** button vanishing with a STOCK OUT message.

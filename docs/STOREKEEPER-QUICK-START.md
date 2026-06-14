@@ -57,8 +57,9 @@ rack slot.
    but setting it correctly lets managers see "how much did Cows cost vs
    Pooja" in the Consumption Value report.
 3. **Scan the product** → quantity to give out.
-4. The system picks the **oldest stock first (FIFO)** / **earliest-expiry first
-   (FEFO)** automatically and shows the plan.
+4. The system picks the **oldest stock first (FIFO)** automatically and shows
+   the plan. (To rotate medicine/feed by expiry, use **WMS → Reports → Expiry
+   alerts** to spot the soonest-to-expire batch and issue that deliberately.)
 5. Tap **Validate**. Stock leaves the slot.
 > If you hit a **daily limit** or **stock-out** message, stop and tell a manager —
 > don't force it.
