@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from markupsafe import Markup
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 
 class WmsAudit(models.Model):
@@ -235,10 +235,31 @@ class WmsAudit(models.Model):
             if mgr:
                 rec.message_subscribe(partner_ids=mgr.all_user_ids.partner_id.ids)
 
+    def _ensure_manager(self):
+        """Defense-in-depth manager re-check for the audit decision methods.
+
+        The Accept / Reject buttons are hidden in the form for non-managers,
+        but the keeper holds write+create on ``wms.audit`` (they author and
+        submit audits), so a forced RPC / dev-mode call could otherwise reach
+        these methods and let a keeper self-accept their own count — silently
+        overwriting live stock and defeating the manager-review gate the audit
+        workflow exists to enforce. Mirrors
+        ``wms.issue.approval._ensure_can_decide``.
+        """
+        self.ensure_one()
+        if not self.env.user.has_group("wms_location.group_wms_manager"):
+            raise AccessError(
+                _(
+                    "Only a WMS Manager can accept or reject an inventory "
+                    "audit. Submit it and ask a Manager to review."
+                )
+            )
+
     def action_review_accept(self):
         """Admin accepts the audit. Variances become stock adjustments
         so the books match the physical count."""
         for rec in self:
+            rec._ensure_manager()
             # FPAT Critical: serialise concurrent Accepts on the same audit so
             # a double-click / parallel-RPC cannot apply the variance delta
             # twice. Lock the audit row FIRST and re-check state from the DB
@@ -312,6 +333,7 @@ class WmsAudit(models.Model):
 
     def action_reject(self):
         for rec in self:
+            rec._ensure_manager()
             if rec.state != "submitted":
                 raise UserError(_("Only a submitted audit can be rejected."))
             rec.state = "rejected"

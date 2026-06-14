@@ -7,6 +7,18 @@ from odoo.tests import TransactionCase, tagged
 
 @tagged("post_install", "-at_install", "wms", "wms_audit_reconcile")
 class TestAuditAcceptReconcile(TransactionCase):
+    def setUp(self):
+        super().setUp()
+        # Accept now requires a WMS Manager (in-method has_group re-check);
+        # the default test user is the superuser, which is NOT in that group.
+        self.mgr = self.env["res.users"].create(
+            {
+                "name": "Reconcile Mgr",
+                "login": "reconcile_mgr",
+                "group_ids": [(6, 0, [self.env.ref("wms_location.group_wms_manager").id])],
+            }
+        )
+
     def test_accept_applies_delta_not_overwrite(self):
         product = self.env["product.product"].create(
             {"name": "Audit Reconcile", "is_storable": True}
@@ -25,7 +37,7 @@ class TestAuditAcceptReconcile(TransactionCase):
                 "counted_qty": 8.0,  # physically found -> -2 discrepancy
             }
         )
-        audit.action_review_accept()
+        audit.with_user(self.mgr).action_review_accept()
 
         quant = self.env["stock.quant"].search(
             [("product_id", "=", product.id), ("location_id", "=", slot.id)]
@@ -50,7 +62,7 @@ class TestAuditAcceptReconcile(TransactionCase):
                 "counted_qty": 5.0,
             }
         )
-        audit.action_review_accept()
+        audit.with_user(self.mgr).action_review_accept()
         quant = self.env["stock.quant"].search(
             [("product_id", "=", product.id), ("location_id", "=", slot.id)]
         )
@@ -72,7 +84,7 @@ class TestAuditAcceptReconcile(TransactionCase):
                 "counted_qty": 8.0,
             }
         )
-        audit.action_review_accept()
+        audit.with_user(self.mgr).action_review_accept()
         quant = self.env["stock.quant"].search(
             [("product_id", "=", product.id), ("location_id", "=", slot.id)]
         )
