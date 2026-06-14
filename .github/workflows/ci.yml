@@ -237,7 +237,7 @@ jobs:
               -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training \
               --without-demo=all \
               --test-enable \
-              --test-tags wms,wms_audit,wms_delete,wms_health \
+              --test-tags wms,wms_audit,wms_delete,wms_health,wms_ui_cert \
               --log-level=info \
               --logfile=/dev/stdout \
               2>&1 | tee odoo_test.log
