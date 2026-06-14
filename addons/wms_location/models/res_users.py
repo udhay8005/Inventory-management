@@ -27,14 +27,18 @@ from odoo import api, models
 
 _logger = logging.getLogger(__name__)
 
-# Capability group xmlids. Adding a new sub-group later: append its
-# xmlid here and the backfill picks it up automatically.
+# Capability group xmlids backfilled onto legacy keepers. The FOUR
+# daily-work capabilities only - Manage Catalog is deliberately NOT here:
+# editing the product catalog / labels is an Admin task, and the roster's
+# "Create login" action (wms.storekeeper.action_create_login) already grants
+# exactly these four with Manage Catalog OFF. Keeping the backfill in sync
+# with that means an upgrade never silently re-widens a keeper's power.
+# Adding a new daily-work sub-group later: append its xmlid here.
 _CAPABILITY_XMLIDS = [
     "wms_location.group_wms_can_scan_receive",
     "wms_location.group_wms_can_scan_issue",
     "wms_location.group_wms_can_file_damage",
     "wms_location.group_wms_can_submit_audit",
-    "wms_location.group_wms_can_manage_catalog",
 ]
 
 
@@ -43,11 +47,13 @@ class ResUsers(models.Model):
 
     @api.model
     def _wms_backfill_capabilities(self):
-        """Grant every legacy Store Keeper all five capabilities.
+        """Grant every legacy Store Keeper the four daily-work capabilities
+        (Scan Receive / Scan Issue / File Damage / Submit Audit).
 
-        Called automatically by security/wms_security.xml on each
-        module upgrade. Returns the number of users touched (for
-        logging).
+        Manage Catalog is intentionally excluded (see _CAPABILITY_XMLIDS) so
+        an upgrade never re-grants catalog/label editing to keepers. Called
+        automatically by security/wms_security.xml on each module upgrade.
+        Returns the number of users touched (for logging).
         """
         base = self.env.ref("wms_location.group_wms_user", raise_if_not_found=False)
         manager = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)

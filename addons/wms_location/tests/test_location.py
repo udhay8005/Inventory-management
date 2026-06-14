@@ -564,3 +564,79 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(missing, 0)
         self.assertEqual(len(plan), 1)
         self.assertEqual(plan[0][0].product_id.id, tool_new.id, "Tools must not cross batches")
+
+
+@tagged("post_install", "-at_install", "wms")
+class TestCapabilityBackfill(TransactionCase):
+    """3C: the upgrade backfill grants legacy keepers the four daily-work
+    capabilities, but must NOT re-grant Manage Catalog (an Admin task) - so an
+    upgrade never silently re-widens a keeper's power."""
+
+    def test_backfill_grants_four_caps_not_manage_catalog(self):
+        keeper = self.env["res.users"].create(
+            {
+                "name": "BF Keeper",
+                "login": "bf_keeper",
+                "group_ids": [(6, 0, [self.env.ref("wms_location.group_wms_user").id])],
+            }
+        )
+        self.env["res.users"]._wms_backfill_capabilities()
+        keeper.invalidate_recordset()
+        granted = set(keeper.all_group_ids.ids)
+        for cap in (
+            "group_wms_can_scan_receive",
+            "group_wms_can_scan_issue",
+            "group_wms_can_file_damage",
+            "group_wms_can_submit_audit",
+        ):
+            self.assertIn(
+                self.env.ref("wms_location.%s" % cap).id,
+                granted,
+                "backfill must grant %s" % cap,
+            )
+        self.assertNotIn(
+            self.env.ref("wms_location.group_wms_can_manage_catalog").id,
+            granted,
+            "backfill must NOT re-grant Manage Catalog to a keeper",
+        )
+
+
+@tagged("post_install", "-at_install", "wms")
+class TestFloorZoneBarcodeCollision(TransactionCase):
+    """2.5: two parent areas whose names compress to the same 4-char prefix
+    must not mint colliding floor-zone barcodes - that would hit the global
+    stock.location barcode-unique constraint and roll back the whole batch with
+    a cryptic error."""
+
+    def _generate_one_zone(self, parent_name):
+        wh = self.env["stock.warehouse"].search([], limit=1)
+        parent = self.env["stock.location"].create(
+            {
+                "name": parent_name,
+                "usage": "view",
+                "location_id": wh.view_location_id.id,
+                "company_id": wh.company_id.id,
+            }
+        )
+        wiz = self.env["wms.floor.zone.generator"].create(
+            {
+                "warehouse_id": wh.id,
+                "parent_location_id": parent.id,
+                "zone_prefix": "F",
+                "count": 1,
+                "start_number": 1,
+            }
+        )
+        wiz.action_generate()
+        return self.env["stock.location"].search(
+            [("location_id", "=", parent.id), ("wms_location_type", "=", "floor")]
+        )
+
+    def test_similar_parent_names_do_not_collide(self):
+        z1 = self._generate_one_zone("Pharmacy Building")  # -> "PHAR"
+        z2 = self._generate_one_zone("Pharma Store")  # also -> "PHAR"
+        self.assertTrue(z1 and z2, "both floor zones must be created without a crash")
+        self.assertTrue(z1.barcode and z2.barcode)
+        self.assertNotEqual(
+            z1.barcode, z2.barcode, "floor-zone barcodes must not collide across parents"
+        )

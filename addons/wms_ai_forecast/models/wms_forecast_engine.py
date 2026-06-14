@@ -40,12 +40,17 @@ class WmsForecastEngine(models.AbstractModel):
         pids = products.ids
         if not pids:
             return {"on_hand": on_hand, "on_order": on_order, "orderpoints": orderpoints}
-        for product, qty in self.env["stock.quant"]._read_group(
-            [("product_id", "in", pids), ("location_id.usage", "=", "internal")],
-            groupby=["product_id"],
-            aggregates=["quantity:sum"],
-        ):
-            on_hand[product.id] = qty or 0.0
+        # On-hand counts only warehouse STORAGE (lot-stock + children), NOT the
+        # "Trust internal use" sink — same universe as _on_hand / the value
+        # report. Counting the consumed-goods sink here would suppress reorders.
+        storage = self._storage_location_ids()
+        if storage:
+            for product, qty in self.env["stock.quant"]._read_group(
+                [("product_id", "in", pids), ("location_id", "child_of", storage)],
+                groupby=["product_id"],
+                aggregates=["quantity:sum"],
+            ):
+                on_hand[product.id] = qty or 0.0
         for product, ordered, received in self.env["purchase.order.line"]._read_group(
             [("product_id", "in", pids), ("state", "in", ("purchase", "done"))],
             groupby=["product_id"],
@@ -89,19 +94,39 @@ class WmsForecastEngine(models.AbstractModel):
                 _logger.warning("forecast train failed for %s: %s", product.display_name, exc)
 
     def _gather_outflow(self, product):
-        """Return list of (datetime, qty) — daily outflow events."""
+        """Return list of (datetime, qty) — daily consumption events.
+
+        For this trust, consumption == Scan Issue: the SAME signal the
+        Consumption-Value report keys off (the immutable ``wms_is_scan_issue``
+        flag on the picking — see ``wms_value_reports.py``). The previous
+        query counted only moves whose DESTINATION usage was
+        ``customer``/``production``; but a Scan Issue routes stock into the
+        *internal* "Trust internal use" sink, so that filter observed ZERO
+        outflow for the only consumption path the shelter actually uses. The
+        result was daily_avg=0 -> velocity 'dead' -> reorder_qty=0 for every
+        product, silencing both the AI buying recommendations and the daily
+        low-stock alert. We now count done Scan-Issue move-lines, excluding
+        issues that were later Undone (``wms_reversed_by_id``) since those net
+        to zero consumption — exactly the rule the value report uses.
+        """
+        # The ORM auto-flushes before its OWN queries, but NOT before a raw
+        # cr.execute. Flush the two models this query reads so an issue created
+        # earlier in the same transaction (a test, or action_retrain right
+        # after a Scan Issue) is visible. No-op in the nightly cron, where the
+        # data is already committed and nothing on these models is pending.
+        self.env["stock.move.line"].flush_model()
+        self.env["stock.picking"].flush_model()
         self.env.cr.execute(
             """
-            SELECT date_trunc('day', sm.date) AS d,
-                   COALESCE(SUM(sm.product_uom_qty), 0)
-              FROM stock_move sm
-              JOIN stock_location lsrc ON lsrc.id = sm.location_id
-              JOIN stock_location ldst ON ldst.id = sm.location_dest_id
-             WHERE sm.product_id = %s
-               AND sm.state = 'done'
-               AND lsrc.usage = 'internal'
-               AND ldst.usage IN ('customer', 'production')
-               AND sm.date >= now() - INTERVAL '2 years'
+            SELECT date_trunc('day', sml.date) AS d,
+                   COALESCE(SUM(sml.quantity), 0)
+              FROM stock_move_line sml
+              JOIN stock_picking sp ON sp.id = sml.picking_id
+             WHERE sml.product_id = %s
+               AND sml.state = 'done'
+               AND sp.wms_is_scan_issue = TRUE
+               AND sp.wms_reversed_by_id IS NULL
+               AND sml.date >= now() - INTERVAL '2 years'
              GROUP BY d
              ORDER BY d
             """,
@@ -109,11 +134,27 @@ class WmsForecastEngine(models.AbstractModel):
         )
         return [(row[0], float(row[1])) for row in self.env.cr.fetchall()]
 
+    def _storage_location_ids(self):
+        """Warehouse STORAGE locations — each warehouse's lot-stock location
+        and all its children (zones / racks / compartments / slots / floor) —
+        as the on-hand universe.
+
+        Deliberately EXCLUDES the top-level internal "Trust internal use"
+        sink: it is ``usage='internal'`` but holds already-CONSUMED goods, so
+        counting it as on-hand would understate reorder need (the engine would
+        think issued stock is still available). Mirrors the Stock-Value
+        report's ``lot_stock_id`` child_of guard (``wms_value_reports.py``).
+        """
+        return self.env["stock.warehouse"].search([]).lot_stock_id.ids
+
     def _on_hand(self, product):
+        storage = self._storage_location_ids()
+        if not storage:
+            return 0.0
         quants = self.env["stock.quant"].search(
             [
                 ("product_id", "=", product.id),
-                ("location_id.usage", "=", "internal"),
+                ("location_id", "child_of", storage),
             ]
         )
         return sum(q.quantity for q in quants)

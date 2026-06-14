@@ -74,14 +74,6 @@ class WmsFloorZoneGenerator(models.TransientModel):
         for n in range(self.start_number, self.start_number + self.count):
             code = f"{prefix}-{n:02d}"
 
-            # Build a unique-ish barcode under the parent — include parent
-            # complete_name in compressed form so two warehouses with their
-            # own F-01 don't collide on the same scanner.
-            parent_prefix = "".join(c for c in self.parent_location_id.name if c.isalnum())[
-                :4
-            ].upper()
-            barcode = f"{parent_prefix}-{code}" if parent_prefix else code
-
             existing = Location.search(
                 [
                     ("location_id", "=", self.parent_location_id.id),
@@ -91,6 +83,31 @@ class WmsFloorZoneGenerator(models.TransientModel):
             )
             if existing:
                 continue  # idempotent re-runs
+
+            # Build a unique barcode under the parent. The first-4-alnum prefix
+            # of the parent name is human-friendly but NOT unique: two parents
+            # like "Pharmacy Building" / "Pharma Store" both compress to "PHAR"
+            # and would mint the same barcode, hitting stock.location's global
+            # barcode-unique constraint and rolling back the whole batch with a
+            # cryptic error. So if the friendly barcode already belongs to
+            # another location, fall back to one keyed on the parent id (always
+            # unique); if even that clashes, fail with a clear message.
+            parent_prefix = "".join(c for c in self.parent_location_id.name if c.isalnum())[
+                :4
+            ].upper()
+            barcode = f"{parent_prefix}-{code}" if parent_prefix else code
+            clash = Location.search([("barcode", "=", barcode)], limit=1)
+            if clash and clash.location_id.id != self.parent_location_id.id:
+                pid = self.parent_location_id.id
+                barcode = f"{parent_prefix}{pid}-{code}" if parent_prefix else f"{pid}-{code}"
+                clash2 = Location.search([("barcode", "=", barcode)], limit=1)
+                if clash2:
+                    raise UserError(
+                        "Cannot generate floor zone %s: the barcode %s already "
+                        "belongs to %s. Rename the parent location or choose a "
+                        "different zone prefix, then try again."
+                        % (code, barcode, clash2.complete_name or clash2.display_name)
+                    )
 
             loc = Location.create(
                 {

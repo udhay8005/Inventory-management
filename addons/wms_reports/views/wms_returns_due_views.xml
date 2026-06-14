@@ -81,7 +81,7 @@
                   name="Returns due / overdue"
                   parent="wms_reports.menu_wms_reports_root"
                   action="action_wms_returns_due"
-                  groups="wms_location.group_wms_manager"
+                  groups="wms_location.group_wms_user"
                   sequence="35"/>
 
     </data>

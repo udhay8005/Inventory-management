@@ -28,14 +28,15 @@ class WmsScanIssue(models.TransientModel):
     )
     destination_id = fields.Many2one(
         "stock.location",
+        string="Used by / area",
         required=True,
         domain=[("usage", "in", ("customer", "production", "internal"))],
         default=lambda s: s._default_destination_id(),
         help="Where the issued stock goes. Defaults to the trust's "
         "'Trust internal use' location since the trust uses inventory "
-        "internally rather than selling it. Admin can pick any other "
-        "internal location (Cow Shed, Pooja Room, etc.) on the day "
-        "without changing the default.",
+        "internally rather than selling it. Most issues leave this as-is; "
+        "change it only to charge a specific area (Cow Shed, Pooja Room, "
+        "etc.) on the day, without changing the default.",
     )
 
     @api.model
@@ -79,20 +80,31 @@ class WmsScanIssue(models.TransientModel):
     )
     ordered_by = fields.Char(
         string="Ordered by",
-        required=True,
-        help="Name of the person who authorised this issue "
-        "(the Manager / cow-care lead / project owner).",
+        help="Optional — name of the person who authorised this issue "
+        "(the Manager / cow-care lead / project owner). Leave blank if it's "
+        "the same as the keeper or not tracked for this issue.",
     )
     storekeeper_id = fields.Many2one(
         "wms.storekeeper",
         string="Store Keeper on duty",
         required=True,
         domain=[("active", "=", True)],
-        help="The actual human running the desk right now. Pick from the "
-        "roster the Admin maintains under Configuration → Store Keepers. "
-        "If the name you want isn't here, ask the Admin to add it before "
-        "validating.",
+        default=lambda s: s._default_storekeeper_id(),
+        help="The actual human running the desk right now. Defaults to the "
+        "roster entry linked to your login. Pick from the roster the Admin "
+        "maintains under Configuration → Store Keepers. If the name you want "
+        "isn't here, ask the Admin to add it before validating.",
     )
+
+    @api.model
+    def _default_storekeeper_id(self):
+        """Pre-select the roster entry linked to the logged-in user so the
+        keeper doesn't re-pick themselves on every issue. Empty when the user
+        isn't on the roster (e.g. the shared desk login) - then the keeper
+        picks who is at the desk, exactly as before."""
+        return self.env["wms.storekeeper"].search(
+            [("user_id", "=", self.env.uid), ("active", "=", True)], limit=1
+        )
 
     # Mandatory free-text reason for taking the stock. The taken_by /
     # ordered_by fields capture WHO; this captures WHY. The trust uses
@@ -209,24 +221,49 @@ class WmsScanIssue(models.TransientModel):
 
     @api.depends("plan_line_ids.product_id")
     def _compute_photo_required(self):
-        # A product is "measured" (issued by weight / volume / length, e.g.
-        # Litre / kg / Metre) when its UoM is NOT the Units UoM. Counted
-        # Units items stay photo-free.
+        # Arm the photo gate for "measured, not counted" products — those
+        # issued by weight / volume / length (kg, Litre, Metre) rather than
+        # by the whole piece.
         #
         # Why not category_id != Units category? Odoo 19 CE dropped UoM
         # categories — ``uom.product_uom_categ_unit`` resolves to None — so
         # the old category test was always falsy and the photo gate was
-        # INERT (no measured product ever required a photo). Comparing the
-        # UoM record directly against ``uom.product_uom_unit`` restores the
-        # gate: a Litre / kg / Metre product requires a photo again, while a
-        # Units product does not.
-        units_uom = self.env.ref("uom.product_uom_unit", raise_if_not_found=False)
+        # INERT (no measured product ever required a photo). UoMs are now
+        # organised as ``relative_uom_id`` parent chains, so we classify by
+        # walking each UoM to its chain root (see ``_uom_is_measured``):
+        # anything rooted in the Units UoM — Units itself AND bundles of it
+        # (Pack of 6, Dozens, or a custom child) — is COUNTED and stays
+        # photo-free; everything else (Volume / Weight / Length / ... chains)
+        # is MEASURED and requires a photo.
         for wiz in self:
-            wiz.photo_required = (
-                any(ln.product_id.uom_id != units_uom for ln in wiz.plan_line_ids if ln.product_id)
-                if units_uom
-                else False
+            wiz.photo_required = any(
+                self._uom_is_measured(ln.product_id.uom_id)
+                for ln in wiz.plan_line_ids
+                if ln.product_id
             )
+
+    def _uom_is_measured(self, uom):
+        """True when ``uom`` measures by weight / volume / length (kg, Litre,
+        Metre, ...) rather than counting whole pieces.
+
+        Counted UoMs are the Units chain — the ``uom.product_uom_unit`` root
+        plus any bundle of it (Pack of 6, Dozens, or a custom child) —
+        identified by walking ``relative_uom_id`` to the root and checking it
+        is the Units UoM. Returns False (gate disarmed, fail-open) when the
+        Units UoM can't be resolved or the product carries no UoM, matching
+        the prior "never block on an un-classifiable product" behaviour.
+        """
+        units_root = self.env.ref("uom.product_uom_unit", raise_if_not_found=False)
+        if not units_root or not uom:
+            return False
+        node = uom
+        seen = set()  # cycle guard — the FK can't loop, but stay defensive
+        while node and node.id not in seen:
+            if node == units_root:
+                return False  # rooted in Units -> counted, no photo
+            seen.add(node.id)
+            node = node.relative_uom_id
+        return True  # rooted outside the Units chain -> measured, photo required
 
     def on_barcode_scanned(self, barcode):
         """Auto-plan FIFO deduction when a scan is detected.
@@ -267,9 +304,14 @@ class WmsScanIssue(models.TransientModel):
             by_product.setdefault(line.product_id, 0.0)
             by_product[line.product_id] += line.take
 
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
-        now = datetime.now()
+        # UTC, to align with the UTC `create_date` column. datetime.now() is
+        # server-LOCAL; on the IST (UTC+5:30) deploy it shrank the rolling
+        # "24h" window by the offset (~18.5h), so issues 18.5-24h ago dropped
+        # out and the cap failed OPEN. fields.Datetime.now() keeps the cutoff
+        # in UTC so the window is a true 24h regardless of server timezone.
+        now = fields.Datetime.now()
         cutoff = now - timedelta(hours=24)
 
         for product, requested_qty in by_product.items():
@@ -444,9 +486,12 @@ class WmsScanIssue(models.TransientModel):
         except (TypeError, ValueError):
             global_default = 0
 
-        from datetime import datetime, timedelta
+        from datetime import timedelta
 
-        now = datetime.now()
+        # UTC — same reason as _enforce_overuse_caps: server-local time vs the
+        # UTC create_date column shrank the min-life window by the TZ offset,
+        # letting a too-soon re-request slip the approval gate near the edge.
+        now = fields.Datetime.now()
         # One product per planned product (FEFO can split across siblings).
         products = self.plan_line_ids.mapped("product_id")
         for product in products:
@@ -556,15 +601,6 @@ class WmsScanIssue(models.TransientModel):
             parent_location_id=self.warehouse_id.lot_stock_id.id,
         )
 
-        # Was FEFO used? Decide the same way find_oldest_quants_for_product
-        # does, so the feedback text matches the planner's behaviour.
-        from odoo.addons.wms_location.models.product_template import EXPIRY_SENSITIVE_KINDS
-
-        kind = product.product_tmpl_id.wms_product_kind
-        used_fefo = (kind in EXPIRY_SENSITIVE_KINDS) or bool(
-            product.product_tmpl_id.wms_expiry_date
-        )
-
         # Clear previous plan
         self.plan_line_ids.unlink()
         for quant, take in plan:
@@ -585,11 +621,11 @@ class WmsScanIssue(models.TransientModel):
             )
         self.short_qty = missing
 
-        # Build a clear feedback line. When the warehouse can't satisfy
-        # the requested quantity, surface a STOCK OUT message so the
-        # operator knows immediately to wait for a return or alert the
+        # Build a clear feedback line. The planner removes OLDEST stock first
+        # (FIFO — see stock.quant._wms_sorted_for_removal). When the warehouse
+        # can't satisfy the requested quantity, surface a STOCK OUT message so
+        # the operator knows immediately to wait for a return or alert the
         # Admin — not a cryptic "short by 5".
-        rule = "FEFO" if used_fefo else "FIFO"
         if not plan and missing:
             self.feedback = (
                 "⚠ STOCK OUT — no %s available anywhere in the warehouse. "
@@ -598,30 +634,12 @@ class WmsScanIssue(models.TransientModel):
             ) % product.display_name
         elif missing:
             self.feedback = (
-                "⚠ Only %s × %s on hand (%s plan) — that's %s less than "
-                "you asked for. Reduce the quantity, or wait for the rest "
+                "⚠ Only %s × %s on hand (oldest stock first) — that's %s less "
+                "than you asked for. Reduce the quantity, or wait for the rest "
                 "to come back via Scan Return."
-            ) % (qty - missing, product.display_name, rule, missing)
-        elif used_fefo:
-            # Make it obvious when the planner has crossed batches so the
-            # keeper doesn't think the wizard misread their scan.
-            picked_names = {ln.product_id.display_name for ln in self.plan_line_ids}
-            if len(picked_names) > 1 or (picked_names and product.display_name not in picked_names):
-                self.feedback = (
-                    "FEFO: planned %s × %s — taking from earlier-expiring "
-                    "batch(es): %s. Pick from the slot(s) below."
-                ) % (qty, product.display_name, ", ".join(sorted(picked_names)))
-            else:
-                self.feedback = (
-                    "FEFO: planned %s × %s across %d slot(s) — earliest expiry first."
-                    % (
-                        qty,
-                        product.display_name,
-                        len(plan),
-                    )
-                )
+            ) % (qty - missing, product.display_name, missing)
         else:
-            self.feedback = "Planned %s × %s across %d slot(s)." % (
+            self.feedback = "Planned %s × %s across %d slot(s) — oldest stock first." % (
                 qty,
                 product.display_name,
                 len(plan),
@@ -954,10 +972,9 @@ class WmsScanIssue(models.TransientModel):
 
 class WmsScanIssuePlan(models.TransientModel):
     _name = "wms.scan.issue.plan"
-    _description = "Planned deduction line (FIFO / FEFO)"
-    # No fixed _order: when the wizard does FEFO, lines are written in
-    # expiry order; for plain FIFO they're written in in_date order.
-    # Sorting in SQL by either column would re-shuffle the wrong cases.
+    _description = "Planned deduction line (FIFO — oldest arrival first)"
+    # No fixed _order: lines are written in the planner's removal order
+    # (in_date / FIFO). Sorting in SQL would re-shuffle that intended order.
 
     wizard_id = fields.Many2one("wms.scan.issue", ondelete="cascade", required=True)
     product_id = fields.Many2one("product.product", required=True)
@@ -966,9 +983,9 @@ class WmsScanIssuePlan(models.TransientModel):
     in_date = fields.Datetime()
     expiry_date = fields.Date(
         string="Expires",
-        help="Batch expiry date for medicine / feed / fluid / pooja. "
-        "When set, the planner sorts by this date (FEFO) — earliest "
-        "expiry first — instead of arrival date.",
+        help="The product's expiry date, shown for awareness. Removal order "
+        "is oldest-arrival-first (FIFO); watch the Expiry-Alert report for "
+        "items nearing expiry.",
     )
     available = fields.Float()
     take = fields.Float()

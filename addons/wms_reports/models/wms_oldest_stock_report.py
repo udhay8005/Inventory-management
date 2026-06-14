@@ -36,11 +36,15 @@ class WmsOldestStockReport(models.Model):
                      EXTRACT(DAY FROM (now() - COALESCE(q.in_date, q.create_date)))::int AS age_days
                 FROM stock_quant q
                 JOIN stock_location s ON s.id = q.location_id
-                                     AND s.wms_location_type = 'slot'
-                JOIN stock_location c ON c.id = s.location_id
-                                     AND c.wms_location_type = 'compartment'
-                JOIN stock_location r ON r.id = c.location_id
-                                     AND r.wms_location_type = 'rack'
+                                     AND s.wms_location_type IN ('slot', 'floor')
+                -- LEFT so floor-zone stock (which has no compartment/rack
+                -- chain) still shows in the FIFO-age report. The old INNER
+                -- joins silently dropped every floor quant, contradicting the
+                -- planner / scan / sibling reports that treat slot+floor alike.
+                LEFT JOIN stock_location c ON c.id = s.location_id
+                                          AND c.wms_location_type = 'compartment'
+                LEFT JOIN stock_location r ON r.id = c.location_id
+                                          AND r.wms_location_type = 'rack'
                WHERE q.quantity > 0
         """
         )

@@ -109,6 +109,59 @@ class TestScanConcurrency(TransactionCase):
             wiz2.action_validate()
         self.assertFalse(wiz2.picking_id)
 
+    def test_daily_cap_window_counts_20h_excludes_25h(self):
+        """The rolling 24h cap window is measured against each move-line's UTC
+        create_date. An issue ~20h ago must still count toward the cap; one
+        ~25h ago must have aged out.
+
+        Regression guard for the timezone fix: the cutoff is computed with
+        fields.Datetime.now() (UTC) to match the UTC create_date column. The
+        old code used datetime.now() (server-LOCAL), which on the IST deploy
+        shrank the window by the offset (~18.5h) and let the cap fail OPEN.
+        Both the cutoff and the back-dated create_date here are anchored in
+        UTC, so the assertion is deterministic on any server timezone.
+
+        Back-dating create_date via SQL is the only way to age a row inside a
+        single non-committing test transaction.
+        """
+        # Plenty of stock so the SECOND issue can only be blocked by the cap,
+        # never by an empty slot.
+        self.env["stock.quant"]._update_available_quantity(self.product, self.stock, 100.0)
+        self.product.product_tmpl_id.wms_daily_cap = 15.0
+
+        self._new_issue(10.0).action_validate()  # 10 issued "now"
+        prior = self.env["stock.move.line"].search(
+            [("product_id", "=", self.product.id), ("state", "=", "done")]
+        )
+        self.assertTrue(prior, "the first issue should have left done move-lines")
+
+        # Age the prior issue to ~20h ago -> still inside the 24h window.
+        self.env.cr.execute(
+            "UPDATE stock_move_line "
+            "SET create_date = (now() AT TIME ZONE 'UTC') - INTERVAL '20 hours' "
+            "WHERE id IN %s",
+            (tuple(prior.ids),),
+        )
+        prior.invalidate_recordset(["create_date"])
+        # 10 (in-window) + 8 = 18 > 15 -> must block.
+        with self.assertRaises(UserError):
+            self._new_issue(8.0).action_validate()
+
+        # Age it to ~25h ago -> out of the window, no longer counts.
+        self.env.cr.execute(
+            "UPDATE stock_move_line "
+            "SET create_date = (now() AT TIME ZONE 'UTC') - INTERVAL '25 hours' "
+            "WHERE id IN %s",
+            (tuple(prior.ids),),
+        )
+        prior.invalidate_recordset(["create_date"])
+        # 0 in-window + 8 = 8 < 15 -> allowed again.
+        wiz = self._new_issue(8.0)
+        wiz.action_validate()
+        self.assertTrue(
+            wiz.picking_id, "an issue must be allowed once the prior one ages out of the 24h window"
+        )
+
     # ---- Happy path exercises the product-row FOR UPDATE lock ----------
     def test_issue_happy_path_with_product_lock(self):
         start = self._on_hand()

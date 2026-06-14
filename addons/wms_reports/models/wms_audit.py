@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from markupsafe import Markup
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 
 class WmsAudit(models.Model):
@@ -140,13 +140,26 @@ class WmsAudit(models.Model):
             )
 
     def _populate_from_quants(self):
-        """Snapshot every internal quant > 0 into audit lines so the
-        keeper has the expected value to compare against."""
+        """Snapshot warehouse STORAGE quants > 0 into audit lines so the
+        keeper has the expected value to compare against.
+
+        Counts only the warehouse storage tree (each warehouse's lot-stock and
+        its children: zones / racks / compartments / slots / floor). Excludes
+        the top-level "Trust internal use" sink (already-consumed goods) and
+        the Damage / Repair internal locations - none of which are shelf stock
+        the keeper physically walks - using the same lot_stock_id child_of
+        guard the Stock-Value report applies. Without this, every batch ever
+        issued to the sink showed up as an expected line to find, generating
+        bogus negative variances and bloating the count list over months.
+        """
         self.ensure_one()
         Quant = self.env["stock.quant"].sudo()
+        storage = self.env["stock.warehouse"].search([]).lot_stock_id.ids
+        if not storage:
+            return
         quants = Quant.search(
             [
-                ("location_id.usage", "=", "internal"),
+                ("location_id", "child_of", storage),
                 ("quantity", ">", 0),
             ]
         )
@@ -180,8 +193,12 @@ class WmsAudit(models.Model):
                         "form)."
                     )
                 )
-            rec.state = "submitted"
-            rec.submitted_at = fields.Datetime.now()
+            # Single write so the keeper's in_progress -> submitted transition
+            # clears the finalised-state write guard in one shot (the guard
+            # reads the pre-write state, still in_progress here). A second
+            # attribute assignment would be evaluated against the now-submitted
+            # state and blocked.
+            rec.write({"state": "submitted", "submitted_at": fields.Datetime.now()})
 
             # Headline numbers
             n = len(rec.line_ids)
@@ -235,10 +252,75 @@ class WmsAudit(models.Model):
             if mgr:
                 rec.message_subscribe(partner_ids=mgr.all_user_ids.partner_id.ids)
 
+    # States in which a keeper may no longer edit the audit - only a Manager
+    # can change a finalised audit (re-open / correct). This is the record-level
+    # second line of defense behind the in-method manager re-check on accept.
+    _KEEPER_LOCKED_STATES = ("submitted", "reviewed", "rejected")
+    # Chatter / activity system fields a keeper may still write on a locked
+    # audit (action_submit posts a digest right after the transition); only
+    # BUSINESS fields are frozen once submitted.
+    _MAIL_SYSTEM_FIELDS = frozenset(
+        {
+            "message_ids",
+            "message_follower_ids",
+            "message_partner_ids",
+            "message_main_attachment_id",
+            "message_is_follower",
+            "activity_ids",
+        }
+    )
+
+    def write(self, vals):
+        """Freeze a finalised audit against keeper edits (record-level guard).
+
+        A keeper holds write on wms.audit (they author/submit audits), so once
+        an audit is submitted/reviewed/rejected they could otherwise still edit
+        it over RPC - e.g. change counts after submitting but before the manager
+        reviews. Managers (and superuser internal paths) bypass; chatter writes
+        are allowed so action_submit's own digest post still works.
+        """
+        if (
+            not self.env.su
+            and set(vals) - self._MAIL_SYSTEM_FIELDS
+            and not self.env.user.has_group("wms_location.group_wms_manager")
+        ):
+            for rec in self:
+                if rec.state in self._KEEPER_LOCKED_STATES:
+                    raise AccessError(
+                        _(
+                            "Audit %s is already %s — only a Manager can change "
+                            "it. Ask a Manager to re-open it if a correction is "
+                            "needed."
+                        )
+                        % (rec.name, rec.state)
+                    )
+        return super().write(vals)
+
+    def _ensure_manager(self):
+        """Defense-in-depth manager re-check for the audit decision methods.
+
+        The Accept / Reject buttons are hidden in the form for non-managers,
+        but the keeper holds write+create on ``wms.audit`` (they author and
+        submit audits), so a forced RPC / dev-mode call could otherwise reach
+        these methods and let a keeper self-accept their own count — silently
+        overwriting live stock and defeating the manager-review gate the audit
+        workflow exists to enforce. Mirrors
+        ``wms.issue.approval._ensure_can_decide``.
+        """
+        self.ensure_one()
+        if not self.env.user.has_group("wms_location.group_wms_manager"):
+            raise AccessError(
+                _(
+                    "Only a WMS Manager can accept or reject an inventory "
+                    "audit. Submit it and ask a Manager to review."
+                )
+            )
+
     def action_review_accept(self):
         """Admin accepts the audit. Variances become stock adjustments
         so the books match the physical count."""
         for rec in self:
+            rec._ensure_manager()
             # FPAT Critical: serialise concurrent Accepts on the same audit so
             # a double-click / parallel-RPC cannot apply the variance delta
             # twice. Lock the audit row FIRST and re-check state from the DB
@@ -312,6 +394,7 @@ class WmsAudit(models.Model):
 
     def action_reject(self):
         for rec in self:
+            rec._ensure_manager()
             if rec.state != "submitted":
                 raise UserError(_("Only a submitted audit can be rejected."))
             rec.state = "rejected"
@@ -380,6 +463,28 @@ class WmsAuditLine(models.Model):
     def _compute_variance(self):
         for line in self:
             line.variance = line.counted_qty - line.expected_qty
+
+    def write(self, vals):
+        """Freeze line counts once the parent audit is finalised.
+
+        Keepers enter counts while the audit is draft / in_progress; once it is
+        submitted (or reviewed / rejected) the counts ARE the record of what was
+        physically found, so a keeper must not be able to revise them over RPC
+        after handing the audit in. Managers (and superuser internal paths)
+        bypass; to change a submitted count, a manager rejects the audit and the
+        keeper re-walks it. Mirrors the absolute unlink() guard below.
+        """
+        if not self.env.su and not self.env.user.has_group("wms_location.group_wms_manager"):
+            for line in self:
+                if line.audit_id.state in ("submitted", "reviewed", "rejected"):
+                    raise AccessError(
+                        _(
+                            "This audit has been submitted — its counts are "
+                            "locked. Ask a Manager to reject it so the count can "
+                            "be re-walked."
+                        )
+                    )
+        return super().write(vals)
 
     def unlink(self):
         """Block deletion of audit lines once the parent audit has left

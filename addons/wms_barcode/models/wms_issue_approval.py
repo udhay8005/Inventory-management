@@ -270,6 +270,7 @@ class WmsIssueApproval(models.Model):
             escape(self.keeper_reason or "(none)"),
         )
         self.message_post(body=body, subject="Issue approved", message_type="notification")
+        self._clear_manager_activity()
         return self.action_open_picking()
 
     def action_reject(self):
@@ -298,6 +299,7 @@ class WmsIssueApproval(models.Model):
             escape(self.keeper_reason or "(none)"),
         )
         self.message_post(body=body, subject="Issue rejected", message_type="notification")
+        self._clear_manager_activity()
         return True
 
     def _held_reason_label(self):
@@ -343,6 +345,43 @@ class WmsIssueApproval(models.Model):
             "kreason": escape(self.keeper_reason or "(none)"),
         }
         notify_wms_managers(self.env, body, "WMS — Issue awaiting approval: %s" % (self.name or ""))
+        self._schedule_manager_activity()
+
+    def _schedule_manager_activity(self):
+        """Raise a To-Do activity on every WMS Manager so the systray activity
+        badge (red counter) flags held issues — far more reliable than a Discuss
+        ping that's easy to miss on a shared screen. Cleared on approve/reject.
+
+        Best-effort and idempotent: never breaks the keeper's action, and won't
+        double-schedule on a re-notify (skips a manager who already has one)."""
+        self.ensure_one()
+        try:
+            rec = self.sudo()
+            group = rec.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
+            todo = rec.env.ref("mail.mail_activity_data_todo", raise_if_not_found=False)
+            if not group or not todo:
+                return
+            already = rec.activity_ids.filtered(lambda a: a.activity_type_id == todo).mapped(
+                "user_id"
+            )
+            summary = "Approve / reject held issue %s" % (self.name or "")
+            for user in group.all_user_ids:
+                if user in already:
+                    continue
+                rec.activity_schedule(
+                    "mail.mail_activity_data_todo", summary=summary, user_id=user.id
+                )
+        except Exception as exc:  # noqa: BLE001 — best-effort, never block the keeper
+            _logger.warning("wms approval: could not schedule manager activity: %s", exc)
+
+    def _clear_manager_activity(self):
+        """Drop the held-issue To-Do activities once the request is decided so
+        the managers' systray badge clears. Best-effort."""
+        self.ensure_one()
+        try:
+            self.sudo().activity_unlink(["mail.mail_activity_data_todo"])
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("wms approval: could not clear manager activity: %s", exc)
 
     def action_open_picking(self):
         """Open the delivery this approval created. Public so the form's

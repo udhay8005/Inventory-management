@@ -78,9 +78,9 @@ a manager approves.
 
 ---
 
-## 3. What the manager does — WMS → Approvals
+## 3. What the manager does — WMS → Operations → Approvals
 
-Pending requests live under **WMS → Approvals** (manager-only; a keeper does
+Pending requests live under **WMS → Operations → Approvals** (manager-only; a keeper does
 not see the menu). The list defaults to the **Pending** ones. Open a request to
 see the snapshot — what, how much, which department / purpose / animal, the
 value, why it was held, and the keeper's typed reason — plus the keeper's photo

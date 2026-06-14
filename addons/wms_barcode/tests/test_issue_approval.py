@@ -86,6 +86,19 @@ class TestIssueApproval(TransactionCase):
         )
         cls.env["stock.quant"]._update_available_quantity(cls.pricey, cls.stock, 50.0)
 
+        # A COUNTED bundle UoM (a pack of 6 pieces) — self-seeded rather than
+        # ref'd from demo data (uom.product_uom_pack_6 is demo-only, absent
+        # under CI's --without-demo, which silently skipped this branch). It
+        # chains up to the Units root via relative_uom_id, so the photo gate
+        # must treat it as counted, NOT measured.
+        cls.bundle_uom = cls.env["uom.uom"].create(
+            {
+                "name": "APR Pack of 6",
+                "relative_uom_id": cls.env.ref("uom.product_uom_unit").id,
+                "relative_factor": 6.0,
+            }
+        )
+
     # ---- helpers ---------------------------------------------------------
     def _make_wizard(self, **extra):
         vals = {
@@ -422,9 +435,88 @@ class TestIssueApproval(TransactionCase):
         with self.assertRaises(UserError):
             wiz.action_validate()
 
+    def test_kg_product_requires_photo(self):
+        kg = self.env.ref("uom.product_uom_kgm", raise_if_not_found=False)
+        if not kg:
+            self.skipTest("kg UoM not present")
+        feed = self.env["product.product"].create(
+            {
+                "name": "APR Bran",
+                "type": "consu",
+                "is_storable": True,
+                "barcode": "APRBRAN1",
+                "wms_product_kind": "feed",
+                "uom_id": kg.id,
+                "standard_price": 1.0,
+            }
+        )
+        self.env["stock.quant"]._update_available_quantity(feed, self.stock, 100.0)
+        wiz = self._make_wizard(last_scan="APRBRAN1", requested_qty=2.0)
+        wiz.action_plan()
+        self.assertTrue(wiz.photo_required, "a measured (kg) product must require a photo")
+        with self.assertRaises(UserError):
+            wiz.action_validate()
+
     def test_units_product_does_not_require_photo(self):
         wiz = self._make_wizard(last_scan="APRCHEAP1", requested_qty=2.0)
         wiz.action_plan()
         self.assertFalse(wiz.photo_required, "a counted (Units) product must NOT require a photo")
         wiz.action_validate()
         self.assertTrue(wiz.picking_id)
+
+    def test_counted_bundle_does_not_require_photo(self):
+        """A product measured in a *bundle* of Units (Pack of 6 / Dozens) is
+        still COUNTED, not measured — its UoM chains up to the Units root via
+        ``relative_uom_id`` — so the photo gate must stay OFF. Guards against a
+        naive ``uom_id != Units`` check that would treat every non-Units UoM,
+        including counted bundles, as measured."""
+        pack6 = self.bundle_uom
+        # Sanity: this UoM really is a child of the Units chain, not a root.
+        self.assertEqual(
+            pack6.relative_uom_id,
+            self.env.ref("uom.product_uom_unit"),
+            "Pack of 6 should chain up to the Units UoM",
+        )
+        bundled = self.env["product.product"].create(
+            {
+                "name": "APR Egg 6-pack",
+                "type": "consu",
+                "is_storable": True,
+                "barcode": "APRPACK6",
+                "wms_product_kind": "consumable",
+                "uom_id": pack6.id,
+                "standard_price": 1.0,
+            }
+        )
+        self.env["stock.quant"]._update_available_quantity(bundled, self.stock, 100.0)
+        wiz = self._make_wizard(last_scan="APRPACK6", requested_qty=2.0)
+        wiz.action_plan()
+        self.assertFalse(
+            wiz.photo_required,
+            "a counted bundle (Pack of 6) must NOT require a photo — it counts pieces",
+        )
+        wiz.action_validate()
+        self.assertTrue(wiz.picking_id)
+
+    def test_held_issue_schedules_and_clears_manager_activity(self):
+        """A held issue raises a To-Do activity on the manager(s) so the systray
+        badge flags it (more reliable than a Discuss ping on a shared screen),
+        and the activity clears once the request is decided."""
+        wiz = self._make_wizard(
+            last_scan="APRPRICEY1", requested_qty=2.0, keeper_reason="vet authorised"
+        )
+        wiz.action_plan()
+        result = wiz.action_validate()
+        approval = self.env["wms.issue.approval"].browse(result["res_id"])
+        todo = self.env.ref("mail.mail_activity_data_todo")
+        acts = approval.activity_ids.filtered(lambda a: a.activity_type_id == todo)
+        self.assertTrue(acts, "holding an issue must raise a manager To-Do activity")
+        self.assertIn(
+            self.manager, acts.mapped("user_id"), "the WMS manager must receive the activity"
+        )
+        approval.with_user(self.manager).action_approve()
+        approval.invalidate_recordset()
+        self.assertFalse(
+            approval.activity_ids.filtered(lambda a: a.activity_type_id == todo),
+            "deciding the request must clear the held-issue activity badge",
+        )

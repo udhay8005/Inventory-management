@@ -169,3 +169,20 @@ class TestReturnsDue(TransactionCase):
         self._stamp(picking, -3)
         self._mark_reversed(picking)
         self.assertFalse(self._report_rows(picking))
+
+    def test_report_readable_by_keeper(self):
+        """3E: the read-only Returns-due report is keeper-visible - the people
+        who do the returns can self-serve the due/overdue list."""
+        keeper_user = self.env["res.users"].create(
+            {
+                "name": "RET ACL Keeper",
+                "login": "ret_acl_keeper",
+                "group_ids": [(6, 0, [self.env.ref("wms_location.group_wms_user").id])],
+            }
+        )
+        self.assertTrue(
+            self.env["ir.model.access"]
+            .with_user(keeper_user)
+            .check("wms.returns.due.report", "read", raise_exception=False),
+            "a keeper (group_wms_user) must be able to read the Returns-due report",
+        )

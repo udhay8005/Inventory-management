@@ -3,6 +3,7 @@ group, not just baseline group_wms_user (audit lines are the count-of-record).
 Previously the capability was menu-gated only, so a non-capability keeper could
 create audits over RPC."""
 
+from odoo.exceptions import AccessError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -28,3 +29,98 @@ class TestAuditCapabilityAcl(TransactionCase):
             self.assertFalse(self._can_create(base, model), "%s baseline blocked" % model)
             self.assertTrue(self._can_create(cap, model), "%s capability allowed" % model)
             self.assertTrue(self._can_create(mgr, model), "%s manager allowed" % model)
+
+
+@tagged("post_install", "-at_install", "wms", "wms_acl")
+class TestAuditDecisionManagerOnly(TransactionCase):
+    """Accept/Reject must re-check the manager group in-method. A keeper holds
+    write+create on wms.audit (they author and submit audits) and the buttons
+    are only hidden in the view, so without the re-check a keeper could
+    self-accept their own physical count over RPC and silently overwrite live
+    stock — defeating the manager-review gate the audit workflow enforces."""
+
+    def _user(self, xmlid, login):
+        return self.env["res.users"].create(
+            {"name": login, "login": login, "group_ids": [(6, 0, [self.env.ref(xmlid).id])]}
+        )
+
+    def test_keeper_cannot_accept_or_reject_audit(self):
+        keeper = self._user("wms_location.group_wms_can_submit_audit", "aud_keeper")
+        mgr = self._user("wms_location.group_wms_manager", "aud_mgr_dec")
+        slot = self.env.ref("stock.stock_location_stock")
+        product = self.env["product.product"].create(
+            {"name": "Aud Decide Probe", "is_storable": True}
+        )
+        self.env["stock.quant"]._update_available_quantity(product, slot, 10.0)
+        audit = self.env["wms.audit"].create({"state": "submitted"})
+        self.env["wms.audit.line"].create(
+            {
+                "audit_id": audit.id,
+                "location_id": slot.id,
+                "product_id": product.id,
+                "expected_qty": 10.0,
+                "counted_qty": 7.0,  # a variance the keeper would love to self-apply
+            }
+        )
+        with self.assertRaises(AccessError):
+            audit.with_user(keeper).action_review_accept()
+        with self.assertRaises(AccessError):
+            audit.with_user(keeper).action_reject()
+        # The refused calls must not have advanced the workflow or touched stock.
+        self.assertEqual(audit.state, "submitted")
+        self.assertEqual(
+            self.env["stock.quant"]._get_available_quantity(product, slot),
+            10.0,
+            "a refused accept must not apply the variance",
+        )
+        # A real manager can still decide.
+        audit.with_user(mgr).action_review_accept()
+        self.assertEqual(audit.state, "reviewed")
+
+
+@tagged("post_install", "-at_install", "wms", "wms_acl")
+class TestAuditFinalisedWriteGuard(TransactionCase):
+    """Chunk 4 (§3B): a finalised audit is frozen against keeper edits, while
+    the keeper's normal draft -> in_progress -> submit flow still works and a
+    manager can still decide."""
+
+    def _user(self, xmlid, login):
+        return self.env["res.users"].create(
+            {"name": login, "login": login, "group_ids": [(6, 0, [self.env.ref(xmlid).id])]}
+        )
+
+    def setUp(self):
+        super().setUp()
+        self.keeper = self._user("wms_location.group_wms_can_submit_audit", "wg_keeper")
+        self.mgr = self._user("wms_location.group_wms_manager", "wg_mgr")
+        self.roster = self.env["wms.storekeeper"].search([], limit=1) or self.env[
+            "wms.storekeeper"
+        ].create({"name": "WG Roster"})
+        wh = self.env["stock.warehouse"].search([], limit=1)
+        self.slot = wh.lot_stock_id
+        self.product = self.env["product.product"].create(
+            {"name": "WG Audit Probe", "is_storable": True}
+        )
+        self.env["stock.quant"]._update_available_quantity(self.product, self.slot, 6.0)
+
+    def test_keeper_flow_works_then_locks_after_submit(self):
+        # Keeper drives the full happy path - none of it may be over-blocked.
+        audit = (
+            self.env["wms.audit"].with_user(self.keeper).create({"storekeeper_id": self.roster.id})
+        )
+        audit.action_start()  # draft -> in_progress + populate lines (allowed)
+        line = audit.line_ids.filtered(lambda ln: ln.product_id == self.product)
+        self.assertTrue(line, "audit should have a line for the seeded product")
+        line.counted_qty = 4.0  # keeper enters a count while in_progress (allowed)
+        audit.action_submit()  # in_progress -> submitted (single write, allowed)
+        self.assertEqual(audit.state, "submitted")
+
+        # Now the keeper is frozen out of both the audit and its lines.
+        with self.assertRaises(AccessError):
+            audit.write({"storekeeper_id": self.roster.id})
+        with self.assertRaises(AccessError):
+            line.write({"counted_qty": 99.0})
+
+        # A manager can still finalise it.
+        audit.with_user(self.mgr).action_review_accept()
+        self.assertEqual(audit.state, "reviewed")

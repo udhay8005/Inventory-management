@@ -64,6 +64,15 @@ class TestFpatFx1AuditAcceptIdempotent(TransactionCase):
         keeper = self.env["wms.storekeeper"].search([], limit=1) or self.env[
             "wms.storekeeper"
         ].create({"name": "FX1 Audit Keeper"})
+        # Accept/Reject now require a WMS Manager (in-method has_group re-check);
+        # the default test user is the superuser, which is NOT in that group.
+        mgr = self.env["res.users"].create(
+            {
+                "name": "FX1 Audit Mgr",
+                "login": "fx1_audit_mgr",
+                "group_ids": [(6, 0, [self.env.ref("wms_location.group_wms_manager").id])],
+            }
+        )
         audit = self.env["wms.audit"].create({"storekeeper_id": keeper.id})
         audit.action_start()  # populates lines from current quants + moves to in_progress
         line = audit.line_ids.filtered(lambda ln: ln.product_id == product)
@@ -71,7 +80,7 @@ class TestFpatFx1AuditAcceptIdempotent(TransactionCase):
         line.counted_qty = 10.0  # variance = -2
         audit.action_submit()
         self.assertEqual(audit.state, "submitted")
-        audit.action_review_accept()
+        audit.with_user(mgr).action_review_accept()
         self.assertEqual(audit.state, "reviewed")
         with self.assertRaises(UserError):
-            audit.action_review_accept()
+            audit.with_user(mgr).action_review_accept()
