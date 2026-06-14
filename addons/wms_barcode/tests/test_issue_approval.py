@@ -497,3 +497,26 @@ class TestIssueApproval(TransactionCase):
         )
         wiz.action_validate()
         self.assertTrue(wiz.picking_id)
+
+    def test_held_issue_schedules_and_clears_manager_activity(self):
+        """A held issue raises a To-Do activity on the manager(s) so the systray
+        badge flags it (more reliable than a Discuss ping on a shared screen),
+        and the activity clears once the request is decided."""
+        wiz = self._make_wizard(
+            last_scan="APRPRICEY1", requested_qty=2.0, keeper_reason="vet authorised"
+        )
+        wiz.action_plan()
+        result = wiz.action_validate()
+        approval = self.env["wms.issue.approval"].browse(result["res_id"])
+        todo = self.env.ref("mail.mail_activity_data_todo")
+        acts = approval.activity_ids.filtered(lambda a: a.activity_type_id == todo)
+        self.assertTrue(acts, "holding an issue must raise a manager To-Do activity")
+        self.assertIn(
+            self.manager, acts.mapped("user_id"), "the WMS manager must receive the activity"
+        )
+        approval.with_user(self.manager).action_approve()
+        approval.invalidate_recordset()
+        self.assertFalse(
+            approval.activity_ids.filtered(lambda a: a.activity_type_id == todo),
+            "deciding the request must clear the held-issue activity badge",
+        )
