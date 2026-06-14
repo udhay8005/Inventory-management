@@ -15,9 +15,9 @@
 
   <!-- info banner -->
   <rect x="32" y="62" width="348" height="48" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
-  <text x="44" y="80" font-size="11" fill="#1e3a8a">Set qty, then scan. FIFO pulls the oldest</text>
-  <text x="44" y="94" font-size="11" fill="#1e3a8a">stock first; FEFO for items with an</text>
-  <text x="44" y="104" font-size="11" fill="#1e3a8a">expiry.</text>
+  <text x="44" y="80" font-size="11" fill="#1e3a8a">Set qty, then scan. FIFO pulls the</text>
+  <text x="44" y="94" font-size="11" fill="#1e3a8a">oldest stock first, for every item.</text>
+  <text x="44" y="104" font-size="11" fill="#1e3a8a">Use Expiry Alerts to rotate perishables.</text>
 
   <!-- field 1: Requested Qty + field 2: Last Scan (side by side row) -->
   <rect x="32" y="122" width="106" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>

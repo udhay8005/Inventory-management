@@ -86,17 +86,18 @@ KIND_DEFAULT_MIN_LIFE_DAYS = {
     "safety": 7,
 }
 
-# Kinds whose stock must be issued by **expiry date** (FEFO), not by
-# arrival date (FIFO). Trust workflow: veterinary medicine must leave
-# the shelf with the soonest-expiring batch first, cattle feed rots,
-# food-grade fluid (ghee, edible oil) goes rancid, pooja items spoil.
+# Kinds whose stock is EXPIRY-SENSITIVE: veterinary medicine, cattle feed,
+# food-grade fluid (ghee, edible oil) and pooja items all spoil. Setting an
+# expiry date on these drives the Expiry-Alert report, which flags the
+# soonest-to-expire stock so it gets rotated out before it spoils.
 #
-# When a product belongs to one of these kinds (or has an explicit
-# wms_expiry_date set), ``find_oldest_quants_for_product`` switches to
-# FEFO: it orders quants by (expiry asc, in_date asc) and expands the
-# search to sibling batches with the same name + kind — that way a
-# brand-new MED-00042 batch with a 2027 expiry never gets picked while
-# an older MED-00037 batch expiring next month is still on the shelf.
+# NOTE: removal at Scan Issue is FIFO (oldest-arrived first) for these kinds
+# too. The shared removal engine (stock.quant._wms_sorted_for_removal) keeps an
+# expiry-sort branch, but the Scan Issue planner pools within ONE product
+# template — and wms_expiry_date is a single template-level field — so that
+# branch collapses to plain FIFO. There is NO per-batch FEFO at the picker (the
+# trust does not run lot tracking); perishable rotation is the Expiry-Alert
+# report's job, not the picker's.
 EXPIRY_SENSITIVE_KINDS = frozenset({"medicine", "feed", "fluid", "pooja"})
 
 # The dropdown shown on the product form. Order matches the dict

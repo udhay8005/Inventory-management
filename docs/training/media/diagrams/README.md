@@ -30,5 +30,5 @@ between steps, and a fixed colour key.
 | `backup-restore-health.svg` | Daily backup (4:30 PM), restore drill, and the /wms/health status (HEALTHY / DEGRADED / CRITICAL). |
 | `cloud-backup.svg` | Cloud backup tier: local backup → GPG AES256 → SHA-256 → Google Drive (Inventory_Backups tree) → verified → retention tiers, plus the restore path back. |
 | `forecast-reorder.svg` | AI demand forecast feeding reorder suggestions and low-stock / dead-stock reports. |
-| `fifo-vs-fefo.svg` | Conceptual illustration only, comparing FIFO (oldest-first) vs FEFO (soonest-expiry) as general warehouse ideas. In this system the Scan Issue picker always uses FIFO (oldest-first) for every product, including perishables; expiry is managed separately via the Expiry Alerts report (WMS -> Reports -> Expiry alerts), not at issue. Diagram pending a redraw. |
+| `fifo-vs-fefo.svg` | Two panels: **At issue: FIFO** (oldest in-date leaves first, every product, no expiry-sort at the picker) and **Manage expiry: the Expiry Alerts report** (flags soonest-to-expire red/amber/blue so you rotate perishables). Reflects how this system actually behaves — issuing is FIFO; expiry is managed via the report, not at issue. |
 | `roles-permissions.svg` | Who can do what: Manager, Store Keeper, and Read-only viewer. |
