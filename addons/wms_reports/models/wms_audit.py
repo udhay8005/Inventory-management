@@ -486,7 +486,7 @@ class WmsAuditLine(models.Model):
                     )
         return super().write(vals)
 
-    def unlink(self):
+    def unlink(self):  # pylint: disable=no-raise-unlink
         """Block deletion of audit lines once the parent audit has left
         'draft'. Lines are auto-populated at creation and ARE the count of
         record; deleting them after submission would let a Store Keeper
