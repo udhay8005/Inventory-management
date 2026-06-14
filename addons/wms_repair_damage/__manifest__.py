@@ -1,6 +1,6 @@
 {
     "name": "WMS — Damage, Repair, Return",
-    "version": "19.0.1.14.0",
+    "version": "19.0.1.15.0",
     "summary": "Damage / repair / return workflows that generate auditable stock moves.",
     "depends": ["wms_location", "wms_barcode", "stock", "mail"],
     "author": "WMS",

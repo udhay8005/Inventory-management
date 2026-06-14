@@ -1,6 +1,6 @@
 from markupsafe import Markup
 from odoo import api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 from .reservation import validate_reserved_or_abort
 
@@ -368,6 +368,47 @@ class WmsDamage(models.Model):
                         free,
                     )
                 )
+
+    # Once a damage is confirmed the loss is recorded and the stock has already
+    # moved to the Damage location, so a keeper must not be able to revise it
+    # over RPC. Managers (and superuser internal paths) bypass. The keeper IS
+    # still allowed to link a repair order (action_create_repair_order writes
+    # only repair_order_id) and chatter still works, so those fields are
+    # whitelisted; every other business field is frozen once confirmed.
+    _KEEPER_LOCKED_STATES = ("confirmed",)
+    _KEEPER_ALLOWED_ON_LOCKED = frozenset(
+        {
+            "repair_order_id",
+            "message_ids",
+            "message_follower_ids",
+            "message_partner_ids",
+            "message_main_attachment_id",
+            "message_is_follower",
+            "activity_ids",
+        }
+    )
+
+    def write(self, vals):
+        """Freeze a confirmed damage against keeper edits (record-level guard).
+
+        Defence-in-depth behind the readonly-on-confirmed form: the value is a
+        frozen snapshot and the stock has moved, so editing a confirmed damage
+        must not silently rewrite the loss record. Managers bypass; linking a
+        repair order and chatter are still allowed (whitelisted).
+        """
+        if (
+            not self.env.su
+            and set(vals) - self._KEEPER_ALLOWED_ON_LOCKED
+            and not self.env.user.has_group("wms_location.group_wms_manager")
+        ):
+            for rec in self:
+                if rec.state in self._KEEPER_LOCKED_STATES:
+                    raise AccessError(
+                        "Damage %s is already confirmed — only a Manager can "
+                        "change it. The loss is recorded and the stock has "
+                        "moved; create a repair order if the item needs fixing." % (rec.name or "?")
+                    )
+        return super().write(vals)
 
     def action_confirm(self):
         for rec in self:
