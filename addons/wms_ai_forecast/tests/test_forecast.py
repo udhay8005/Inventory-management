@@ -61,3 +61,68 @@ class TestForecastEngine(TransactionCase):
             self.env["wms.forecast.history"]._fields["trained_at"].index,
             "wms.forecast.history.trained_at must be indexed",
         )
+
+    def test_outflow_counts_scan_issue_to_internal_sink(self):
+        """A Scan Issue routes stock into the INTERNAL 'Trust internal use'
+        sink, not to a customer/production location — that is the trust's only
+        consumption path. The engine must observe it as outflow, and on-hand
+        must EXCLUDE the sink (already-consumed goods).
+
+        Regression for the old query, which filtered destination usage IN
+        ('customer','production') and therefore saw zero outflow for every
+        product, leaving the AI buying recommendation and low-stock alert
+        permanently silent.
+        """
+        wh = self.env["stock.warehouse"].search([], limit=1)
+        stock = wh.lot_stock_id
+        keeper = self.env["wms.storekeeper"].search([], limit=1) or self.env[
+            "wms.storekeeper"
+        ].create({"name": "FC Keeper"})
+        dept = self.env.ref("wms_location.dept_other")
+        # consumable kind -> Units UoM (counted) so the photo gate stays off and
+        # the issue validates inline; cheap so the high-value gate never trips.
+        product = self.env["product.product"].create(
+            {
+                "name": "FC Bran",
+                "type": "consu",
+                "is_storable": True,
+                "barcode": "FCBRAN1",
+                "wms_product_kind": "consumable",
+                "standard_price": 1.0,
+            }
+        )
+        self.env["stock.quant"]._update_available_quantity(product, stock, 100.0)
+
+        engine = self.env["wms.forecast.engine"]
+        self.assertFalse(engine._gather_outflow(product), "no issues yet -> no outflow")
+
+        wiz = self.env["wms.scan.issue"].create(
+            {
+                "warehouse_id": wh.id,
+                "requested_qty": 10.0,
+                "last_scan": "FCBRAN1",
+                "taken_by": "T",
+                "ordered_by": "O",
+                "usage_note": "forecast outflow test",
+                "storekeeper_id": keeper.id,
+                "department_id": dept.id,
+            }
+        )
+        wiz.action_plan()
+        wiz.action_validate()
+        self.assertTrue(wiz.picking_id and wiz.picking_id.state == "done")
+
+        outflow = engine._gather_outflow(product)
+        self.assertTrue(outflow, "a Scan Issue to the internal sink must register as outflow")
+        self.assertAlmostEqual(sum(qty for _d, qty in outflow), 10.0, places=3)
+
+        # On-hand = warehouse storage only (100 received - 10 issued = 90); the
+        # 10 sitting in the consumed-goods sink must NOT be counted as on-hand.
+        self.assertAlmostEqual(engine._on_hand(product), 90.0, places=3)
+
+        # The whole downstream chain now treats it as consumable, not 'dead'.
+        engine.run_all_forecasts()
+        fc = self.env["wms.forecast"].search([("product_id", "=", product.id)])
+        self.assertTrue(
+            fc.is_consumable, "a product with scan-issue history must be flagged consumable"
+        )
