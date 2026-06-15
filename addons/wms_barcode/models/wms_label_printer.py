@@ -92,6 +92,11 @@ class WmsLabelPrinter(models.Model):
         "inside the sticker.",
     )
     y_offset_mm = fields.Float(string="Shift down (mm)", default=1.5)
+    brand_line = fields.Char(
+        string="Brand line",
+        default="Mercy & Care For Cows Dakshin Vrindavan PCT",
+        help="Small heading printed on every label (the trust's name). Clear it " "to hide.",
+    )
     notes = fields.Text()
 
     # ---------------------------------------------------------------------
@@ -154,61 +159,140 @@ class WmsLabelPrinter(models.Model):
     # ---------------------------------------------------------------------
     # TSPL generation
     # ---------------------------------------------------------------------
-    def build_tspl(self, labels, copies=1):
-        """Build a TSPL job string for ``labels`` (list of dicts with optional
-        ``title``, ``subtitle`` and ``barcode``). One physical label per dict.
+    _CODE39_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%"
 
-        Layout for the 100x25 mm sticker: a title line + optional sub-line at the
-        top, then a Code128 barcode filling the lower half with its digits under
-        it. All positions derive from the configured media size, so a different
-        stock just re-flows. The x/y offset shifts the whole label to align it
-        inside the die-cut.
-        """
+    def _barcode_params(self, code, x_left, x_right):
+        """Pick symbology + module width + a centred x so the barcode fills the
+        right zone. Short, Code39-compatible codes use **Code 39** (more bars =
+        a fuller, normal-looking barcode); everything else uses the compact
+        **Code 128**. The encoded value is never altered, so scanning is
+        unaffected."""
+        avail = max(1, x_right - x_left)
+        c39 = set(self._CODE39_CHARS)
+        if code and len(code) <= 8 and code == code.upper() and all(ch in c39 for ch in code):
+            sym, modules, cap = "39", 13 * (len(code) + 2), 5
+        else:
+            sym, modules, cap = "128", 11 * (len(code) + 2) + 13, 4
+        narrow = max(_MIN_NARROW_DOTS, min(cap, int(0.80 * avail / max(modules, 1))))
+        bx = x_left + max(0, (avail - modules * narrow) // 2)
+        return sym, narrow, narrow * 2, bx
+
+    def _logo_bytes(self, x, y, box_w, box_h):
+        """Render the trust logo as a 1-bit TSPL BITMAP for the left zone.
+
+        Uses the admin-uploaded logo (``wms.label.config.logo``) if set, else
+        the packaged cow image. The image is dithered to black/white — dark
+        areas print, light areas stay blank — and centred in the box.
+        Best-effort: any failure just prints the label without the logo."""
+        import base64
+        import io
+        import os
+
+        raw = None
+        cfg = self.env["wms.label.config"].sudo().get_active()
+        if cfg and cfg.logo:
+            raw = base64.b64decode(cfg.logo)
+        else:
+            path = os.path.join(os.path.dirname(__file__), "..", "static", "img", "label_logo.png")
+            if os.path.exists(path):
+                with open(path, "rb") as fh:
+                    raw = fh.read()
+        if not raw or box_w < 8 or box_h < 8:
+            return b""
+        try:
+            from PIL import Image, ImageOps
+
+            img = Image.open(io.BytesIO(raw))
+            if img.mode in ("RGBA", "LA", "P"):
+                img = img.convert("RGBA")
+                flat = Image.new("RGBA", img.size, (255, 255, 255, 255))
+                flat.alpha_composite(img)
+                img = flat.convert("RGB")
+            grey = ImageOps.autocontrast(ImageOps.grayscale(img))
+            grey.thumbnail((int(box_w), int(box_h)))
+            one = grey.convert("1")  # 1 = white, 0 = black (PIL)
+            data = one.point(lambda p: 0 if p else 255).tobytes()  # dark -> printed
+            w, h = one.size
+            cx = x + max(0, (box_w - w) // 2)
+            cy = y + max(0, (box_h - h) // 2)
+            return ("BITMAP %d,%d,%d,%d,0," % (cx, cy, (w + 7) // 8, h)).encode("ascii") + data
+        except Exception:  # noqa: BLE001 - never let a logo break a print run
+            _logger.exception("label logo render failed; printing without it")
+            return b""
+
+    def build_tspl(self, labels, copies=1):
+        """Build a TSPL job (bytes) for ``labels`` — one physical label each.
+
+        Layout: a 1-inch logo zone on the left, a divider, then on the right the
+        brand line, the title (code + name), a sub-line of details, and a centred
+        barcode with its digits below. Positions are in millimetres so a
+        different stock re-flows; the profile's x/y offset nudges the whole label
+        into the die-cut. Returns bytes because the logo BITMAP is binary."""
         self.ensure_one()
         copies = max(1, int(copies or 1))
         w, h = self.label_width_mm, self.label_height_mm
-        mx = self._dots(2.5) + self._dots(self.x_offset_mm)
-        top = self._dots(self.y_offset_mm)
-        # Vertical layout (dots): title band, then barcode band + human-readable.
-        title_y = top + self._dots(1.5)
-        sub_y = top + self._dots(6.0)
-        has_sub = h >= 22  # only room for a sub-line on >= ~22 mm tall stock
-        bar_y = top + self._dots(9.0 if has_sub else 6.0)
-        bar_h = self._dots(min(11.0, h - 13.0)) if has_sub else self._dots(min(13.0, h - 8.0))
-        bar_h = max(bar_h, self._dots(8.0))  # scannable floor
-        narrow = max(_MIN_NARROW_DOTS, self._dots(0.33))
-        wide = narrow * 2
+        d = self._dots
+        xo, yo = d(self.x_offset_mm), d(self.y_offset_mm)
+        right_edge = d(w) - d(2.0)
+        logo_x, logo_y = xo + d(2.0), yo + d(1.5)
+        logo_bw, logo_bh = d(22.0), d(max(6.0, h - 3.0))
+        div_x = xo + d(25.4)  # end of the 1-inch logo zone
+        rx = div_x + d(2.5)
+        brand = _ascii(self.brand_line or "")
+        no_logo = self.env.context.get("wms_print_no_logo")
 
-        head = [
-            "SIZE %s mm,%s mm" % (_fmt(w), _fmt(h)),
-            "GAP %s mm,0 mm" % _fmt(self.gap_mm),
-            "DIRECTION 1",
-            "DENSITY %d" % int(self.density or 10),
-            "SPEED %d" % int(self.speed or 3),
-        ]
-        body = []
+        head = "\r\n".join(
+            [
+                "SIZE %s mm,%s mm" % (_fmt(w), _fmt(h)),
+                "GAP %s mm,0 mm" % _fmt(self.gap_mm),
+                "DIRECTION 1",
+                "DENSITY %d" % int(self.density or 10),
+                "SPEED %d" % int(self.speed or 3),
+            ]
+        ).encode("ascii")
+        logo_cmd = b"" if no_logo else self._logo_bytes(logo_x, logo_y, logo_bw, logo_bh)
+
+        blocks = []
         for lbl in labels:
             title = _ascii(lbl.get("title"))
             subtitle = _ascii(lbl.get("subtitle"))
-            barcode = _ascii(lbl.get("barcode"))
-            cmds = ["CLS"]
-            if title:
-                cmds.append('TEXT %d,%d,"4",0,1,1,"%s"' % (mx, title_y, title[:24]))
-            if subtitle and has_sub:
-                cmds.append('TEXT %d,%d,"2",0,1,1,"%s"' % (mx, sub_y, subtitle[:48]))
-            if barcode:
-                cmds.append(
-                    'BARCODE %d,%d,"128",%d,1,0,%d,%d,"%s"'
-                    % (mx, bar_y, bar_h, narrow, wide, barcode[:48])
-                )
-            elif not title:
-                # Nothing to print for this record — skip a blank feed.
+            code = _ascii(lbl.get("barcode"))
+            if not (title or code):
                 continue
-            cmds.append("PRINT 1,%d" % copies)
-            body.append("\r\n".join(cmds))
-        if not body:
+            parts = [b"CLS"]
+            parts.append(
+                logo_cmd
+                or ("BOX %d,%d,%d,%d,2" % (logo_x, logo_y, logo_bw, logo_bh)).encode("ascii")
+            )
+            parts.append(
+                ("BAR %d,%d,2,%d" % (div_x, yo + d(1.0), d(max(4.0, h - 2.0)))).encode("ascii")
+            )
+            if brand:
+                parts.append(
+                    ('TEXT %d,%d,"1",0,1,1,"%s"' % (rx, yo + d(0.8), brand[:52])).encode("ascii")
+                )
+            if title:
+                parts.append(
+                    ('TEXT %d,%d,"3",0,1,1,"%s"' % (rx, yo + d(3.0), title[:26])).encode("ascii")
+                )
+            if subtitle:
+                parts.append(
+                    ('TEXT %d,%d,"1",0,1,1,"%s"' % (rx, yo + d(7.5), subtitle[:48])).encode("ascii")
+                )
+            if code:
+                sym, narrow, wide, bx = self._barcode_params(code, rx, right_edge)
+                bar_h = max(d(8.0), d(min(11.0, h - 14.0)))
+                parts.append(
+                    (
+                        'BARCODE %d,%d,"%s",%d,1,0,%d,%d,"%s"'
+                        % (bx, yo + d(10.0), sym, bar_h, narrow, wide, code[:48])
+                    ).encode("ascii")
+                )
+            parts.append(("PRINT 1,%d" % copies).encode("ascii"))
+            blocks.append(b"\r\n".join(parts))
+        if not blocks:
             raise UserError(_("Nothing to print: the selected records have no barcode."))
-        return "\r\n".join(head + body) + "\r\n"
+        return head + b"\r\n" + b"\r\n".join(blocks) + b"\r\n"
 
     # ---------------------------------------------------------------------
     # sending
