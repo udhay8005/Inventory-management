@@ -8,6 +8,7 @@ from . import (
     test_cert_onboard_print,
     test_cert_role_actions,
     test_cert_security_matrix,
+    test_cycle_count,
     test_dashboard,
     test_find,
     test_fpat_fx1,
