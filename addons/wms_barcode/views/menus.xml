@@ -50,6 +50,33 @@
                   sequence="60"/>
 
         <!--
+            Products list inside the WMS app so Admins (and keepers) can find
+            every product without leaving for the Inventory app, and print its
+            label. product.product is the variant the label wizard binds to, so
+            Action -> Print labels (direct) appears here too.
+        -->
+        <record id="action_wms_products" model="ir.actions.act_window">
+            <field name="name">Products</field>
+            <field name="res_model">product.product</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No products yet.</p>
+                <p>
+                    Every product the trust stocks. Add them via
+                    <b>Configuration &#8594; Onboard Products</b>. To print barcode
+                    labels, tick rows then <b>Action &#8594; Print labels (direct)</b>.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_products"
+                  name="Products"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_products"
+                  groups="wms_location.group_wms_user"
+                  sequence="35"/>
+
+        <!--
             Onboard Products wizard — adds catalog rows + initial stock.
 
             Lives under Configuration (alongside Generate Zone / Create Rack)

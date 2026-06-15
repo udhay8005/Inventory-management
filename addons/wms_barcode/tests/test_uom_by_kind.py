@@ -8,9 +8,12 @@ Proves the create-time UoM seeding and the onboard-wizard onchange:
     whenever the product's UoM category is not "Units";
   * a product created WITH an explicit uom_id keeps it (the create
     override never clobbers a caller-supplied UoM);
-  * the onboard line onchange seeds Units for a Tool row, and a manual
-    Metre pick on a plumbing row survives the onchange (operator
-    override is never overwritten).
+  * the onboard line onchange sets Units for a Tool row and Litre for a
+    Fluid row, and re-picking the kind always re-drives the UoM (the kind
+    wins, so the operator settles the kind first, then adjusts the UoM);
+  * the onboard UoM dropdown is restricted to warehouse units (count /
+    weight / volume / length / area) — Time / Energy / imperial units are
+    excluded.
 
 The create override + KIND_DEFAULT_UOM live in wms_location; the
 onboard onchange lives in wms_barcode. Both are exercised here so the
@@ -169,24 +172,33 @@ class TestUomByKind(TransactionCase):
             "onboard onchange should seed Litre for a Fluid row",
         )
 
-    def test_onboard_operator_metre_pick_survives(self):
-        """An operator who manually set Metre on a plumbing row keeps it
-        even when the kind onchange fires — the onchange only fills a
-        blank UoM."""
+    def test_onboard_kind_change_drives_uom(self):
+        """Picking — or re-picking — the kind always drives the UoM, so the
+        unit follows the chosen kind (the operator's explicit request). For cut
+        pipe / cloth the operator re-picks Metre AFTER settling the kind."""
         Line = self.env["wms.product.onboard.line"]
-        line = Line.new(
-            {
-                "name": "OB Cut Pipe",
-                "wms_product_kind": "plumbing",
-                "uom_id": self.uom_meter.id,
-            }
-        )
+        line = Line.new({"name": "OB Reclass", "wms_product_kind": "fluid"})
+        line._onchange_wms_product_kind_uom()
+        self.assertEqual(line.uom_id, self.uom_litre, "Fluid -> Litre")
+        line.wms_product_kind = "feed"
         line._onchange_wms_product_kind_uom()
         self.assertEqual(
-            line.uom_id,
-            self.uom_meter,
-            "a manual Metre pick must survive the kind onchange",
+            line.uom_id, self.uom_kg, "re-picking the kind (Feed) re-drives the UoM to kg"
         )
+
+    def test_onboard_uom_dropdown_is_warehouse_only(self):
+        """The UoM dropdown is restricted to warehouse units; Time / Energy /
+        imperial units are excluded so operators are not shown Minutes / kWh.
+        Uses a real wizard line (not .new()) so the M2M holds real records."""
+        wiz = self.env["wms.product.onboard"].create(
+            {"line_ids": [(0, 0, {"name": "OB W", "wms_product_kind": "tool"})]}
+        )
+        allowed = wiz.line_ids.allowed_uom_ids
+        self.assertIn(self.uom_unit, allowed)
+        self.assertIn(self.uom_kg, allowed)
+        self.assertIn(self.uom_litre, allowed)
+        self.assertNotIn(self.env.ref("uom.product_uom_hour"), allowed)
+        self.assertNotIn(self.env.ref("uom.product_uom_kwh"), allowed)
 
     def test_onboard_flow_creates_product_with_metre(self):
         """Full onboard path: a plumbing row with Metre creates a product

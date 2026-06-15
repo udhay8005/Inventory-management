@@ -70,5 +70,16 @@
             <field name="binding_model_id" eval="False"/>
         </record>
 
+        <!--
+            Also unbind Odoo's built-in "Location Barcode" PDF report from the
+            location Print menu. It is browser-scaled (the small / off-size PDF
+            operators kept hitting); direct printing (Action -> Print labels
+            (direct)) is the one path. The report stays defined, just not in the
+            Print dropdown.
+        -->
+        <record id="stock.action_report_location_barcode" model="ir.actions.report">
+            <field name="binding_model_id" eval="False"/>
+        </record>
+
     </data>
 </odoo>
