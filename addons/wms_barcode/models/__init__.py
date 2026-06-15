@@ -4,5 +4,6 @@ from . import (
     wms_barcode_alias,
     wms_issue_approval,
     wms_label_config,
+    wms_label_printer,
     wms_storekeeper,
 )

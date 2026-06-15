@@ -15,3 +15,6 @@ access_wms_issue_approval_keeper,wms.issue.approval keeper,model_wms_issue_appro
 access_wms_issue_approval_mgr,wms.issue.approval mgr,model_wms_issue_approval,wms_location.group_wms_manager,1,1,1,0
 access_wms_issue_approval_line_keeper,wms.issue.approval.line keeper,model_wms_issue_approval_line,wms_location.group_wms_can_scan_issue,1,0,1,0
 access_wms_issue_approval_line_mgr,wms.issue.approval.line mgr,model_wms_issue_approval_line,wms_location.group_wms_manager,1,1,1,0
+access_wms_label_printer_user,wms.label.printer user,model_wms_label_printer,wms_location.group_wms_user,1,0,0,0
+access_wms_label_printer_mgr,wms.label.printer mgr,model_wms_label_printer,wms_location.group_wms_manager,1,1,1,1
+access_wms_label_print_wizard_user,wms.label.print.wizard user,model_wms_label_print_wizard,wms_location.group_wms_user,1,1,1,1

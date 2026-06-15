@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Seed the trust's thermal printer so direct printing works out of the box.
+        noupdate="1": the admin can rename / re-point / retune it (Configuration →
+        Label Printers) without an upgrade resetting their changes. On a different
+        machine, edit "Windows printer name" to match (use Detect printers).
+    -->
+    <data noupdate="1">
+        <record id="printer_tsc_te244" model="wms.label.printer">
+            <field name="name">Thermal label printer</field>
+            <field name="connection">spooler</field>
+            <field name="system_name">TSC TE244</field>
+            <field name="is_default">True</field>
+            <field name="label_width_mm">100</field>
+            <field name="label_height_mm">25</field>
+            <field name="gap_mm">3.0</field>
+            <field name="dpi">203</field>
+            <field name="density">10</field>
+            <field name="speed">3</field>
+            <field name="x_offset_mm">2.0</field>
+            <field name="y_offset_mm">1.5</field>
+        </record>
+    </data>
+</odoo>
