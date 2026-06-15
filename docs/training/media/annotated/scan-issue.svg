@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 620" font-family="Segoe UI, Arial, sans-serif" role="img" aria-label="Annotated screen-map of the Scan Issue (FIFO) wizard">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 620" font-family="Segoe UI, Arial, sans-serif" role="img" aria-label="Annotated screen-map of the Scan Issue wizard">
   <!-- ============================================================= -->
-  <!-- Annotated screen-map: Scan Issue (FIFO) wizard                -->
+  <!-- Annotated screen-map: Scan Issue wizard                -->
   <!-- Stylized vector recreation (NOT a screenshot) with numbered   -->
   <!-- callouts. Numbers follow the order a user fills the form.     -->
   <!-- ============================================================= -->
@@ -9,7 +9,7 @@
   <rect x="16" y="16" width="380" height="588" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
   <!-- title bar -->
   <path d="M16 28 a12 12 0 0 1 12 -12 h356 a12 12 0 0 1 12 12 v22 h-380 z" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
-  <text x="36" y="40" font-size="15" font-weight="700" fill="#334155">Scan Issue (FIFO)</text>
+  <text x="36" y="40" font-size="15" font-weight="700" fill="#334155">Scan Issue</text>
   <circle cx="372" cy="33" r="6" fill="#e2e8f0"/>
   <path d="M369 30 l6 6 M375 30 l-6 6" stroke="#94a3b8" stroke-width="1.5"/>
 
@@ -19,14 +19,14 @@
   <text x="44" y="94" font-size="11" fill="#1e3a8a">oldest stock first, for every item.</text>
   <text x="44" y="104" font-size="11" fill="#1e3a8a">Use Expiry Alerts to rotate perishables.</text>
 
-  <!-- field 1: Requested Qty + field 2: Last Scan (side by side row) -->
+  <!-- field 1: Quantity + field 2: Scan here (side by side row) -->
   <rect x="32" y="122" width="106" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
-  <text x="44" y="140" font-size="13" font-weight="600" fill="#334155">Requested Qty</text>
+  <text x="44" y="140" font-size="13" font-weight="600" fill="#334155">Quantity</text>
   <rect x="44" y="148" width="82" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
   <text x="50" y="158" font-size="9" fill="#475569">1.00</text>
 
   <rect x="146" y="122" width="234" height="46" rx="7" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1.5"/>
-  <text x="158" y="140" font-size="13" font-weight="600" fill="#334155">Last Scan</text>
+  <text x="158" y="140" font-size="13" font-weight="600" fill="#334155">Scan here</text>
   <rect x="158" y="148" width="210" height="13" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-width="1"/>
   <text x="164" y="158" font-size="9" fill="#94a3b8">Scan product / carton…</text>
 
@@ -35,10 +35,10 @@
   <rect x="44" y="188" width="324" height="18" rx="3" fill="#eef2f7" stroke="#e2e8f0" stroke-width="1"/>
   <text x="49" y="200" font-size="8.5" font-weight="600" fill="#475569">Product</text>
   <text x="108" y="200" font-size="8.5" font-weight="600" fill="#475569">Slot</text>
-  <text x="156" y="200" font-size="8.5" font-weight="600" fill="#475569">In Date</text>
+  <text x="156" y="200" font-size="8.5" font-weight="600" fill="#475569">Arrived</text>
   <text x="214" y="200" font-size="8.5" font-weight="600" fill="#475569">Expires</text>
-  <text x="276" y="200" font-size="8.5" font-weight="600" fill="#475569">Avail.</text>
-  <text x="330" y="200" font-size="8.5" font-weight="600" fill="#475569">Take</text>
+  <text x="276" y="200" font-size="8.5" font-weight="600" fill="#475569">On shelf</text>
+  <text x="330" y="200" font-size="8.5" font-weight="600" fill="#475569">Will take</text>
   <line x1="102" y1="188" x2="102" y2="274" stroke="#e2e8f0" stroke-width="1"/>
   <line x1="150" y1="188" x2="150" y2="274" stroke="#e2e8f0" stroke-width="1"/>
   <line x1="208" y1="188" x2="208" y2="274" stroke="#e2e8f0" stroke-width="1"/>
@@ -90,7 +90,7 @@
   <!-- footer buttons -->
   <line x1="32" y1="466" x2="380" y2="466" stroke="#e2e8f0" stroke-width="1"/>
   <rect x="32" y="478" width="90" height="30" rx="6" fill="#e2e8f0"/>
-  <text x="77" y="497" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">Plan FIFO</text>
+  <text x="77" y="497" text-anchor="middle" font-size="11" font-weight="600" fill="#334155">Check stock</text>
   <rect x="132" y="478" width="90" height="30" rx="6" fill="#f59e0b"/>
   <text x="177" y="497" text-anchor="middle" font-size="11" font-weight="700" fill="#ffffff">Validate</text>
   <rect x="232" y="478" width="74" height="30" rx="6" fill="#e2e8f0"/>
@@ -105,19 +105,19 @@
   <!-- numbered callouts (right column)                              -->
   <!-- ============================================================= -->
 
-  <!-- 1 -> Requested Qty -->
+  <!-- 1 -> Quantity -->
   <line x1="85" y1="122" x2="430" y2="100" stroke="#f59e0b" stroke-width="1.5"/>
   <circle cx="420" cy="96" r="13" fill="#f59e0b"/>
   <text x="420" y="101" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">1</text>
-  <text x="440" y="93" font-size="12" font-weight="600" fill="#7c2d12">Requested Qty</text>
+  <text x="440" y="93" font-size="12" font-weight="600" fill="#7c2d12">Quantity</text>
   <text x="440" y="107" font-size="12" fill="#7c2d12">Type how many you</text>
   <text x="440" y="121" font-size="12" fill="#7c2d12">need FIRST.</text>
 
-  <!-- 2 -> Last Scan -->
+  <!-- 2 -> Scan here -->
   <line x1="380" y1="148" x2="408" y2="148" stroke="#f59e0b" stroke-width="1.5"/>
   <circle cx="420" cy="148" r="13" fill="#f59e0b"/>
   <text x="420" y="153" text-anchor="middle" font-size="14" font-weight="700" fill="#ffffff">2</text>
-  <text x="440" y="145" font-size="12" font-weight="600" fill="#7c2d12">Last Scan</text>
+  <text x="440" y="145" font-size="12" font-weight="600" fill="#7c2d12">Scan here</text>
   <text x="440" y="159" font-size="12" fill="#7c2d12">Scan the product; the</text>
   <text x="440" y="173" font-size="12" fill="#7c2d12">system plans the pick.</text>
 

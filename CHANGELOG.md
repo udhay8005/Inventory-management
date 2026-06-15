@@ -5,6 +5,75 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.24.0.0] — 2026-06-15 — UX overhaul: wayfinding, plain language, grouped menus
+
+A value-gated, low-risk usability pass so a non-technical keeper or manager can
+read every screen at a glance and find any action fast. Every change is a label,
+help text, empty-state, decoration, default, or menu sequence/grouping — no model
+logic, security, or action rewiring. Each is independently view-smoke-testable and
+revertible.
+
+Manifest bumps: `wms_location` **19.0.3.17.0 → 19.0.3.18.0**, `wms_barcode`
+**19.0.1.34.0 → 19.0.1.35.0**, `wms_repair_damage` **19.0.1.15.0 → 19.0.1.16.0**,
+`wms_reports` **19.0.4.7.0 → 19.0.4.8.0**, `wms_training`
+**19.0.1.11.0 → 19.0.1.12.0**. The view/menu changes apply on `-u`; the only
+migration is a `wms_training` pre-migrate that refreshes the five noupdate help
+articles whose menu-path wording changed (see below).
+
+**Navigation & menus**
+- **Daily verbs first.** The scan trio now sits at the very top of Operations —
+  Scan Receipt, Scan Issue, Scan Return (seq 5/6/7) — above the browse screens
+  (Slots, Floor Zones pushed to 30/32). The app opens on what keepers actually do.
+- **Reports grouped into three plain-language folders** instead of a flat wall of
+  20+ entries: **Find stock** (Warehouse Map, Where is product X?, Slot occupancy,
+  Oldest stock, Tool/Spare fleet, Movement history), **Alerts & to-dos** (Low
+  stock, Expiry, Returns due, Cycle Count Due, Dead stock, Reorder summary), and
+  **Value & money** (Stock Value, Consumption Value, Product Lifecycle —
+  manager-only). Store Keeper Activity is its own manager folder with the
+  weekly/monthly/yearly summaries as real nested children (the old `-- ` dash-prefix
+  indentation hack is gone).
+- **Maintenance moved out of Reports.** Self-Diagnostics and Backup & DR Audit now
+  live under Configuration where they belong.
+- De-jargoned: **"Scan Issue (FIFO)" → "Scan Issue"** (menu, form, action,
+  capability help); the issue button **"Plan FIFO" → "Check stock"**. Casing
+  aligned so breadcrumbs match the tapped menu (Repair orders).
+
+**First impressions & empty-states**
+- The landing **Slots** screen is now wayfinding: "This is your storage map…" with
+  pointers to Scan Receipt / Scan Issue and Help & Training.
+- Friendly empty-states added across the previously blank screens — Racks,
+  Compartments, Zones, Floor Zones, Damages, Repair orders, Issue Approvals, and
+  the report screens (Reorder summary, Oldest stock, Slot occupancy, Where is
+  product X?, Movement history).
+
+**Daily wizards clarified**
+- **Scan Issue:** plain field labels (Quantity, Scan here), plain plan columns
+  (Slot, Arrived, Expires, On shelf, Will take), a clear short-stock hint instead
+  of a dead-looking form when stock is insufficient, the noisy "Short Qty: 0.00"
+  hidden on healthy plans, and `* required` / `(optional)` markers on the audit
+  panel. The banner explains oldest-first in words and points to Help.
+- **Scan Receipt:** the quality-check box is now visibly `* required` with a hint;
+  a mode-aware commit button ("Validate & Print" vs "Validate Return"); banner
+  notes that each scan adds 1 and the Qty cell is editable for bulk.
+
+**Reports polish**
+- Plain column labels and sensible default ordering on Reorder summary, Oldest
+  stock, Slot occupancy, Cycle Count Due, and Where is product X?; blank-vendor
+  rows greyed on Reorder summary; a search view (almost-full / empty / group-by)
+  added to Slot occupancy; the "Pick next?" flag rendered read-only.
+- **Audit dead-end fixed:** the rejected state now shows in the status bar with a
+  next-step alert, and the button is honestly labelled "Reject" (it does not
+  re-open).
+
+**Safety**
+- **Scrap** on a repair order now asks for confirmation before writing the item off.
+
+**Training kept in sync**
+- Five in-app help articles had their step-by-step navigation updated to the
+  renamed menus ("Scan Issue", "Repair orders"); the FIFO concept is still taught
+  in prose. A `wms_training` pre-migration refreshes these noupdate articles on
+  upgrade so existing installs match the UI.
+
 ## [v19.0.23.0.0] — 2026-06-15 — Honest diagrams + returns-due timezone fix
 
 Finishes the FEFO-honesty work (the teaching diagrams) and fixes the minor

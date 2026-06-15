@@ -72,10 +72,10 @@
 
         <menuitem id="menu_wms_stock_value"
                   name="Stock Value"
-                  parent="wms_reports.menu_wms_reports_root"
+                  parent="wms_reports.menu_wms_reports_value"
                   action="action_wms_stock_value"
                   groups="wms_location.group_wms_manager"
-                  sequence="20"/>
+                  sequence="10"/>
 
         <!-- ============================================================
              Consumption value (issued qty x cost), by month
@@ -162,10 +162,10 @@
 
         <menuitem id="menu_wms_consumption_value"
                   name="Consumption Value"
-                  parent="wms_reports.menu_wms_reports_root"
+                  parent="wms_reports.menu_wms_reports_value"
                   action="action_wms_consumption_value"
                   groups="wms_location.group_wms_manager"
-                  sequence="21"/>
+                  sequence="15"/>
 
         <!-- ============================================================
              Product Lifecycle — reuse the activity log, grouped by product
@@ -192,10 +192,10 @@
 
         <menuitem id="menu_wms_product_lifecycle"
                   name="Product Lifecycle"
-                  parent="wms_reports.menu_wms_reports_root"
+                  parent="wms_reports.menu_wms_reports_value"
                   action="action_wms_product_lifecycle"
                   groups="wms_location.group_wms_manager"
-                  sequence="22"/>
+                  sequence="20"/>
 
     </data>
 </odoo>

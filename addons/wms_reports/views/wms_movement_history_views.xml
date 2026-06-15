@@ -16,6 +16,14 @@
             <field name="context">{
                 'search_default_groupby_product': 1,
             }</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No movements recorded yet.</p>
+                <p>
+                    Every completed stock movement &#8212; received, issued, and moved
+                    between slots &#8212; grouped by product. Use it to trace what
+                    happened to an item and when.
+                </p>
+            </field>
         </record>
 
         <record id="action_wms_low_stock_alerts" model="ir.actions.act_window">

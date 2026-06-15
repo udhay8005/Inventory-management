@@ -30,9 +30,13 @@
         <field name="view_id" ref="view_wms_self_diagnostics_form"/>
     </record>
 
+    <!--
+        Self-Diagnostics is a maintenance screen, not a report, so it lives
+        under Configuration (manager-gated) rather than in Reports.
+    -->
     <menuitem id="menu_wms_self_diagnostics"
               name="Self-Diagnostics"
-              parent="menu_wms_reports_root"
+              parent="wms_location.menu_wms_config"
               action="action_wms_self_diagnostics"
               groups="wms_location.group_wms_manager"
               sequence="90"/>

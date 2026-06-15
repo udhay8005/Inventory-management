@@ -43,6 +43,14 @@
             <field name="res_model">stock.location</field>
             <field name="view_mode">list,form</field>
             <field name="domain">[('wms_location_type', '=', 'floor')]</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No floor zones yet.</p>
+                <p>
+                    Floor zones are open ground areas for bulky stock that does not
+                    go on a rack (fodder bales, drums, large sacks). Managers create
+                    them from <b>Configuration &#8594; Generate Floor Zones</b>.
+                </p>
+            </field>
         </record>
 
     </data>
