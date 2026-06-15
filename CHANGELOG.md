@@ -5,6 +5,31 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.27.0.0] — 2026-06-15 — Fix: inconsistent compute_sudo/store warning on cycle-count fields
+
+Silences a non-fatal registry-load warning that printed on every `wms` startup
+and every `-u` run. Manifest bump: `wms_reports` **19.0.4.9.0 → 19.0.4.10.0**
+(model + test only; applies on `-u`, no migration).
+
+- **Odoo logged at registry load:** `stock.location: inconsistent 'compute_sudo'`
+  and `inconsistent 'store'` for the computed fields `wms_last_counted` and
+  `wms_days_since_count` (the Cycle-Count-Due fields), with the hint that
+  *accessing `wms_days_since_count` may recompute and update `wms_last_counted`*.
+- **Cause:** both fields shared one compute method (`_compute_wms_count_age`) yet
+  differed in `store` (the date is stored + indexed for the SQL view; the day-delta
+  must stay non-stored so it's fresh on read) and therefore in the `compute_sudo`
+  Odoo derives from `store`. Odoo requires fields sharing a compute method to agree
+  on both flags.
+- **Fix:** split into two distinct compute methods — `_compute_wms_last_counted`
+  (`store=True`, `compute_sudo=True`, depends on the quants) and
+  `_compute_wms_days_since_count` (`store=False`, `compute_sudo=False`, derived from
+  the stored date). Behaviour is identical: the date still tracks the latest
+  `last_count_date`/`in_date`, the delta is still today-minus-that fresh on every
+  read, and the `wms.cycle.count.due` SQL view + weekly reminder cron are unchanged
+  (the cron now recomputes and flushes only the stored date the view reads). New
+  `test_cycle_count.py` pins the registry consistency (distinct methods, intended
+  store/compute_sudo) and the count-age behaviour.
+
 ## [v19.0.26.0.0] — 2026-06-15 — Fix: upgrade-service.ps1 false "health did not confirm"
 
 Operator-facing deploy-script fix. No addon changes (no manifest bump).

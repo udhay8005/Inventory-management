@@ -24,38 +24,61 @@ class StockLocationCount(models.Model):
     _inherit = "stock.location"
 
     wms_last_counted = fields.Datetime(
-        compute="_compute_wms_count_age",
+        compute="_compute_wms_last_counted",
         store=True,
         index=True,
+        # Explicit compute_sudo=True (Odoo's default for a stored computed
+        # field): the compute reads quant_ids, which a non-privileged keeper
+        # may not have full access to. The on-read sibling below is
+        # compute_sudo=False, so the two MUST use distinct compute methods —
+        # see the NOTE before _compute_wms_last_counted.
+        compute_sudo=True,
         help="Most recent date this slot was physically counted or had stock movement. Used to flag slots that are overdue for a recount.",
     )
     wms_days_since_count = fields.Integer(
-        compute="_compute_wms_count_age",
+        compute="_compute_wms_days_since_count",
         # NOT stored: a stored value only refreshes when a quant changes, so an
         # untouched slot would keep yesterday's count forever. Computed on read
         # it always reflects today; the overdue SQL view computes its own delta
         # inline from the stored wms_last_counted date.
+        compute_sudo=False,
         help="Days since this slot was last counted or had stock movement. "
         "0 means it was touched today.",
     )
 
+    # NOTE: wms_last_counted (store=True, compute_sudo=True) and
+    # wms_days_since_count (store=False, compute_sudo=False) deliberately differ
+    # in BOTH `store` and `compute_sudo`. Computed fields that share one compute
+    # method must agree on those flags, or Odoo warns at registry load
+    # ("inconsistent 'compute_sudo'/'store' for computed fields ..."). They are
+    # split into two methods below precisely so each method is internally
+    # consistent. Do not re-merge them.
     @api.depends("quant_ids.in_date", "quant_ids.last_count_date")
-    def _compute_wms_count_age(self):
+    def _compute_wms_last_counted(self):
         # Slots AND floor zones track count-age. Other types stay null.
         stockables = self.filtered(lambda loc: loc.wms_location_type in ("slot", "floor"))
-        (self - stockables).update({"wms_last_counted": False, "wms_days_since_count": 0})
-        if not stockables:
-            return
-        now = fields.Datetime.now()
+        (self - stockables).wms_last_counted = False
         for loc in stockables:
             # Use Odoo's last_count_date where available; fall back to the
             # latest quant in_date so freshly-stocked slots aren't flagged.
-            latest = max(
-                (q.last_count_date or q.in_date or q.create_date for q in loc.quant_ids),
-                default=False,
+            loc.wms_last_counted = (
+                max(
+                    (q.last_count_date or q.in_date or q.create_date for q in loc.quant_ids),
+                    default=False,
+                )
+                or False
             )
-            loc.wms_last_counted = latest or False
-            loc.wms_days_since_count = (now - latest).days if latest else 0
+
+    @api.depends("wms_last_counted")
+    def _compute_wms_days_since_count(self):
+        # Derived from the stored last-counted date so it is always fresh on
+        # read (non-stored): today minus the last count. Non-stockables and
+        # never-counted slots read 0. Identical result to the old shared
+        # compute, just decoupled from quant access (no sudo needed).
+        now = fields.Datetime.now()
+        for loc in self:
+            last = loc.wms_last_counted
+            loc.wms_days_since_count = (now - last).days if last else 0
 
 
 class WmsCycleCountDue(models.Model):
@@ -115,11 +138,13 @@ class WmsCycleCountReminderCron(models.AbstractModel):
 
     @api.model
     def run_weekly_reminder(self):
-        # Re-trigger compute so days_since_count is fresh
+        # Refresh the stored wms_last_counted (and flush it) so the SQL view's
+        # inline CURRENT_DATE - last_counted delta is current before we read it.
         stockables = self.env["stock.location"].search(
             [("wms_location_type", "in", ("slot", "floor"))],
         )
-        stockables._compute_wms_count_age()
+        stockables._compute_wms_last_counted()
+        stockables.flush_recordset(["wms_last_counted"])
 
         due = self.env["wms.cycle.count.due"].search([])
         if not due:
