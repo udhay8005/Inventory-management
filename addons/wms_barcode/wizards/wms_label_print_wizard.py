@@ -59,8 +59,21 @@ class WmsLabelPrintWizard(models.TransientModel):
         }
         return res
 
+    # Friendly names for the WMS location types (shown on the label sub-line).
+    _LOC_TYPE = {
+        "zone": "Zone",
+        "rack": "Rack",
+        "compartment": "Compartment",
+        "slot": "Slot",
+        "floor": "Floor zone",
+    }
+
     def _labels_for(self, model, ids):
-        """Build the list of {title, subtitle, barcode} dicts for the records."""
+        """Build the {title, subtitle, barcode} dicts for the records.
+
+        Kept non-repetitive: the code shows on the title line + under the barcode
+        (standard); the sub-line carries *context* (the parent path + type for a
+        location; the SKU + unit for a product) without repeating the code."""
         records = self.env[model].browse(ids).exists()
         labels, skipped = [], []
         if model == "product.product":
@@ -69,25 +82,20 @@ class WmsLabelPrintWizard(models.TransientModel):
                 if not code:
                     skipped.append(p.display_name)
                     continue
-                labels.append(
-                    {
-                        "title": p.default_code or p.name,
-                        "subtitle": p.name,
-                        "barcode": p.barcode or p.default_code,
-                    }
-                )
+                detail = "SKU: %s" % (p.default_code or "-")
+                if p.uom_id:
+                    detail += "  -  Unit: %s" % p.uom_id.name
+                labels.append({"title": p.name, "subtitle": detail, "barcode": code})
         else:  # stock.location
             for loc in records:
                 if not loc.barcode:
                     skipped.append(loc.display_name)
                     continue
-                labels.append(
-                    {
-                        "title": loc.barcode,
-                        "subtitle": loc.name or loc.complete_name,
-                        "barcode": loc.barcode,
-                    }
-                )
+                title = "%s  %s" % (loc.barcode, loc.name) if loc.name else loc.barcode
+                parent = loc.location_id.complete_name or ""
+                kind = self._LOC_TYPE.get(loc.wms_location_type, "Location")
+                detail = ("%s  -  %s" % (parent, kind)) if parent else kind
+                labels.append({"title": title, "subtitle": detail, "barcode": loc.barcode})
         return labels, skipped
 
     def action_print(self):

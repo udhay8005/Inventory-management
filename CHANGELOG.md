@@ -5,6 +5,35 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.29.0.0] — 2026-06-15 — Direct label redesign: logo, branding, fuller barcode
+
+Refines the direct-print label to the trust's design (iterated on the live TE244).
+Manifest bump: `wms_barcode` **19.0.1.36.0 → 19.0.1.37.0** (view/model/seed +
+packaged logo; applies on `-u`, no migration).
+
+- **Two-column layout:** a 1-inch **logo** zone (left) + a divider, then the
+  **brand line**, **code + name**, a **details** sub-line, and a **centred
+  barcode** with its digits — for both **product** and **location** labels.
+- **Trust logo on every label:** the Kamadhenu cow (packaged as
+  `wms_barcode/static/img/label_logo.png`) is rendered as a 1-bit TSPL `BITMAP`
+  (background whitened, dithered). Admins can override it via Configuration →
+  Label Settings → Logo. (A 1-bit thermal head can only approximate a detailed
+  painting; a simple/line-art logo reproduces sharper.)
+- **Brand line:** new editable `brand_line` field on the printer profile,
+  defaulting to **"Mercy & Care For Cows Dakshin Vrindavan PCT"**.
+- **Fuller barcode:** short, Code39-compatible codes now print as **Code 39**
+  (more bars = a normal-looking barcode that fills better); longer codes stay
+  **Code 128**. Length-adaptive module width, centred. The encoded value is
+  unchanged, so scanning is unaffected.
+- **Less repetition:** the location code shows on the name line + under the
+  barcode (standard); the sub-line carries the **parent path + type** instead of
+  repeating the code. Product sub-line shows **SKU + unit**.
+- **Old PDF "Print" entries removed:** the browser-scaled "WMS Product/Location
+  Label" reports are **unbound from the Print menu** (they were the source of the
+  tiny/rotated output); direct printing is the one path. The reports stay defined
+  as a non-Windows fallback.
+- `build_tspl` now returns **bytes** (the logo BITMAP is binary); tests updated.
+
 ## [v19.0.28.0.0] — 2026-06-15 — Direct label printing (TSC TE244, no browser dialog)
 
 One-click label printing **straight to the thermal printer** — no Chrome print

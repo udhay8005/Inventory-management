@@ -48,40 +48,52 @@ class TestDirectPrint(TransactionCase):
         )
 
     # ---- TSPL generation -------------------------------------------------
+    def _tspl(self, labels, **kw):
+        # no-logo keeps the job pure-ASCII text so assertions are deterministic
+        # (the real logo is a binary BITMAP exercised by the wizard tests).
+        return self.printer.with_context(wms_print_no_logo=True).build_tspl(labels, **kw)
+
     def test_tspl_has_media_and_barcode(self):
-        tspl = self.printer.build_tspl([{"title": "R09", "subtitle": "Rack 9", "barcode": "R09"}])
-        self.assertIn("SIZE 100 mm,25 mm", tspl)
-        self.assertIn("GAP 3 mm,0 mm", tspl)
-        self.assertIn("DENSITY 10", tspl)
-        self.assertIn("BARCODE", tspl)
-        self.assertIn('"R09"', tspl)
-        self.assertIn("PRINT 1,1", tspl)
+        tspl = self._tspl([{"title": "R09", "subtitle": "Rack 9", "barcode": "R09"}])
+        self.assertIsInstance(tspl, bytes)
+        self.assertIn(b"SIZE 100 mm,25 mm", tspl)
+        self.assertIn(b"GAP 3 mm,0 mm", tspl)
+        self.assertIn(b"DENSITY 10", tspl)
+        self.assertIn(b"BARCODE", tspl)
+        self.assertIn(b'"R09"', tspl)
+        self.assertIn(b"PRINT 1,1", tspl)
+
+    def test_short_uppercase_code_uses_code39(self):
+        # Code 39 gives more bars for short codes (the fuller "normal barcode").
+        self.assertIn(b'"39"', self._tspl([{"barcode": "R09"}]))
+
+    def test_long_code_uses_code128(self):
+        self.assertIn(b'"128"', self._tspl([{"barcode": "8901234567890"}]))
 
     def test_copies_in_print_command(self):
-        tspl = self.printer.build_tspl([{"barcode": "X1"}], copies=3)
-        self.assertIn("PRINT 1,3", tspl)
+        self.assertIn(b"PRINT 1,3", self._tspl([{"barcode": "X1"}], copies=3))
 
     def test_output_is_ascii_and_quote_safe(self):
         # Non-ASCII dropped, the double-quote that would break a TSPL literal
-        # is replaced — the whole job must be ASCII-encodable.
-        tspl = self.printer.build_tspl([{"title": 'Café "Z"', "barcode": "B1"}])
-        self.assertNotIn("é", tspl)
-        tspl.encode("ascii")  # must not raise
+        # is replaced. With no logo the job is pure ASCII.
+        tspl = self._tspl([{"title": 'Café "Z"', "barcode": "B1"}])
+        tspl.decode("ascii")  # must not raise
+        self.assertNotIn(b"\xc3", tspl)  # the UTF-8 'é' bytes are gone
+        self.assertIn(b"Caf", tspl)
 
     def test_media_reflows_with_label_size(self):
         self.printer.label_width_mm = 60
         self.printer.label_height_mm = 40
-        tspl = self.printer.build_tspl([{"barcode": "B1"}])
-        self.assertIn("SIZE 60 mm,40 mm", tspl)
+        self.assertIn(b"SIZE 60 mm,40 mm", self._tspl([{"barcode": "B1"}]))
 
     def test_nothing_to_print_raises(self):
         with self.assertRaises(UserError):
-            self.printer.build_tspl([{"title": "", "subtitle": "", "barcode": ""}])
+            self._tspl([{"title": "", "subtitle": "", "barcode": ""}])
 
     def test_dry_run_returns_tspl(self):
         out = self.printer.with_context(wms_print_dry_run=True).print_labels([{"barcode": "Z9"}])
-        self.assertIsInstance(out, str)
-        self.assertIn("SIZE", out)
+        self.assertIsInstance(out, bytes)
+        self.assertIn(b"SIZE", out)
 
     # ---- model rules -----------------------------------------------------
     def test_get_default_printer(self):

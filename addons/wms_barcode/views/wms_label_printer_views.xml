@@ -72,6 +72,9 @@
                                 <field name="y_offset_mm"/>
                             </group>
                         </group>
+                        <group string="Label branding">
+                            <field name="brand_line"/>
+                        </group>
                         <field name="notes" placeholder="Notes (optional)..."/>
                     </sheet>
                 </form>

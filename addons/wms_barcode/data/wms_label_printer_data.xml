@@ -20,6 +20,7 @@
             <field name="speed">3</field>
             <field name="x_offset_mm">2.0</field>
             <field name="y_offset_mm">1.5</field>
+            <field name="brand_line">Mercy &amp; Care For Cows Dakshin Vrindavan PCT</field>
         </record>
     </data>
 </odoo>
