@@ -5,6 +5,31 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.30.0.0] — 2026-06-15 — Label UX: Products menu, kind→UoM, drop the PDF "Print"
+
+Closes the gaps found while using direct printing on the live server. Manifest
+bump: `wms_barcode` **19.0.1.37.0 → 19.0.1.38.0** (view/wizard/report; `-u`, no
+migration).
+
+- **The old PDF "Print → Location Barcode" is gone.** Odoo's built-in
+  location-barcode report is now **unbound** from the Print menu (it was the
+  browser-scaled, off-size PDF). Combined with the v29 unbinding of the WMS PDF
+  labels, **direct printing (Action → Print labels (direct)) is the one path.**
+  *(Note: this takes effect on the live server only after deploying — the live
+  `wms` DB must be upgraded with `upgrade-service.ps1`; until then it still shows
+  the old PDF.)*
+- **Products list in the WMS app.** New **Operations → Products** menu (the
+  `product.product` list) so admins/keepers can find every product without
+  leaving for the Inventory app, and print labels from it (Action → Print labels
+  (direct)).
+- **Kind now always drives the Unit of Measure in Onboard.** Picking — or
+  re-picking — the WMS Kind sets the UoM (Fluid → L, Feed → kg, else Units); the
+  previous behaviour kept a stale unit when the kind changed after a UoM was set.
+  The operator can still override the UoM afterwards.
+- **UoM dropdown decluttered.** The Onboard UoM field now offers only
+  warehouse-relevant units (count / weight / volume / length / area, metric) —
+  Odoo's Minutes / Hours / kWh / miles, etc. are no longer shown.
+
 ## [v19.0.29.0.0] — 2026-06-15 — Direct label redesign: logo, branding, fuller barcode
 
 Refines the direct-print label to the trust's design (iterated on the live TE244).

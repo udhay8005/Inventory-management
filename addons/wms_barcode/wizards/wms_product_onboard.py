@@ -391,28 +391,50 @@ class WmsProductOnboardLine(models.TransientModel):
         help="Optional Odoo category. Drives the category breakdown in the "
         "Stock / Consumption Value reports. Leave blank for the default.",
     )
+    # Only the warehouse-relevant units are offered in the UoM dropdown — Odoo
+    # ships dozens of irrelevant ones (Minutes, Hours, kWh, miles, ...) that
+    # confused operators. Count / weight / volume / length / area, metric.
+    _WAREHOUSE_UOM_XMLIDS = (
+        "uom.product_uom_unit",
+        "uom.product_uom_dozen",
+        "uom.product_uom_kgm",
+        "uom.product_uom_gram",
+        "uom.product_uom_litre",
+        "uom.product_uom_milliliter",
+        "uom.product_uom_meter",
+        "uom.product_uom_cm",
+        "uom.product_uom_millimeter",
+        "uom.product_uom_square_meter",
+    )
+    allowed_uom_ids = fields.Many2many("uom.uom", compute="_compute_allowed_uom_ids")
     uom_id = fields.Many2one(
         "uom.uom",
         string="UoM",
-        help="Unit of measure for the on-hand quantity (kg, L, units, ...). "
-        "Picking a WMS Kind seeds this automatically (Fluid -> L, "
-        "Feed -> kg, everything else -> Units). Switch it to Metre for "
-        "pipe / cable / rope / cloth issued by length, or leave it on "
-        "Units when those are issued by the piece.",
+        domain="[('id', 'in', allowed_uom_ids)]",
+        help="Unit of measure for the on-hand quantity (Units, kg, L, Metre, ...). "
+        "Picking a WMS Kind sets this automatically (Fluid -> L, Feed -> kg, "
+        "everything else -> Units). Change it to Metre for pipe / cable / rope / "
+        "cloth issued by length, or leave it on Units when issued by the piece.",
     )
+
+    @api.depends_context("uid")
+    def _compute_allowed_uom_ids(self):
+        uoms = self.env["uom.uom"]
+        for xmlid in self._WAREHOUSE_UOM_XMLIDS:
+            uom = self.env.ref(xmlid, raise_if_not_found=False)
+            if uom:
+                uoms |= uom
+        for line in self:
+            line.allowed_uom_ids = uoms
 
     @api.onchange("wms_product_kind")
     def _onchange_wms_product_kind_uom(self):
-        """Seed the row's UoM from the chosen WMS kind (Fluid -> L,
-        Feed -> kg, everything else -> Units) — but ONLY when the
-        operator has not already picked a UoM, so a manual Metre choice
-        for cut pipe / cable / cloth is never clobbered when they tweak
-        the kind. Resolved with raise_if_not_found=False so a
-        half-loaded DB degrades to "leave it blank" rather than crash;
-        _do_onboard only writes uom_id when truthy, so a blank row
-        still falls back to the product-template default."""
-        if self.uom_id:
-            return
+        """Set the row's UoM from the chosen WMS kind (Fluid -> L, Feed -> kg,
+        everything else -> Units). Runs on EVERY kind change so picking — or
+        re-picking — the kind always drives the unit; the operator can still
+        override the UoM afterwards (that choice stays until the kind changes
+        again). raise_if_not_found=False so a half-loaded DB degrades to a blank
+        UoM (the product-template default) rather than crashing."""
         kind = self.wms_product_kind
         if not kind:
             return
