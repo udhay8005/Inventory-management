@@ -5,6 +5,45 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.28.0.0] — 2026-06-15 — Direct label printing (TSC TE244, no browser dialog)
+
+One-click label printing **straight to the thermal printer** — no Chrome print
+box, no PDF download, no scaling/alignment fight. Manifest bump: `wms_barcode`
+**19.0.1.35.0 → 19.0.1.36.0** (new model + wizard + views + seed; applies on `-u`,
+no migration). Full guide: `docs/DIRECT-PRINTING.md`.
+
+**Why this design.** The WMS server runs natively on the **same Windows PC** as
+the printer, so it sends the printer's native **TSPL** straight to the Windows
+spooler (RAW). Because TSPL carries the label size itself, output is always
+exact-size and upright — the browser can't shrink or rotate it. This is simpler
+and more reliable than a QZ Tray / WebUSB / WebSocket bridge for a co-located
+single-PC warehouse, with no extra process to install or keep running. (pywin32
+is already in the server venv; the import is lazy so the module still loads + all
+tests pass on Linux CI.)
+
+- **`wms.label.printer`** — printer profiles (Configuration → Label Printers,
+  manager-only): Windows-spooler **or** network (raw 9100), media size, density,
+  speed, and an x/y **alignment nudge**. **Detect printers** + **Test print**
+  buttons. The TSC TE244 is seeded as the default (editable, `noupdate`).
+- **"Print labels (direct)"** in the **Action** menu of Products and of Slots /
+  Racks / Compartments (lists and forms): select one or many → choose printer +
+  copies → **Print** → labels print, with a success/error toast and skipped-no-
+  barcode notice. Reprint = print again.
+- **TSPL engine** (`build_tspl`): 203 dpi, title + sub-line + a full-width Code128
+  barcode that re-flows to the configured media; ASCII/quote-sanitised; copies.
+- **Security:** managers manage printers + test print; keepers can print only.
+- **Fallback preserved:** the existing PDF label reports remain for non-Windows
+  hosts; `LABEL-PRINTING.md` now points to direct printing as primary.
+- **Deliberately deferred** (not needed for one co-located USB printer): offline
+  queue/retry daemon, multi-PC remote printing, QZ Tray/WebUSB. Documented.
+- **Tests:** `test_direct_print.py` — TSPL correctness (media, barcode, copies,
+  ASCII safety, media re-flow, empty-guard), dry-run send, default-printer rule,
+  and the product/location wizard paths.
+
+> Note: physical print output is verified by the operator on the live printer
+> (CI is Linux/printerless). The mechanism was confirmed live during development —
+> a full-size, scannable label printed directly from the server.
+
 ## [v19.0.27.0.0] — 2026-06-15 — Fix: inconsistent compute_sudo/store warning on cycle-count fields
 
 Silences a non-fatal registry-load warning that printed on every `wms` startup

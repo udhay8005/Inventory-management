@@ -4,6 +4,7 @@ from . import (
     test_audit_tracking,
     test_barcode_integrity,
     test_concurrency,
+    test_direct_print,
     test_fpat_fx4,
     test_issue_approval,
     test_issue_dimensions,

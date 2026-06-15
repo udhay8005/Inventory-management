@@ -1,5 +1,11 @@
 # Label Printing — Thermal 4×1 inch (100×25 mm)
 
+> **Print with one click — use Direct Printing.**
+> The recommended way to print is now **direct to the printer** (no browser print
+> box, no PDF, no scaling): select records → **Action → Print labels (direct)**.
+> See **[DIRECT-PRINTING.md](DIRECT-PRINTING.md)**. The PDF method below is kept as
+> a **fallback** (e.g. if the server ever runs on a non-Windows host).
+
 All WMS labels print on the **thermal printer** as **4×1 inch (100×25 mm) die-cut stickers** — the **True-Ally** direct-thermal roll the trust uses. A4 sheet labels have been removed: there is one label format for everything.
 
 ## Hardware
