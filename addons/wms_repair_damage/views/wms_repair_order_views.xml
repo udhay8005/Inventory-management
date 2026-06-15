@@ -24,6 +24,7 @@
                                 groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
                         <button name="action_scrap" type="object"
                                 string="Scrap"
+                                confirm="Scrap this item? It will be written off and cannot be repaired afterwards."
                                 invisible="state != 'in_repair'"
                                 groups="wms_repair_damage.group_repair_tech,wms_location.group_wms_manager"/>
                         <button name="action_cancel" type="object"
@@ -57,7 +58,7 @@
                                 <field name="finish_picking_id" readonly="1"
                                        invisible="not finish_picking_id"/>
                             </group>
-                            <group string="Who reported it">
+                            <group string="People involved">
                                 <field name="wms_reported_by"
                                        placeholder="Worker who flagged the item"/>
                                 <field name="wms_authorized_by"
@@ -96,6 +97,14 @@
             <field name="name">Repair orders</field>
             <field name="res_model">wms.repair.order</field>
             <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No repairs in progress.</p>
+                <p>
+                    A repair order is created from a Damage report when an item can be
+                    fixed. Track it here from <b>Start Repair</b> to <b>Mark Done</b>,
+                    or <b>Scrap</b> it if it is beyond repair.
+                </p>
+            </field>
         </record>
     </data>
 </odoo>

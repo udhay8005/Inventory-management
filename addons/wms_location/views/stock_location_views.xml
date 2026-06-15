@@ -107,6 +107,19 @@
             <field name="domain">[('wms_location_type', '=', 'slot')]</field>
             <field name="search_view_id" ref="view_wms_slot_search"/>
             <field name="context">{'search_default_group_rack': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">This is your storage map.</p>
+                <p>
+                    Each slot is one shelf space where stock lives. To bring stock
+                    <b>IN</b>, use <b>Scan Receipt</b>; to take stock <b>OUT</b>, use
+                    <b>Scan Issue</b> &#8212; both just below in this <b>Operations</b> menu.
+                </p>
+                <p>
+                    No slots yet? A manager creates them under
+                    <b>Configuration &#8594; Generate Zone / Create Rack</b>.
+                    New here? Open <b>Help &amp; Training &#8594; Getting Started</b>.
+                </p>
+            </field>
         </record>
 
         <record id="action_wms_racks" model="ir.actions.act_window">
@@ -114,6 +127,13 @@
             <field name="res_model">stock.location</field>
             <field name="view_mode">list,form</field>
             <field name="domain">[('wms_location_type', '=', 'rack')]</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No racks yet.</p>
+                <p>
+                    A rack is a shelving unit that holds compartments and slots.
+                    Managers create racks from <b>Configuration &#8594; Create Rack</b>.
+                </p>
+            </field>
         </record>
 
         <record id="action_wms_compartments" model="ir.actions.act_window">
@@ -121,6 +141,14 @@
             <field name="res_model">stock.location</field>
             <field name="view_mode">list,form</field>
             <field name="domain">[('wms_location_type', '=', 'compartment')]</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No compartments yet.</p>
+                <p>
+                    A compartment is a section of a rack that groups slots.
+                    Managers create these along with racks from
+                    <b>Configuration &#8594; Create Rack</b>.
+                </p>
+            </field>
         </record>
 
     </data>

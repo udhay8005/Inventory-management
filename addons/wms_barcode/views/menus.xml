@@ -7,26 +7,40 @@
             Admin can grant or revoke each from the Store Keeper form.
             Users without the matching capability never see the menu.
         -->
+        <!--
+            Daily verbs near the top. The scan trio sits right below Slots
+            (sequences 10/11/12) so the most-used actions are the first
+            things under the storage map, well above the other browse
+            screens. Order: bring stock IN (Receipt), take stock OUT
+            (Issue), put stock BACK (Return).
+
+            Slots (a real list page) is kept as the FIRST Operations item
+            (seq 5) on purpose: the scan wizards open as target="new"
+            modals, so if one were the first leaf the WMS app icon would
+            open straight into a modal over a blank backdrop. Landing on
+            Slots — which carries a wayfinding empty-state pointing here —
+            avoids that and is a clean front door.
+        -->
         <menuitem id="menu_wms_scan_receipt"
                   name="Scan Receipt"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_scan_receipt"
                   groups="wms_location.group_wms_can_scan_receive"
-                  sequence="20"/>
+                  sequence="10"/>
+
+        <menuitem id="menu_wms_scan_issue"
+                  name="Scan Issue"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_scan_issue"
+                  groups="wms_location.group_wms_can_scan_issue"
+                  sequence="11"/>
 
         <menuitem id="menu_wms_scan_return"
                   name="Scan Return"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_scan_return"
                   groups="wms_location.group_wms_can_scan_receive"
-                  sequence="22"/>
-
-        <menuitem id="menu_wms_scan_issue"
-                  name="Scan Issue (FIFO)"
-                  parent="wms_location.menu_wms_operations"
-                  action="action_wms_scan_issue"
-                  groups="wms_location.group_wms_can_scan_issue"
-                  sequence="25"/>
+                  sequence="12"/>
 
         <menuitem id="menu_wms_barcode_alias"
                   name="Carton Barcodes"

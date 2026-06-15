@@ -7,17 +7,17 @@
             <field name="arch" type="xml">
                 <list decoration-bf="is_oldest" decoration-success="is_oldest">
                     <field name="product_id"/>
-                    <field name="product_barcode"/>
-                    <field name="quantity"/>
-                    <field name="available_quantity"/>
+                    <field name="product_barcode" string="Barcode"/>
+                    <field name="quantity" string="Qty"/>
+                    <field name="available_quantity" string="Free to pick"/>
                     <field name="reserved_quantity" optional="hide"/>
-                    <field name="location_id"/>
-                    <field name="location_kind"/>
+                    <field name="location_id" string="Slot"/>
+                    <field name="location_kind" string="Slot type"/>
                     <field name="compartment_id" optional="show"/>
                     <field name="rack_id" optional="show"/>
-                    <field name="in_date"/>
-                    <field name="age_days"/>
-                    <field name="is_oldest" widget="boolean_toggle"/>
+                    <field name="in_date" string="Arrived"/>
+                    <field name="age_days" string="Age (days)"/>
+                    <field name="is_oldest" string="Pick next?" widget="boolean"/>
                 </list>
             </field>
         </record>
@@ -59,6 +59,14 @@
             <field name="view_mode">list,pivot</field>
             <field name="search_view_id" ref="view_wms_product_stock_search"/>
             <field name="context">{'search_default_group_product': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No stock to locate yet.</p>
+                <p>
+                    Type a product name or scan its barcode in the search box to see
+                    every slot it sits in. The row marked <b>Pick next?</b> is the
+                    oldest batch &#8212; take that one first.
+                </p>
+            </field>
         </record>
     </data>
 </odoo>

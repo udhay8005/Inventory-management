@@ -157,6 +157,14 @@
             <field name="search_view_id" ref="view_wms_issue_approval_search"/>
             <!-- Default to the pending queue so Managers land on what needs action. -->
             <field name="context">{'search_default_filter_pending': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No issues waiting &#8212; you're all caught up.</p>
+                <p>
+                    High-value or too-soon stock issues pause here for a manager's
+                    yes/no. When one is waiting, open it, read the keeper's reason,
+                    then <b>Approve</b> or <b>Reject</b>.
+                </p>
+            </field>
         </record>
 
         <!--

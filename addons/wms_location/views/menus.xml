@@ -46,7 +46,7 @@
                   name="Slots"
                   parent="menu_wms_operations"
                   action="action_wms_slots"
-                  sequence="10"/>
+                  sequence="5"/>
 
         <!--
             Cycle Count = Odoo's built-in stock.quant "Inventory Adjustments"
@@ -76,7 +76,7 @@
                   name="Floor Zones"
                   parent="menu_wms_operations"
                   action="action_wms_floor_zones"
-                  sequence="15"/>
+                  sequence="32"/>
 
         <menuitem id="menu_wms_floor_zone_generator"
                   name="Generate Floor Zones"

@@ -5,15 +5,16 @@
             <field name="name">wms.cycle.count.due.list</field>
             <field name="model">wms.cycle.count.due</field>
             <field name="arch" type="xml">
-                <list decoration-danger="days_since_count &gt; 90"
+                <list default_order="days_since_count desc"
+                      decoration-danger="days_since_count &gt; 90"
                       decoration-warning="days_since_count &gt; 60"
                       decoration-info="days_since_count &gt; 30">
-                    <field name="location_id"/>
+                    <field name="location_id" string="Slot"/>
                     <field name="rack_id"/>
-                    <field name="last_counted"/>
-                    <field name="days_since_count"/>
-                    <field name="on_hand"/>
-                    <field name="distinct_products"/>
+                    <field name="last_counted" string="Last counted on"/>
+                    <field name="days_since_count" string="Days since last count"/>
+                    <field name="on_hand" string="Units in slot"/>
+                    <field name="distinct_products" string="Different products"/>
                 </list>
             </field>
         </record>

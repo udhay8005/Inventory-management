@@ -5,10 +5,11 @@
             <field name="name">wms.reorder.summary.list</field>
             <field name="model">wms.reorder.summary</field>
             <field name="arch" type="xml">
-                <list>
-                    <field name="partner_id"/>
-                    <field name="product_count"/>
-                    <field name="total_qty"/>
+                <list default_order="total_qty desc"
+                      decoration-muted="not partner_id">
+                    <field name="partner_id" string="Preferred vendor"/>
+                    <field name="product_count" string="Items to order"/>
+                    <field name="total_qty" string="Total qty to buy" sum="Total qty"/>
                 </list>
             </field>
         </record>
@@ -17,6 +18,18 @@
             <field name="name">Reorder summary by vendor</field>
             <field name="res_model">wms.reorder.summary</field>
             <field name="view_mode">list</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Nothing to reorder right now.</p>
+                <p>
+                    Products that have dropped below their reorder point, grouped by
+                    the vendor you usually buy them from &#8212; so you can place one
+                    order per supplier.
+                </p>
+                <p>
+                    Rows shown in grey have <b>no vendor set</b>. Open the product and
+                    set a preferred vendor so it joins that supplier's order.
+                </p>
+            </field>
         </record>
     </data>
 </odoo>

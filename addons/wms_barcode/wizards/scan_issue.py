@@ -52,8 +52,8 @@ class WmsScanIssue(models.TransientModel):
             return trust
         return self.env.ref("stock.stock_location_customers", raise_if_not_found=False)
 
-    last_scan = fields.Char()
-    requested_qty = fields.Float(default=1.0)
+    last_scan = fields.Char(string="Scan here")
+    requested_qty = fields.Float(string="Quantity", default=1.0)
     feedback = fields.Char(readonly=True)
 
     plan_line_ids = fields.One2many("wms.scan.issue.plan", "wizard_id")
@@ -962,7 +962,7 @@ class WmsScanIssue(models.TransientModel):
     def _reopen(self):
         return {
             "type": "ir.actions.act_window",
-            "name": "Scan Issue (FIFO)",
+            "name": "Scan Issue",
             "res_model": self._name,
             "res_id": self.id,
             "view_mode": "form",

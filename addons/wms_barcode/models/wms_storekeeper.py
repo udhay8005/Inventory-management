@@ -89,7 +89,7 @@ class WmsStorekeeper(models.Model):
         string="Can Scan Issue",
         compute="_compute_capabilities",
         inverse="_inverse_can_scan_issue",
-        help="Shows the Scan Issue (FIFO) menu and grants create on " "the wizard. Default ON.",
+        help="Shows the Scan Issue menu and grants create on " "the wizard. Default ON.",
     )
     can_file_damage = fields.Boolean(
         string="Can file Damage events",

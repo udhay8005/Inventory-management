@@ -14,7 +14,7 @@
                   sequence="40"/>
 
         <menuitem id="menu_wms_repair"
-                  name="Repair Orders"
+                  name="Repair orders"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_repair"
                   groups="wms_location.group_wms_manager"

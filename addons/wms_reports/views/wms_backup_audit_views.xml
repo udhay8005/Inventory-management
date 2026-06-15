@@ -93,9 +93,13 @@
         </field>
     </record>
 
+    <!--
+        Backup & DR Audit is a maintenance screen, not a report, so it lives
+        under Configuration (manager-gated) rather than in Reports.
+    -->
     <menuitem id="menu_wms_backup_audit"
               name="Backup &amp; DR Audit"
-              parent="menu_wms_reports_root"
+              parent="wms_location.menu_wms_config"
               action="action_wms_backup_audit"
               sequence="95"
               groups="wms_location.group_wms_manager"/>
