@@ -5,6 +5,25 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.25.0.0] — 2026-06-15 — Fix: WMS app landed on the Find page; honest Find quantities
+
+Two fixes to the `/wms/find` quick-search feature. Manifest bump: `wms_reports`
+**19.0.4.8.0 → 19.0.4.9.0** (view + controller only; applies on `-u`, no migration).
+
+- **Clicking the WMS app opened the standalone Find page instead of a normal
+  screen.** The `menu_wms_find` item sat at `sequence="1"` under Operations, and
+  Odoo opens an app on its first leaf menu — Find is an `act_url` that jumps out
+  of the backend to `/wms/find`, so the app "landed" there. Re-sequenced to **15**
+  (after the daily scan trio) so the app now opens on **Slots** (the storage-map
+  landing with its wayfinding empty-state). Find stays one tap away in Operations.
+- **Find rounded measured quantities.** The product card formatted on-hand and
+  per-slot quantities with `%.0f`, so a 2.5 L fluid or 1.5 kg feed showed as a
+  whole number. Now formatted with a decimal-trimming helper (`2.5` stays `2.5`,
+  `3.0` shows `3`) — correct for the trust's litre/kg stock. Audited the rest of
+  the Find controller: the chip queries (low / expiring / dead / damaged / repair)
+  all reference valid model states, barcode-alias fallback and the storage-only
+  quant filter are correct — no other issues found.
+
 ## [v19.0.24.0.0] — 2026-06-15 — UX overhaul: wayfinding, plain language, grouped menus
 
 A value-gated, low-risk usability pass so a non-technical keeper or manager can

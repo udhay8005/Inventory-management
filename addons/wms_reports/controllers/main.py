@@ -16,6 +16,20 @@ from odoo import fields, http
 from odoo.http import request
 
 
+def _fmt_qty(value):
+    """Trim a quantity for human display: 3.0 -> '3', 2.5 -> '2.5', 0 -> '0'.
+
+    Used by the /wms/find product card. The trust stocks measured goods
+    (litres of fluid, kilograms of feed), so the old '%.0f' rounded 2.5 L to
+    '2'/'3' and silently misreported on-hand. We keep up to 3 decimals and trim
+    trailing zeros; we avoid '%g' because it switches to scientific notation for
+    large numbers.
+    """
+    text = "%.3f" % float(value or 0.0)
+    text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
 def _slot_color(occupancy_pct, on_hand):
     """Return a Bootstrap background class based on slot fill ratio."""
     if on_hand <= 0:
@@ -324,11 +338,11 @@ class WmsRackGridController(http.Controller):
                     "name": p.display_name,
                     "sku": p.default_code or "",
                     "barcode": p.barcode or "",
-                    "total": "%.0f" % sum(quants.mapped("quantity")),
+                    "total": _fmt_qty(sum(quants.mapped("quantity"))),
                     "uom": p.uom_id.name or "",
                     "low": p.id in low_ids,
                     "locations": [
-                        (loc.display_name, "%.0f" % qty)
+                        (loc.display_name, _fmt_qty(qty))
                         for loc, qty in ((g.location_id, g.quantity) for g in quants)
                     ],
                 }
