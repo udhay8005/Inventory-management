@@ -133,11 +133,20 @@
             <field name="target">new</field>
         </record>
 
+        <!--
+            Sequence MUST stay above Slots (seq 5). Odoo opens an app on the
+            first leaf menu of its first sub-menu; Find is an act_url that
+            jumps OUT of the backend to the standalone /wms/find page, so if
+            it were the lowest-sequence Operations item (it used to be seq 1)
+            clicking the WMS app dropped the user onto that page instead of a
+            normal backend screen. Slots (the storage-map landing) is seq 5,
+            so Find sits after the daily scan trio.
+        -->
         <menuitem id="menu_wms_find"
                   name="Find / Where is it?"
                   parent="wms_location.menu_wms_operations"
                   action="action_wms_find"
                   groups="wms_location.group_wms_user"
-                  sequence="1"/>
+                  sequence="15"/>
     </data>
 </odoo>
