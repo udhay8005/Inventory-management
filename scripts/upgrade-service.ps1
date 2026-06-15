@@ -25,6 +25,11 @@
 .PARAMETER Port         Default 8069.
 .PARAMETER Modules      Comma-separated modules to upgrade. Default: the WMS set.
 .PARAMETER SkipBackup   Skip the pre-upgrade backup (NOT recommended).
+.PARAMETER HealthToken  Value of ir.config_parameter wms_reports.health_token, if
+                        one is configured. Passed to /wms/health so the poll can
+                        read the real HEALTHY/DEGRADED/CRITICAL status. Optional:
+                        when omitted, a 401 from the token-gated endpoint is still
+                        correctly treated as "service is up".
 
 .EXAMPLE
     .\scripts\upgrade-service.ps1
@@ -37,7 +42,8 @@ param(
     [string]$DbName = 'wms',
     [int]$Port = 8069,
     [string]$Modules = 'wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training',
-    [switch]$SkipBackup
+    [switch]$SkipBackup,
+    [string]$HealthToken = ''
 )
 $ErrorActionPreference = 'Stop'
 
@@ -53,6 +59,7 @@ if (-not $isAdmin) {
         '-ServiceName', $ServiceName, '-DbName', $DbName, '-Port', "$Port", '-Modules', $Modules
     )
     if ($SkipBackup) { $relaunch += '-SkipBackup' }
+    if ($HealthToken) { $relaunch += @('-HealthToken', $HealthToken) }
     Start-Process powershell.exe -Verb RunAs -ArgumentList $relaunch
     return
 }
@@ -111,21 +118,44 @@ if ($svc) {
     Start-Service $ServiceName
 
     # --- 5. health check --------------------------------------------------
-    Write-Host "Waiting for http://localhost:$Port/wms/health ..." -ForegroundColor Cyan
+    # We poll until the HTTP server ANSWERS - that is what proves the upgrade
+    # restarted cleanly. /wms/health is auth="public" but has an opt-in
+    # shared-secret gate (ir.config_parameter wms_reports.health_token); when
+    # that is set, a token-less GET returns 401. A 401/403 still proves the
+    # service is up and the route exists, so we treat ANY HTTP status as
+    # "responding" (only connection-refused / timeout keeps us waiting). Pass
+    # -HealthToken to read the real HEALTHY/DEGRADED/CRITICAL status.
+    $healthUrl = "http://localhost:$Port/wms/health"
+    if ($HealthToken) { $healthUrl += "?token=$([uri]::EscapeDataString($HealthToken))" }
+    Write-Host "Waiting for $healthUrl ..." -ForegroundColor Cyan
     $healthy = $false
     for ($i = 1; $i -le 36; $i++) {
+        $code = $null; $body = $null
         try {
-            $resp = Invoke-WebRequest "http://localhost:$Port/wms/health" -UseBasicParsing -TimeoutSec 5
-            if ($resp.StatusCode -eq 200) {
-                $status = ($resp.Content | ConvertFrom-Json).status
-                Write-Host "  Healthy after ~$($i*5)s : $status" -ForegroundColor Green
-                $healthy = $true; break
+            $resp = Invoke-WebRequest $healthUrl -UseBasicParsing -TimeoutSec 5
+            $code = [int]$resp.StatusCode; $body = $resp.Content
+        } catch {
+            # PS 5.1 throws on 4xx/5xx; the response (if any) carries the code.
+            if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+        }
+        if ($code) {
+            $secs = $i * 5
+            if ($code -eq 200) {
+                $status = try { ($body | ConvertFrom-Json).status } catch { 'OK' }
+                Write-Host "  Healthy after ~${secs}s : $status (HTTP 200)" -ForegroundColor Green
+            } elseif ($code -eq 503) {
+                Write-Host "  Service up after ~${secs}s but health=CRITICAL (HTTP 503) - investigate /wms/health." -ForegroundColor Yellow
+            } elseif ($code -in 401, 403) {
+                Write-Host "  Service up after ~${secs}s (HTTP $code - /wms/health is token-gated; pass -HealthToken to read status)." -ForegroundColor Green
+            } else {
+                Write-Host "  Service responding after ~${secs}s (HTTP $code)." -ForegroundColor Green
             }
-        } catch { }
+            $healthy = $true; break
+        }
         Start-Sleep -Seconds 5
     }
     if (-not $healthy) {
-        Write-Host "Upgrade applied but health did not confirm in 180s. Check $LogDir\service-err.log." -ForegroundColor Red
+        Write-Host "Upgrade applied but the service did not answer on $Port within 180s. Check $LogDir\service-err.log." -ForegroundColor Red
         exit 1
     }
 }

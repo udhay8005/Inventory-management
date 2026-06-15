@@ -5,6 +5,26 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.26.0.0] — 2026-06-15 — Fix: upgrade-service.ps1 false "health did not confirm"
+
+Operator-facing deploy-script fix. No addon changes (no manifest bump).
+
+- **`scripts/upgrade-service.ps1` reported "Upgrade applied but health did not
+  confirm in 180s" even when the upgrade fully succeeded and the service was
+  healthy.** `/wms/health` is `auth="public"` with an opt-in shared-secret gate
+  (`ir.config_parameter wms_reports.health_token`); when that token is set, a
+  token-less poll returns **HTTP 401** — which the script treated as "not healthy"
+  because it only accepted **200**. A 401/403 actually proves the HTTP server is
+  back up and the route exists.
+- **Fix:** the post-restart poll now treats **any** HTTP response (200 / 401 /
+  403 / 503) as "service responding" — only a refused connection or timeout keeps
+  it waiting. It still reads and prints the real status on 200, warns on a 503
+  CRITICAL, and notes when the endpoint is token-gated. Added an optional
+  **`-HealthToken`** parameter (passed through UAC self-elevation) so the operator
+  can read the true HEALTHY/DEGRADED/CRITICAL status through the gate.
+- No functional change to Odoo; this only removes a false failure at the end of a
+  successful live upgrade.
+
 ## [v19.0.25.0.0] — 2026-06-15 — Fix: WMS app landed on the Find page; honest Find quantities
 
 Two fixes to the `/wms/find` quick-search feature. Manifest bump: `wms_reports`
