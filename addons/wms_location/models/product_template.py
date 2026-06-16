@@ -1,5 +1,5 @@
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 # Default returnability per WMS kind. The Admin can still override
 # per-product on the form (`wms_is_returnable` is read/write — the
@@ -526,6 +526,106 @@ class ProductTemplate(models.Model):
         "out-pickings.",
     )
 
+    # ======================================================================
+    # Enterprise product identity (P2) — universal on EVERY product
+    # ======================================================================
+    #
+    # Family / Brand / Form are admin-editable master registers (each
+    # carrying a stable uppercase `code`); Variant / Strength / Pack are
+    # free text. Together they identify a stockable item and compose the
+    # human-readable BUSINESS SKU (= default_code). These fields apply to
+    # ALL product kinds — medicine, feed, tool, chemical, spare, … — the
+    # CATEGORY (product.category.wms_effective_req_*) decides which are
+    # *required* (enforced in P3), not the field set.
+    wms_family_id = fields.Many2one(
+        "wms.family",
+        string="Family",
+        index=True,
+        help="Generic group / molecule (Paracetamol, Cow Feed, Liv52). Its "
+        "code becomes the Family segment of the SKU.",
+    )
+    wms_brand_id = fields.Many2one(
+        "wms.brand",
+        string="Brand",
+        index=True,
+        help="Manufacturer / label (Cipla, Himalaya, Local). Its code becomes "
+        "the Brand segment of the SKU.",
+    )
+    wms_form_id = fields.Many2one(
+        "wms.form",
+        string="Form / Model",
+        index=True,
+        help="Physical form (Tablet, Syrup, Pellet) — or the Model for tools / "
+        "spare parts. Its code becomes the Form segment of the SKU; its "
+        "suggested unit pre-fills the UoM on a new product.",
+    )
+    wms_variant = fields.Char(
+        string="Variant",
+        help="Product line within a brand (Premium, Citrus, Cordless, Adult). "
+        "Optional. Squeezed into the SKU.",
+    )
+    wms_pack_size = fields.Char(
+        string="Pack size",
+        help="The pack you receive / scan as a unit: 10, 50kg, 5L, 1L. Enter "
+        "just the quantity + unit; squeezed into the SKU (50kg → 50KG).",
+    )
+    # Strength reuses the existing wms_dosage field (see above) — no new
+    # column; it is the Strength/concentration segment (500mg, 70%, 18V).
+
+    # --- Two-identifier scheme -------------------------------------------
+    # default_code = the readable BUSINESS SKU (composed below).
+    # wms_product_code = the IMMUTABLE internal handle, stamped once.
+    wms_product_code = fields.Char(
+        string="Internal product code",
+        index=True,
+        copy=False,
+        readonly=True,
+        help="Permanent internal identifier (PRD-NNNNNN), stamped once at "
+        "creation and never changed — survives renames, brand / category "
+        "changes and migrations. The stable reference for audits, imports and "
+        "history. (The readable SKU lives in the Internal Reference field.)",
+    )
+    wms_sku_frozen = fields.Boolean(
+        string="SKU frozen",
+        compute="_compute_wms_sku_frozen",
+        copy=False,
+        help="True once the product has stock or movement: its SKU and barcode "
+        "are then in circulation and locked (archive + recreate instead of "
+        "renaming a code already on printed labels / in stock history).",
+    )
+
+    _wms_product_code_unique = models.Constraint(
+        "UNIQUE(wms_product_code)",
+        "The internal product code must be unique.",
+    )
+
+    def _wms_in_circulation(self):
+        """Live, reliable check: the product has a stock.quant or any stock
+        movement, so its SKU/barcode are in circulation and must not change.
+
+        Done as a direct query rather than a stored compute because
+        stored-compute invalidation does NOT fire on every stock path (e.g.
+        stock.quant._update_available_quantity bypasses the variant→template
+        dependency), which would let a stale 'not frozen' value slip through.
+        The write-guards call this directly so the lock can never be bypassed."""
+        self.ensure_one()
+        vids = self.product_variant_ids.ids
+        if not vids:
+            return False
+        Quant = self.env["stock.quant"].sudo()
+        if Quant.search_count([("product_id", "in", vids)]):
+            return True
+        MoveLine = self.env["stock.move.line"].sudo()
+        return bool(MoveLine.search_count([("product_id", "in", vids)]))
+
+    @api.depends("product_variant_ids.stock_quant_ids")
+    def _compute_wms_sku_frozen(self):
+        """Non-stored UI mirror of _wms_in_circulation (so the form always
+        reflects live stock). The write-guards use _wms_in_circulation directly;
+        this just hides the Regenerate button and shows the freeze alert."""
+        for tmpl in self:
+            tmpl.wms_sku_frozen = tmpl._wms_in_circulation()
+
     # ---- Structured SKU: <PREFIX>-<NNNNN> --------------------------------
     #
     # When a product is created with a wms_product_kind, the
@@ -546,15 +646,40 @@ class ProductTemplate(models.Model):
         #    boolean back on a per-product basis if a one-off resale
         #    ever happens (excess construction material to a neighbour
         #    trust, for example).
+        seen_skus = set()
         for vals in vals_list:
             kind = vals.get("wms_product_kind")
             code = (vals.get("default_code") or "").strip()
-            if kind and not code:
-                seq_code = KIND_SEQ_CODE.get(kind)
-                if seq_code:
-                    new_sku = self.env["ir.sequence"].next_by_code(seq_code)
-                    if new_sku:
-                        vals["default_code"] = new_sku
+            # Stamp the immutable internal product code once (on EVERY
+            # product, structured-SKU or not), if the caller left it blank.
+            if not (vals.get("wms_product_code") or "").strip():
+                prd = self.env["ir.sequence"].next_by_code("wms.product.code")
+                if prd:
+                    vals["wms_product_code"] = prd
+            # Fill the Business SKU (default_code) only when the operator left
+            # it blank: prefer the deterministic structured composition from
+            # the identity fields; otherwise fall back to the per-kind
+            # KIND-NNNNN sequence (legacy / quick-entry path). A composed SKU
+            # that already exists BLOCKS creation (no auto-suffix) so the
+            # catalogue stays clean. seen_skus also blocks two rows in the SAME
+            # create() batch composing the same code (neither is in the DB yet).
+            if not code:
+                business = self._wms_compose_business_sku(vals)
+                if business:
+                    self._wms_block_sku_collision(business, seen=seen_skus)
+                    vals["default_code"] = business
+                    seen_skus.add(business)
+                elif kind:
+                    seq_code = KIND_SEQ_CODE.get(kind)
+                    if seq_code:
+                        new_sku = self.env["ir.sequence"].next_by_code(seq_code)
+                        if new_sku:
+                            vals["default_code"] = new_sku
+            else:
+                # Caller supplied the SKU (import / data file): give it the same
+                # friendly collision gate instead of a raw DB IntegrityError.
+                self._wms_block_sku_collision(code, seen=seen_skus)
+                seen_skus.add(code)
             if kind and "sale_ok" not in vals:
                 vals["sale_ok"] = False
             # Seed the unit of measure from the kind ONLY when the
@@ -568,7 +693,17 @@ class ProductTemplate(models.Model):
             # favour of per-supplier UoM on product.supplierinfo, and
             # writing it raises — see wms_product_onboard._do_onboard.)
             if kind and not vals.get("uom_id"):
-                uom_id = self._wms_kind_default_uom_id(kind)
+                # Prefer the chosen Form's suggested unit (tablet → Units,
+                # syrup → L, powder → kg); fall back to the kind default.
+                # Create-time seed only (never retrofits a stocked product).
+                uom_id = None
+                form_id = self._wms_vals_id(vals.get("wms_form_id"))
+                if form_id:
+                    form = self.env["wms.form"].browse(form_id)
+                    if form.default_uom_id:
+                        uom_id = form.default_uom_id.id
+                if not uom_id:
+                    uom_id = self._wms_kind_default_uom_id(kind)
                 if uom_id:
                     vals["uom_id"] = uom_id
         templates = super().create(vals_list)
@@ -605,6 +740,7 @@ class ProductTemplate(models.Model):
                     clash = (
                         self.env["product.product"]
                         .sudo()
+                        .with_context(active_test=False)
                         .search(
                             [("barcode", "=", tmpl.default_code), ("id", "!=", variant.id)],
                             limit=1,
@@ -791,6 +927,251 @@ class ProductTemplate(models.Model):
                     % {"code": tmpl.default_code, "kind": kind_label, "prefix": expected}
                 )
 
+    # ---- Business-SKU composition + two-identifier guards (P2) -----------
+    #
+    # The Business SKU (= default_code) is the readable, deterministic code
+    # operators search and print; the immutable wms_product_code (PRD-…)
+    # guarantees a stable unique handle regardless. A composed SKU that
+    # collides with an existing product BLOCKS creation — the owner's rule:
+    # force the catalogue to be corrected, never auto-suffix.
+
+    @staticmethod
+    def _wms_squeeze(text, maxlen):
+        """Deterministic SKU segment from free text: uppercase, keep only
+        A-Z 0-9, cap length. '500 mg' -> '500MG', '50kg' -> '50KG',
+        'Premium' -> 'PREM'. Lossy by design — uniqueness is guaranteed by
+        the collision block + the immutable PRD code, not the squeeze."""
+        if not text:
+            return ""
+        squeezed = "".join(ch for ch in text.upper() if ch.isalnum())
+        return squeezed[: max(0, maxlen)]
+
+    @staticmethod
+    def _wms_vals_id(value):
+        """Resolve a single id from a Many2one value as it can appear in a
+        create() vals dict: a bare int (the form / normal path), or an x2many-
+        style command such as (6, 0, [id]) / (4, id) / [(6, 0, [id])] that some
+        ORM/import callers emit. Returns the int id or None — never lets a
+        command tuple reach browse() (which would crash or browse the wrong
+        record and silently drop the SKU segment / the Form-UoM seed)."""
+        if not value:
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, (list, tuple)):
+            # unwrap a singleton list like [(6,0,[id])] or [(4,id)]
+            if value and isinstance(value[0], (list, tuple)):
+                value = value[0]
+            if not value:
+                return None
+            tag = value[0]
+            if tag in (4, 3, 2, 5) and len(value) > 1 and isinstance(value[1], int):
+                return value[1]
+            if tag in (6, 0) and len(value) > 2 and value[2]:
+                ids = value[2]
+                return ids[0] if isinstance(ids, (list, tuple)) and ids else None
+        return None
+
+    @api.model
+    def _wms_master_code(self, model, value):
+        rec_id = self._wms_vals_id(value)
+        return self.env[model].browse(rec_id).code if rec_id else None
+
+    @api.model
+    def _wms_compose_business_sku(self, vals):
+        """Compose KINDPREFIX-FAMILY-BRAND-[VARIANT]-FORM-[STRENGTH]-[PACK]
+        from a vals dict. Returns '' when the kind + Family + Brand minimum is
+        absent, so create() falls back to KIND-NNNNN. Family/Brand/Form come
+        from the master `code` (stable lookup); Variant/Strength(=wms_dosage)/
+        Pack are squeezed free text. Optional segments collapse (never empty).
+        Many2one values are resolved via _wms_vals_id so command-style vals
+        from ORM/import callers don't crash or silently drop a segment."""
+        kind = vals.get("wms_product_kind")
+        prefix = KIND_SKU_PREFIX.get(kind) if kind else None
+        family = self._wms_master_code("wms.family", vals.get("wms_family_id"))
+        brand = self._wms_master_code("wms.brand", vals.get("wms_brand_id"))
+        if not (prefix and family and brand):
+            return ""
+        segments = [prefix, family, brand]
+        variant = self._wms_squeeze(vals.get("wms_variant"), 4)
+        if variant:
+            segments.append(variant)
+        form = self._wms_master_code("wms.form", vals.get("wms_form_id"))
+        if form:
+            segments.append(form)
+        strength = self._wms_squeeze(vals.get("wms_dosage"), 5)
+        if strength:
+            segments.append(strength)
+        pack = self._wms_squeeze(vals.get("wms_pack_size"), 6)
+        if pack:
+            segments.append(pack)
+        return "-".join(segments)
+
+    @api.model
+    def _wms_block_sku_collision(self, business_sku, ignore_tmpl_ids=None, seen=None):
+        """Raise a friendly UserError if `business_sku` already belongs to a
+        product (the hard duplicate gate — no auto-suffix). `seen` blocks a
+        repeat within the same create() batch (the DB search can't see rows not
+        yet committed). The search is archive-inclusive (active_test=False) so it
+        matches the scope of the UNIQUE(default_code) constraint — otherwise an
+        archived holder slips past the friendly gate and dies on a raw DB error
+        (the exact 'archive + recreate' path the freeze tells operators to use)."""
+        if seen and business_sku in seen:
+            raise UserError(
+                _(
+                    "SKU '%s' is repeated within this batch. Adjust the Brand, "
+                    "Variant, Pack size or Strength so each product is distinct."
+                )
+                % business_sku
+            )
+        existing = (
+            self.env["product.product"]
+            .with_context(active_test=False)
+            .search([("default_code", "=", business_sku)], limit=1)
+        )
+        if ignore_tmpl_ids and existing.product_tmpl_id.id in ignore_tmpl_ids:
+            return
+        if existing:
+            raise UserError(
+                _(
+                    "SKU '%(sku)s' already exists.\n\n"
+                    "Existing product: %(name)s (%(prd)s)\n\n"
+                    "This Brand / Variant / Form / Strength / Pack combination is "
+                    "already in the catalogue. Adjust the Brand, Variant, Pack "
+                    "size or Strength to make it distinct — the system never "
+                    "creates near-duplicate codes."
+                )
+                % {
+                    "sku": business_sku,
+                    "name": existing.display_name,
+                    "prd": existing.product_tmpl_id.wms_product_code
+                    or existing.default_code
+                    or _("no code"),
+                }
+            )
+
+    def write(self, vals):
+        # The internal product code is permanent — never editable once set.
+        if "wms_product_code" in vals:
+            new = (vals.get("wms_product_code") or "").strip()
+            for tmpl in self:
+                if tmpl.wms_product_code and new != tmpl.wms_product_code:
+                    raise UserError(
+                        _("The internal product code (%s) is permanent and " "cannot be changed.")
+                        % tmpl.wms_product_code
+                    )
+        # A SKU in circulation (the product has stock / movement) cannot be
+        # renamed. Clearing it stays allowed (archived-item cleanup, per
+        # _check_sku_prefix). Archive + recreate instead of renaming. The live
+        # _wms_in_circulation check (not the cached field) is the lock.
+        if "default_code" in vals:
+            new_code = (vals.get("default_code") or "").strip()
+            if new_code:
+                for tmpl in self:
+                    old = (tmpl.default_code or "").strip()
+                    if old and new_code != old and tmpl._wms_in_circulation():
+                        raise UserError(
+                            _(
+                                "SKU '%s' is locked: this product has stock or "
+                                "movement, so its code is already in circulation. "
+                                "Archive it and create a new product instead of "
+                                "renaming the SKU."
+                            )
+                            % tmpl.default_code
+                        )
+        return super().write(vals)
+
+    @api.onchange(
+        "wms_family_id",
+        "wms_brand_id",
+        "wms_form_id",
+        "wms_variant",
+        "wms_dosage",
+        "wms_pack_size",
+    )
+    def _onchange_wms_identity_dup(self):
+        """Soft, non-blocking heads-up that a product with the same identity
+        already exists. The hard block happens at save via the composed SKU."""
+        if not (self.wms_family_id and self.wms_brand_id):
+            return
+        domain = [
+            ("wms_family_id", "=", self.wms_family_id.id),
+            ("wms_brand_id", "=", self.wms_brand_id.id),
+        ]
+        if self.wms_form_id:
+            domain.append(("wms_form_id", "=", self.wms_form_id.id))
+        existing = (
+            self.env["product.template"]
+            .with_context(active_test=False)
+            .search(domain + [("id", "!=", self._origin.id)], limit=3)
+        )
+        if not existing:
+            return
+        names = ", ".join("%s (%s)" % (p.display_name, p.wms_product_code or "—") for p in existing)
+        return {
+            "warning": {
+                "title": _("Similar product already exists"),
+                "message": _(
+                    "An item with this Family / Brand%(form)s already exists:\n"
+                    "%(names)s\n\n"
+                    "If this is the SAME item, open it instead. If it's a different "
+                    "variant / strength / pack, carry on — it gets its own SKU."
+                )
+                % {"form": _(" / Form") if self.wms_form_id else "", "names": names},
+            }
+        }
+
+    def action_wms_regenerate_sku(self):
+        """Manager tool: re-compose the Business SKU from the current identity
+        fields BEFORE the product is frozen (e.g. after fixing the brand).
+        Blocks on collision and re-syncs the Code128 barcode. Refused once the
+        product is frozen (stock / printed label)."""
+        for tmpl in self:
+            if tmpl._wms_in_circulation():
+                raise UserError(
+                    _(
+                        "'%s' is frozen (it has stock / movement); its SKU can no "
+                        "longer be regenerated. Archive + recreate instead."
+                    )
+                    % tmpl.display_name
+                )
+            vals = {
+                "wms_product_kind": tmpl.wms_product_kind,
+                "wms_family_id": tmpl.wms_family_id.id,
+                "wms_brand_id": tmpl.wms_brand_id.id,
+                "wms_form_id": tmpl.wms_form_id.id,
+                "wms_variant": tmpl.wms_variant,
+                "wms_dosage": tmpl.wms_dosage,
+                "wms_pack_size": tmpl.wms_pack_size,
+            }
+            business = tmpl._wms_compose_business_sku(vals)
+            if not business:
+                raise UserError(
+                    _("'%s' needs at least a Kind, Family and Brand to build a " "structured SKU.")
+                    % tmpl.display_name
+                )
+            tmpl._wms_block_sku_collision(business, ignore_tmpl_ids=tmpl.ids)
+            tmpl.default_code = business
+            # Re-sync the Code128 barcode (= SKU). If another product already
+            # owns this string as a barcode, raise rather than silently leave a
+            # SKU≠barcode mismatch (archive-inclusive, matching barcode_uniq).
+            for variant in tmpl.product_variant_ids:
+                clash = (
+                    self.env["product.product"]
+                    .with_context(active_test=False)
+                    .search([("barcode", "=", business), ("id", "!=", variant.id)], limit=1)
+                )
+                if clash:
+                    raise UserError(
+                        _(
+                            "Cannot re-sync the barcode: '%(sku)s' is already used as a "
+                            "barcode by %(name)s. Resolve that conflict first."
+                        )
+                        % {"sku": business, "name": clash.display_name}
+                    )
+                variant.barcode = business
+        return True
+
     # ---- "Where is it?" smart-button summary -----------------------------
     wms_total_on_hand = fields.Float(
         string="Total on hand (WMS)",
@@ -883,6 +1264,29 @@ class ProductProduct(models.Model):
         Template = self.env["product.template"]
         for rec in self.filtered("barcode"):
             Template._wms_validate_barcode(rec.barcode)
+
+    def write(self, vals):
+        # The Code128 barcode (= SKU) is locked once the product has stock /
+        # movement — it is already on labels in the field. Clearing it stays
+        # allowed; FILLING a blank barcode stays allowed (so _wms_ensure_barcodes
+        # and the bulk back-fill still work on a stocked product). Only a RENAME
+        # of a non-empty barcode on an in-circulation product is blocked. The
+        # live _wms_in_circulation check (not the cached field) is the lock.
+        if "barcode" in vals:
+            new_bc = (vals.get("barcode") or "").strip()
+            if new_bc:
+                for rec in self:
+                    old = (rec.barcode or "").strip()
+                    if old and new_bc != old and rec.product_tmpl_id._wms_in_circulation():
+                        raise UserError(
+                            _(
+                                "The barcode for '%s' is locked: this product has "
+                                "stock or movement. Archive it and create a new "
+                                "product instead of changing the barcode."
+                            )
+                            % rec.display_name
+                        )
+        return super().write(vals)
 
     wms_product_kind = fields.Selection(
         related="product_tmpl_id.wms_product_kind",

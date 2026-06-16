@@ -5,6 +5,55 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.33.0.0] — 2026-06-16 — Product Master P2: two-identifier SKU engine
+
+The Product Master starts behaving like an enterprise PIM: every product now
+carries a permanent internal code **and** a readable, composed Business SKU. Plan:
+[docs/PRODUCT-MASTER-BUILD-SPEC.md §5](docs/PRODUCT-MASTER-BUILD-SPEC.md). Manifest:
+`wms_location` **19.0.3.20.0 → 19.0.3.21.0** (additive fields + a back-fill
+migration; no existing `default_code`/`barcode`/`stock`/`audit` data is rewritten).
+
+- **Two identifiers per product.** (1) **Internal product code** `PRD-NNNNNN` —
+  stamped once at creation, **permanent**, unique, write-protected forever; the
+  stable handle for audits / imports / history. (2) **Business SKU** =
+  `default_code` = the readable composed code.
+- **Deterministic Business-SKU builder.** `KIND-FAMILY-BRAND-[VARIANT]-FORM-
+  [STRENGTH]-[PACK]` (e.g. `MED-PARA-CIP-TAB-500MG-10`), composed from the
+  Family/Brand/Form register **codes** + squeezed Variant/Strength/Pack text.
+  Optional segments collapse. Without a Family+Brand it falls back to the legacy
+  `KIND-NNNNN`.
+- **Collision blocks creation — never auto-suffixes.** If the composed SKU already
+  exists, creation is refused with a message naming the existing product and its
+  PRD code, asking you to adjust Brand / Variant / Pack / Strength. No `-2`/`-0002`.
+- **Universal identity fields** on every product — Family, Brand, Form/Model,
+  Variant, Strength (the reused `wms_dosage`), Pack size — surfaced in a *Product
+  identity* group. The **category** decides which are required (enforcement lands
+  in P3).
+- **Form suggests the unit.** Choosing a Form seeds the UoM (tablet → Units, syrup
+  → L, powder → kg) over the kind default, at create time only.
+- **Freeze after stock.** Once a product has stock or movement, its SKU and
+  barcode lock — archive + recreate instead of renaming a code already in
+  circulation. A manager can **Regenerate SKU** before freeze. *(Behaviour change:
+  renaming a product's barcode/SKU after it has stock is now blocked; the freeze
+  uses a live stock check so it is reliable across every stock path. `_validate`/
+  back-fill that **fill a blank** barcode are unaffected — only renames lock.)*
+- **Soft duplicate warning** on the product form when a matching Family/Brand/Form
+  already exists (non-blocking; the hard block is the SKU collision at save).
+- **Back-fill migration** assigns a `PRD-` code to every pre-existing product
+  (additive — new column only).
+
+### Verification
+Full `wms` suite green on a fresh scratch DB, including the new
+`test_structured_sku.py` (PRD stamping/immutability/uniqueness; deterministic
+composition + segment collapse; KIND fallback; collision block with no auto-suffix;
+form-suggests-UoM; stock-freezes-SKU + frozen-rename-blocked; pre-freeze regenerate;
+soft dup onchange).
+
+### Live server
+Additive `-u` via `upgrade-service.ps1` (runs the PRD back-fill). Existing products
+keep their current SKUs and barcodes; they simply gain a permanent `PRD-` code. The
+structured SKU applies to **new** products that carry identity fields.
+
 ## [v19.0.32.0.0] — 2026-06-16 — Product Master P1: identity registers + editable category tree
 
 First structural phase of the enterprise Product-Master (full plan in

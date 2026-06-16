@@ -60,12 +60,17 @@ class TestFpatFx3ScanIssueImmutable(TransactionCase):
                 "wms_product_kind": "consumable",
             }
         )
+        # Set the test barcode BEFORE stock lands: post-P2, stock movement
+        # freezes a product's SKU/barcode (they are then in circulation), so a
+        # barcode rename must happen pre-stock. This is the intended freeze
+        # behaviour, not a test workaround.
+        product.barcode = "FX3IMMUTABLE1"
         self.env["stock.quant"]._update_available_quantity(product, wh.lot_stock_id, 10.0)
         wiz = self.env["wms.scan.issue"].create(
             {
                 "warehouse_id": wh.id,
                 "requested_qty": 2.0,
-                "last_scan": product.barcode or "",
+                "last_scan": "FX3IMMUTABLE1",
                 "taken_by": "T",
                 "ordered_by": "O",
                 "usage_note": "FX3 immutability test",
@@ -73,8 +78,6 @@ class TestFpatFx3ScanIssueImmutable(TransactionCase):
                 "issued_for": "other",
             }
         )
-        # Plan + validate via the wizard's product barcode (auto-generated).
-        product.barcode = "FX3IMMUTABLE1"
         wiz.last_scan = "FX3IMMUTABLE1"
         wiz.action_plan()
         wiz.action_validate()
