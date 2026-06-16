@@ -68,10 +68,11 @@ per-model class attribute (`_code_max_len`).
 ### New fields on `product.template` *(P2)*
 
 `wms_family_id` (M2o), `wms_brand_id` (M2o), `wms_form_id` (M2o), `wms_variant`
-(Char), `wms_pack_size` (Char), `wms_sku_frozen` (Bool, stored — set when stock
-exists or a label printed), `wms_identity_key` (Char, compute+store+index — the
-dup-detection tuple). **Reuse** `wms_dosage` (Strength) and `wms_size` (Size) —
-relabel strings only, never rename the fields.
+(Char), `wms_pack_size` (Char), `wms_product_code` (Char — immutable PRD-NNNNNN,
+UNIQUE), `wms_sku_frozen` (Bool, **non-stored** compute — true once the product has
+stock/movement). **Reuse** `wms_dosage` (Strength) — relabelled in the view only,
+never a field rename. *(The `wms_identity_key` precompute from the spec draft was
+dropped as unnecessary — the soft detector searches the identity fields directly.)*
 
 ### New fields on `product.category` *(P1, shipped)*
 
@@ -113,23 +114,57 @@ violates the additive invariant and must ship gated/logged/tested on its own).
 
 ---
 
-## 5. Structured SKU *(P2)*
+## 5. Structured SKU — TWO IDENTIFIERS *(P2)* — owner decision 2026-06-16
 
-`KINDPREFIX-FAMILY-BRAND-[VARIANT]-FORM-[STRENGTH]-[PACK]-NNNNN`. Charset `[A-Z0-9]`
-per segment; Family/Brand/Form from the stored `code`; Variant/Strength/Pack are
-deterministic squeezes of the typed text; optional segments collapse (never `--`/
-`000`); Family+Brand never collapse. Built inside `create()` between the existing
-`next_by_code()` draw and the `default_code` assignment — **reuse the single
-draw** (split the numeric tail off the returned `MED-00001`, never call
-`next_by_code` twice). The **visible `-NNNNN` tail is mandatory** (critic): it is
-the collision-breaker and immutable id. Freeze: `wms_sku_frozen` must be a
-**stored compute** on `product_variant_ids.stock_quant_ids` (+ a label-printed
-flag), *not* a phantom guard (critic — a Boolean can't auto-flip on an unrelated
-quant insert without a compute). Before freeze, editing identity re-stamps the
-SKU + re-syncs Code128 (needs new code — `_wms_ensure_barcodes` only fills a
-blank barcode today); after freeze, `default_code`/Code128 are immutable. The v31
-EAN-13 alias (12 numeric digits) is fully independent of the SKU string → zero
-risk. `docs/14-sku-naming.md` to be rewritten (drop ≤20-char/000/3-segment rules).
+The owner rejected both a trailing sequence number *and* collision auto-suffixing
+in favour of the genuine enterprise pattern: **separate the immutable internal id
+from the readable item number.**
+
+1. **Business SKU = `default_code`** = `KINDPREFIX-FAMILY-BRAND-[VARIANT]-FORM-
+   [STRENGTH]-[PACK]` — **no trailing number**. Charset `[A-Z0-9]` per segment;
+   Family/Brand/Form from the stored `code`; Variant/Strength/Pack are
+   deterministic squeezes of the typed text; optional segments collapse (never
+   `--`); Family+Brand are required for the structured path. This is what
+   operators search, print and recognise.
+2. **Internal Product Code = new `wms_product_code`** = `PRD-NNNNNN` from a new
+   global `ir.sequence` (`wms.product.code`, padding 6). **Always** stamped at
+   create, **immutable forever** (blocked from any write), `index`, UNIQUE,
+   `copy=False`. This is the stable reference that guarantees uniqueness
+   regardless of how the readable SKU is composed or edited.
+3. **Collision policy = BLOCK, never suffix.** Before create, if the composed
+   Business SKU already exists on another product, raise a friendly `UserError`
+   naming the existing product + its `PRD-` code and asking the operator to adjust
+   Brand / Variant / Pack Size / Strength. No `-2`/`-3` auto-append (the owner:
+   "force the catalog to be corrected"). This is the hard form of the dup
+   detector; the soft onchange warning (§7) is the early heads-up.
+4. **Fallback:** when Family or Brand is absent (legacy-style quick entry / bulk
+   paste without identity), `default_code` falls back to the existing
+   `KIND-NNNNN` per-kind sequence exactly as today — so the per-kind sequences are
+   retained. `wms_product_code` (PRD) is stamped on **every** product regardless.
+
+**Mechanics:** compose inside `create()`; `_check_sku_prefix` already accepts the
+structured form (it only checks the leading kind segment). `_sku_unique` is on
+**`product.product`** (not the template) — the UNIQUE(default_code) there backs the
+block. Code128 `variant.barcode = default_code` (Business SKU) unchanged; the v31
+EAN-13 numeric alias (the daily scan) is fully independent → zero risk.
+
+**Freeze (as built, post adversarial review):** a **live** `_wms_in_circulation()`
+check (queries `stock.quant` / `stock.move.line`) — NOT a stored compute. A stored
+compute on `stock_quant_ids` was unreliable (its invalidation doesn't fire on
+`stock.quant._update_available_quantity`, so it let a stale "not frozen" value
+through — which is why an unmodified `test_fpat_fx3` passed by accident). The
+write-guards call the live check directly; `wms_sku_frozen` is a non-stored UI
+mirror. Freeze is **stock-only** (the owner's stated trigger) — the design-phase
+"label-printed" leg was dropped as dead code. Once in circulation, `default_code` and
+Code128 **renames** are blocked (clearing / filling a blank stays allowed, so
+`_wms_ensure_barcodes` + back-fill still work); `wms_product_code` is *always*
+immutable. **Behaviour change:** renaming a barcode/SKU after stock is now blocked
+(the only collateral was `test_fpat_fx3`, reordered to set its barcode pre-stock; no
+production flow renames after stock). The collision gate is archive-inclusive, covers
+the manual-`default_code` path, and blocks in-batch duplicates in one `create()`; M2o
+vals are resolved via `_wms_vals_id` against command-style values. Existing products
+get a `PRD-` code via an additive back-fill migration (new column only).
+`docs/14-sku-naming.md` rewritten for the two-identifier model.
 
 ---
 
@@ -169,9 +204,9 @@ must never change so printed labels keep scanning (note: both subtitle `:280`
 
 | Phase | Scope | Risk | Status |
 |---|---|---|---|
-| **P1** | 3 master models + `product.category` extension (active, default-kind, req matrix, recursive effective-req) + editable tree seed + masters seed + ACL + manager menus/views | Low (additive tables + noupdate seeds) | **building now → v19.0.32.0.0** |
-| **P2** | identity fields on template + structured-SKU builder + freeze (stored compute) + identity-tuple dup detector | Med | next |
-| **P3** | guided stepper + shared create helper + guarded required-matrix enforcement | Med | after P2 |
+| **P1** | 3 master models + `product.category` extension (active, default-kind, req matrix, recursive effective-req) + editable tree seed + masters seed + ACL + manager menus/views | Low (additive tables + noupdate seeds) | **shipped v19.0.32.0.0** |
+| **P2** | identity fields on template + structured-SKU builder + freeze (live check) + collision block + soft dup detector | Med | **shipped v19.0.33.0.0** |
+| **P3** | guided stepper + shared create helper + guarded required-matrix enforcement | Med | next |
 | **P4** | assisted-migration wizard (opt-in, reviewable, reversible) | Low | after P3 |
 | **P5** | label + `/wms/find` + search deltas | Low–Med | after P4 |
 | **later** | category `merge` action (gated/logged); per-lot FEFO (separate approval) | Med | deferred |
@@ -188,11 +223,13 @@ manifests too.
 
 ## 9. Open decisions for the owner
 
-1. **Visible `-NNNNN` SKU tail** — recommended/required (without it, identical
-   identity tuples collide). The owner's worked examples omit it; the build keeps
-   it for guaranteed uniqueness. *(Confirm.)*
-2. **Code length caps** — Family/Brand ≤6, Form ≤4. *(Confirm.)*
-3. **Freeze trigger** — first stock OR first label print. *(Confirm.)*
+1. **SKU uniqueness — RESOLVED (owner, 2026-06-16):** two identifiers — a readable
+   `default_code` Business SKU (no tail) + an immutable `wms_product_code`
+   (`PRD-NNNNNN`); Business-SKU collisions **block** creation (no auto-suffix).
+   See §5.
+2. **Code length caps** — Family/Brand ≤6, Form ≤4. *(Built; confirm.)*
+3. **Freeze trigger — RESOLVED:** stock/movement only (a live `_wms_in_circulation`
+   check). The "label-printed" leg was dropped as dead code.
 4. **Starter `code` dictionary** — P1 seeds common forms/brands/a few families;
    the owner supplies/edits the rest (esp. families).
 5. **Required-matrix tuning** — seeded per the owner's branch matrix; refine

@@ -10,4 +10,5 @@ from . import (
     test_polyomino,
     test_removal_engine,
     test_sku_integrity,
+    test_structured_sku,
 )

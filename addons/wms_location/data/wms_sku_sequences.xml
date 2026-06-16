@@ -193,5 +193,29 @@
             <field name="padding">10</field>
             <field name="implementation">standard</field>
         </record>
+
+        <!--
+            Internal immutable Product Code (PRD-NNNNNN).
+
+            The enterprise Product Master uses TWO identifiers (P2):
+              * the BUSINESS SKU (default_code) is the readable, composed
+                code (MED-PARA-CIP-TAB-500-10) operators search and print;
+              * this PRD code is the IMMUTABLE internal handle, stamped
+                once at create and never changed - it survives renames,
+                category / brand changes, and migrations, and is the stable
+                reference for audits / imports / history.
+
+            Format: PRD-NNNNNN (6-digit zero-padded). 6 digits covers
+            ~1 million products for a single trust. Stamped on EVERY
+            product regardless of whether it gets a structured Business
+            SKU or the KIND-NNNNN fallback.
+        -->
+        <record id="seq_wms_product_code" model="ir.sequence">
+            <field name="name">WMS Internal Product Code</field>
+            <field name="code">wms.product.code</field>
+            <field name="prefix">PRD-</field>
+            <field name="padding">6</field>
+            <field name="implementation">standard</field>
+        </record>
     </data>
 </odoo>
