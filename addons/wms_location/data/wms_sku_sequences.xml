@@ -161,24 +161,36 @@
             so the same product can ALSO be read by any retail/POS
             scanner that only understands EAN-13.
 
-            Prefix 89011110 is in the GS1 Indian non-retail range and
-            is not assigned to any registered manufacturer, so we can
-            use it privately without colliding with vendor packaging.
+            Prefix "02" is the GS1 RESTRICTED-CIRCULATION range
+            (first two digits 02x, alongside the wider 2xx range) that
+            GS1 reserves for codes used only INSIDE one organisation -
+            they are guaranteed never to be a vendor's real retail GTIN,
+            so an internally-minted EAN-13 can never overlap a supplier
+            pack's barcode. (The old prefix 89011110 sat in the GS1
+            India "890" registered-manufacturer range - changed to "02"
+            as hygiene; see migrations/19.0.3.19.0/post-migration.py,
+            which repoints this sequence on already-installed databases
+            because noupdate="1" keeps the upgrade from touching it.)
 
-            Format: 89011110-NNNN-C
-              - 89011110 = 8-digit private prefix
-              - NNNN     = 4-digit sequence number (0001..9999)
-              - C        = EAN-13 checksum (computed at insert time)
+            Format: 02 + NNNNNNNNNN + C
+              - 02          = 2-digit restricted-circulation prefix
+              - NNNNNNNNNN  = 10-digit zero-padded sequence number
+              - C           = EAN-13 checksum (computed at insert time)
 
-            The 4-digit sequence covers 9999 unique products, more
-            than enough for a single trust. If we exceed that we
-            switch prefix and reset.
+            CRITICAL: the body (prefix + sequence) MUST stay exactly 12
+            digits, because product_template._next_ean13() returns ''
+            (mints NO alias) unless len == 12. 2 + 10 = 12. If you ever
+            change the prefix width, change the padding to compensate so
+            the sum stays 12.
+
+            The 10-digit sequence covers 10 billion unique products -
+            it never rolls over for a single trust.
         -->
         <record id="seq_barcode_ean13" model="ir.sequence">
             <field name="name">WMS Barcode - EAN-13</field>
             <field name="code">wms.barcode.ean13</field>
-            <field name="prefix">89011110</field>
-            <field name="padding">4</field>
+            <field name="prefix">02</field>
+            <field name="padding">10</field>
             <field name="implementation">standard</field>
         </record>
     </data>

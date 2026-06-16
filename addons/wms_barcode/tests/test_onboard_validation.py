@@ -122,6 +122,39 @@ class TestOnboardValidation(TransactionCase):
         self.assertEqual(p.categ_id, Categ, "Category should be applied")
         self.assertAlmostEqual(p.standard_price, 17.5, places=2)
 
+    def test_name_dup_warning_fires_for_existing_name(self):
+        """Typing the name of a product that already exists returns a soft,
+        non-blocking warning (anti-sprawl) - case-insensitive exact match."""
+        Line = self.env["wms.product.onboard.line"]
+        res = Line.new({"name": "obv existing"})._onchange_name_dup_warning()
+        self.assertTrue(res and res.get("warning"), "an existing name must warn")
+        self.assertIn("CONS-99001", res["warning"]["message"])
+
+    def test_name_dup_warning_silent_for_new_name(self):
+        Line = self.env["wms.product.onboard.line"]
+        res = Line.new({"name": "OBV Totally Unique 9Z"})._onchange_name_dup_warning()
+        self.assertFalse(res, "a brand-new name must not warn")
+
+    def test_name_dup_warning_is_non_blocking(self):
+        """The warning must NEVER stop the save - a same-named row still
+        onboards (a genuinely different brand/form/size is a real product)."""
+        wiz = self._wiz(
+            [
+                {
+                    "name": "OBV Existing",  # same name as the pre-existing product
+                    "wms_product_kind": "consumable",
+                    "initial_qty": 0,
+                }
+            ]
+        )
+        wiz._validate()  # does not raise on a duplicate name
+        wiz._do_onboard()
+        self.assertEqual(
+            self.env["product.product"].search_count([("name", "=", "OBV Existing")]),
+            2,
+            "the duplicate-name warning is advisory only; the save proceeds",
+        )
+
     def test_failed_validation_creates_no_products(self):
         wiz = self._wiz(
             [

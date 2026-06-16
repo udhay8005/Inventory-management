@@ -443,6 +443,39 @@ class WmsProductOnboardLine(models.TransientModel):
         if uom:
             self.uom_id = uom.id
 
+    @api.onchange("name")
+    def _onchange_name_dup_warning(self):
+        """Soft, non-blocking anti-sprawl warning: if a product with this
+        EXACT name already exists, tell the operator so they open it instead
+        of creating a near-duplicate master.
+
+        This is the cheapest duplicate control that needs nothing new - it
+        keys on the name (always present), adds no field, no model, no step,
+        and never blocks the save: a genuinely different brand / form / size
+        legitimately gets a new product, so the operator stays in control.
+        Match is case-insensitive but exact ('=ilike' with no wildcards) to
+        keep precision high and false alarms low."""
+        name = (self.name or "").strip()
+        if not name:
+            return
+        existing = self.env["product.product"].search([("name", "=ilike", name)], limit=3)
+        if not existing:
+            return
+        skus = ", ".join(p.default_code or _("(no SKU)") for p in existing)
+        return {
+            "warning": {
+                "title": _("This product may already exist"),
+                "message": _(
+                    "A product named %r is already in the catalogue (%s).\n\n"
+                    "If it's the SAME item, cancel and open the existing one "
+                    "instead of creating a duplicate. If this is genuinely a "
+                    "DIFFERENT brand, form, or size, carry on - it should be "
+                    "its own product."
+                )
+                % (name, skus),
+            }
+        }
+
     @api.onchange("location_scan")
     def _onchange_location_scan(self):
         """Look up the scanned barcode against stock.location and
