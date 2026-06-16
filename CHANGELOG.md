@@ -5,6 +5,49 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.32.0.0] — 2026-06-16 — Product Master P1: identity registers + editable category tree
+
+First structural phase of the enterprise Product-Master (full plan in
+[docs/PRODUCT-MASTER-BUILD-SPEC.md](docs/PRODUCT-MASTER-BUILD-SPEC.md)). **Purely
+additive** — new tables + `noupdate` seeds, **zero** existing product/stock/quant/
+audit/barcode/`categ_id` data touched. Manifest: `wms_location`
+**19.0.3.19.0 → 19.0.3.20.0** (`-u`, no migration script needed).
+
+- **Three identity master registers** — **Families** (Paracetamol, Cow Feed, …),
+  **Brands** (Cipla, Himalaya, Local, …) and **Forms** (Tablet, Syrup, Powder,
+  Pellet, …, or "Model" for tools/spares). Each carries a stable, unique,
+  uppercase short **code** (PARA / CIP / TAB) that becomes a SKU segment in P2 —
+  set once, so SKU abbreviations can never drift. Forms also carry a *suggested
+  unit* (tablet → Units, syrup → L, powder → kg). Managed under **Configuration →
+  Families / Brands / Forms** (manager-only); archive rather than delete.
+- **Editable enterprise category tree** seeded on `product.category` — Animal Care
+  (Medicines / Vaccines / Supplements / First Aid), Feed (Green / Dry /
+  Concentrate / Mineral / Silage), Consumables, Chemicals, Tools, Spare Parts,
+  Equipment, Office, Kitchen, Agriculture, Other. Fully admin-editable (add /
+  rename / move / **disable**) under **Configuration → Categories**. The seed only
+  *creates* categories — it reparents **no** existing product.
+- **`active` on `product.category`** — Odoo 19 CE has none natively, so a category
+  could not be disabled without code; now it can (archived categories drop out of
+  the pickers).
+- **Per-category identity rules + one-way kind bridge** — each category can mark
+  which of Brand / Form / Strength / Size / Pack a new product must carry (the
+  owner's matrix, seeded as tunable defaults), with sub-categories inheriting a
+  branch's policy, and can suggest the WMS Kind. **These rules are defined but not
+  yet enforced** — enforcement is P3; this phase changes no creation behaviour.
+
+### Verification
+Full `wms` suite green on a fresh scratch DB, including the new
+`test_category_config.py` (13 tests): registers load with their seeded codes,
+reject duplicate / over-long / non-alphanumeric codes and uppercase input; the
+tree loads with correct parents and a kind on every leaf; **seeding does not
+reparent an existing product**; the recursive required-field inheritance works;
+and `product.category` archiving works.
+
+### Live server
+Additive `-u` (`upgrade-service.ps1`). Nothing changes for daily scanning — the
+registers/tree are admin configuration that P2–P5 will build the guided creation
+flow, structured SKUs, duplicate detector and assisted back-fill on top of.
+
 ## [v19.0.31.0.0] — 2026-06-16 — Product Master P0: EAN-13 internal range + duplicate-name warning
 
 First, no-regrets slice of the Enterprise Product-Master design sprint (see
