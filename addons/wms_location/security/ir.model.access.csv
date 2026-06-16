@@ -9,3 +9,9 @@ access_wms_purpose_manager,wms.purpose manager,model_wms_purpose,wms_location.gr
 access_wms_purpose_user,wms.purpose user,model_wms_purpose,wms_location.group_wms_user,1,0,0,0
 access_wms_animal_manager,wms.animal manager,model_wms_animal,wms_location.group_wms_manager,1,1,1,1
 access_wms_animal_user,wms.animal user,model_wms_animal,wms_location.group_wms_user,1,0,0,0
+access_wms_family_manager,wms.family manager,model_wms_family,wms_location.group_wms_manager,1,1,1,1
+access_wms_family_user,wms.family user,model_wms_family,wms_location.group_wms_user,1,0,0,0
+access_wms_brand_manager,wms.brand manager,model_wms_brand,wms_location.group_wms_manager,1,1,1,1
+access_wms_brand_user,wms.brand user,model_wms_brand,wms_location.group_wms_user,1,0,0,0
+access_wms_form_manager,wms.form manager,model_wms_form,wms_location.group_wms_manager,1,1,1,1
+access_wms_form_user,wms.form user,model_wms_form,wms_location.group_wms_user,1,0,0,0
