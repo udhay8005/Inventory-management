@@ -5,6 +5,37 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.34.0.0] — 2026-06-16 — Product Master: master-data governance (no near-duplicate registers)
+
+Hardens the foundation before the P3 wizard makes inline master-creation easy: the
+single biggest real-world risk is admins forking a register into
+"Paracetamol" / "PARACETAMOL" / "Paracetamol " — which would corrupt the catalogue
+and the SKUs. **Additive, no migration.** Manifest: `wms_location`
+**19.0.3.21.0 → 19.0.3.22.0** (`-u`).
+
+- **Case- and whitespace-insensitive uniqueness** on the Families, Brands and Forms
+  registers. Names are normalized on save (whitespace collapsed) and compared
+  case-insensitively across active **and** archived rows, so a near-duplicate is
+  rejected with a clear message pointing to the existing entry. (The `code` was
+  already unique; this protects the human **name** too.)
+- **Categories**: the same protection, **scoped to the parent** — a "Cleaning" under
+  both Consumables and Chemicals is legitimate, but two "Cleaning" under Consumables
+  is blocked.
+- Typos that are genuinely different strings (e.g. "Bosch" vs "Bosche") are not
+  auto-detected — the autocomplete dropdown when picking a brand/family on a product
+  is the guard there; this release stops the *deterministic* case/whitespace forks.
+
+### Verification
+Full `wms` suite green on a **fresh install** (so the seeded registers + category
+tree re-run through the new constraints), incl. new governance tests in
+`test_category_config.py` (case + whitespace duplicates blocked on Family/Brand/Form;
+duplicate category under the same parent blocked; same name under a different parent
+allowed; distinct names allowed).
+
+### Live server
+Additive `-u`. No effect on existing data; it only rejects *new* near-duplicate
+register entries going forward.
+
 ## [v19.0.33.0.0] — 2026-06-16 — Product Master P2: two-identifier SKU engine
 
 The Product Master starts behaving like an enterprise PIM: every product now

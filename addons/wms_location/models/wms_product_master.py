@@ -60,16 +60,53 @@ class WmsCodedMaster(models.AbstractModel):
                     _("Code %r may use letters and digits only (no spaces or symbols).") % code
                 )
 
+    @api.constrains("name")
+    def _check_name_unique_ci(self):
+        """Master-data governance: block case-/whitespace-only duplicate names
+        (e.g. 'Paracetamol' vs 'PARACETAMOL' vs 'Paracetamol  '). Names are
+        normalized on write (whitespace collapsed) and compared case-insensitively
+        across active AND archived rows, so the catalogue — and the SKUs composed
+        from these masters — never fork on a near-duplicate. (Typos like 'Bosch'
+        vs 'Bosche' are different strings; the autocomplete dropdown is the guard
+        against those.)"""
+        for rec in self:
+            name = (rec.name or "").strip()
+            if not name:
+                continue
+            dup = self.with_context(active_test=False).search(
+                [("id", "!=", rec.id), ("name", "=ilike", name)], limit=1
+            )
+            if dup:
+                raise ValidationError(
+                    _(
+                        "“%(name)s” already exists (code %(code)s). Pick the existing "
+                        "entry instead of creating a near-duplicate — duplicates that "
+                        "differ only in spelling or capitalisation corrupt the "
+                        "catalogue and the SKUs built from it."
+                    )
+                    % {"name": dup.name, "code": dup.code or "—"}
+                )
+
+    @staticmethod
+    def _wms_norm_name(name):
+        """Collapse leading/trailing/internal whitespace so ' Cattle  Feed ' and
+        'Cattle Feed' can't coexist as two masters."""
+        return " ".join(name.split()) if name else name
+
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("code"):
                 vals["code"] = vals["code"].strip().upper()
+            if vals.get("name"):
+                vals["name"] = self._wms_norm_name(vals["name"])
         return super().create(vals_list)
 
     def write(self, vals):
         if vals.get("code"):
             vals["code"] = vals["code"].strip().upper()
+        if vals.get("name"):
+            vals["name"] = self._wms_norm_name(vals["name"])
         return super().write(vals)
 
 

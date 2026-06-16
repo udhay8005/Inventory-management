@@ -126,6 +126,49 @@ class TestCategoryConfig(TransactionCase):
             "child must inherit the parent's required-brand policy",
         )
 
+    # ------------------------------------------------------------------
+    # Master-data governance: no case-/whitespace-only duplicates
+    # ------------------------------------------------------------------
+    def test_family_case_duplicate_blocked(self):
+        # Seeded family "Paracetamol" — a case-variant must be rejected.
+        with self.assertRaises(ValidationError):
+            self.Family.create({"name": "PARACETAMOL", "code": "PCM2"})
+            self.env.flush_all()
+
+    def test_family_whitespace_duplicate_blocked(self):
+        with self.assertRaises(ValidationError):
+            self.Family.create({"name": "  Paracetamol  ", "code": "PCM3"})
+            self.env.flush_all()
+
+    def test_brand_case_duplicate_blocked(self):
+        with self.assertRaises(ValidationError):
+            self.Brand.create({"name": "cipla", "code": "CIP2"})
+            self.env.flush_all()
+
+    def test_form_case_duplicate_blocked(self):
+        with self.assertRaises(ValidationError):
+            self.Form.create({"name": "TABLET", "code": "TB2"})
+            self.env.flush_all()
+
+    def test_distinct_master_name_allowed(self):
+        fam = self.Family.create({"name": "Amoxicillin Trihydrate", "code": "AMX"})
+        self.assertEqual(fam.name, "Amoxicillin Trihydrate")
+
+    def test_category_duplicate_same_parent_blocked(self):
+        # Seeded "Cleaning" lives under Consumables — a case-variant there is garbage.
+        with self.assertRaises(ValidationError):
+            self.Categ.create(
+                {"name": "cleaning", "parent_id": self.env.ref("wms_location.cat_consumables").id}
+            )
+            self.env.flush_all()
+
+    def test_category_same_name_different_parent_allowed(self):
+        # "Cleaning" under a DIFFERENT parent is legitimate (different branch).
+        c = self.Categ.create(
+            {"name": "Cleaning", "parent_id": self.env.ref("wms_location.cat_chemicals").id}
+        )
+        self.assertTrue(c.id)
+
     def test_category_has_active_field(self):
         """Odoo 19 CE product.category has no native active field; we add one
         so a category can be disabled (archived) without code."""
