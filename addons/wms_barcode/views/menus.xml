@@ -55,18 +55,43 @@
             label. product.product is the variant the label wizard binds to, so
             Action -> Print labels (direct) appears here too.
         -->
+        <!--
+            F1 fix (v35): target product.TEMPLATE, not product.product. The WMS
+            Classification page (Kind + Family/Brand/Form identity + structured
+            SKU) lives on the product.template form (it inherits
+            product.product_template_only_form_view); the product.product variant
+            form does NOT carry it, so "Products -> New" used to open the vanilla
+            Odoo form with none of the Product-Master fields. We bind the form
+            view EXPLICITLY to the WMS-carrying template form so New always opens
+            the classified screen (no dependence on which template form is the
+            registry default).
+        -->
         <record id="action_wms_products" model="ir.actions.act_window">
             <field name="name">Products</field>
-            <field name="res_model">product.product</field>
+            <field name="res_model">product.template</field>
             <field name="view_mode">list,form</field>
             <field name="help" type="html">
                 <p class="o_view_nocontent_smiling_face">No products yet.</p>
                 <p>
-                    Every product the trust stocks. Add them via
+                    Every product the trust stocks. Add one with <b>New</b> (fill the
+                    <b>WMS Classification</b> tab — Kind, Family, Brand, Form — and the
+                    SKU + barcode are generated for you), or load many at once via
                     <b>Configuration &#8594; Onboard Products</b>. To print barcode
                     labels, tick rows then <b>Action &#8594; Print labels (direct)</b>.
                 </p>
             </field>
+        </record>
+        <record id="action_wms_products_view_list" model="ir.actions.act_window.view">
+            <field name="sequence" eval="1"/>
+            <field name="view_mode">list</field>
+            <field name="view_id" ref="product.product_template_tree_view"/>
+            <field name="act_window_id" ref="action_wms_products"/>
+        </record>
+        <record id="action_wms_products_view_form" model="ir.actions.act_window.view">
+            <field name="sequence" eval="2"/>
+            <field name="view_mode">form</field>
+            <field name="view_id" ref="product.product_template_only_form_view"/>
+            <field name="act_window_id" ref="action_wms_products"/>
         </record>
 
         <menuitem id="menu_wms_products"

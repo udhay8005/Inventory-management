@@ -5,6 +5,38 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.35.0.0] — 2026-06-16 — Fix F1: the WMS Products menu opens the classified Product-Master form
+
+**Critical usability fix from live acceptance testing.** The WMS app's
+**Operations → Products → New** opened the *standard Odoo product form* (variant
+form) instead of the Product-Master form — so it showed **no WMS Kind, no
+Family/Brand/Form, no SKU/PRD preview**, effectively hiding the entire Product
+Master from the natural create path. Manifest: `wms_barcode`
+**19.0.1.39.0 → 19.0.1.40.0** (`-u`, no migration).
+
+- **Root cause:** the WMS Classification page is inherited into the product
+  *template* form (`product.product_template_only_form_view`), but
+  `action_wms_products` targeted **`product.product`** (the variant form), which
+  doesn't carry that page.
+- **Fix:** `action_wms_products` now targets **`product.template`** and binds its
+  views **explicitly** to the product-template list + the WMS-carrying template
+  form, so **New always opens the classified screen** (Kind + Family/Brand/Form +
+  the auto SKU/PRD/barcode) regardless of which template form is the registry
+  default.
+- **No regression to v30's "print from the Products list":** the direct-print
+  Action is now bound to `product.template` too (the variant binding stays for the
+  Inventory app), and the label wizard resolves a template to its single variant.
+
+### Verification
+Full `wms` suite green on a fresh install (incl. a new
+`test_wizard_template_print`); plus a live browser check that **Operations →
+Products → New** now opens the form with the **WMS Classification** tab.
+
+### Live server
+Additive `-u`. After deploy, product creation from inside the WMS app exposes the
+full Product Master (the interim "use the Inventory app" workaround is no longer
+needed).
+
 ## [v19.0.34.0.0] — 2026-06-16 — Product Master: master-data governance (no near-duplicate registers)
 
 Hardens the foundation before the P3 wizard makes inline master-creation easy: the

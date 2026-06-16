@@ -131,6 +131,14 @@ class TestDirectPrint(TransactionCase):
         res = wiz.action_print()
         self.assertEqual(res["params"]["type"], "success")
 
+    def test_wizard_template_print(self):
+        """F1: the WMS Products list is product.template, so the wizard must
+        accept a template and resolve it to its variant for the label."""
+        tmpl = self.product.product_tmpl_id
+        wiz = self._wizard("product.template", tmpl.ids)
+        res = wiz.action_print()
+        self.assertEqual(res["params"]["type"], "success")
+
     def test_wizard_rejects_unsupported_model(self):
         with self.assertRaises(UserError):
             self.env["wms.label.print.wizard"].with_context(
