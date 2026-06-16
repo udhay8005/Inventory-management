@@ -14,8 +14,11 @@ from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 # Models this wizard knows how to turn into labels, with the field map.
+# product.template is supported because the WMS "Products" list is the template
+# (F1 fix); each template resolves to its single variant for the barcode.
 _SUPPORTED = {
     "product.product": "products",
+    "product.template": "products",
     "stock.location": "locations",
 }
 
@@ -75,8 +78,12 @@ class WmsLabelPrintWizard(models.TransientModel):
         (standard); the sub-line carries *context* (the parent path + type for a
         location; the SKU + unit for a product) without repeating the code."""
         records = self.env[model].browse(ids).exists()
+        # A product.template resolves to its single variant (the flat one-variant
+        # model) so products and templates share the same label-building code.
+        if model == "product.template":
+            records = records.product_variant_id
         labels, skipped = [], []
-        if model == "product.product":
+        if model in ("product.product", "product.template"):
             for p in records:
                 code = p.barcode or p.default_code
                 if not code:
