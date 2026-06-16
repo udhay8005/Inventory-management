@@ -22,7 +22,8 @@ stays the authoritative driver of the SKU prefix / UoM / lifecycle — this
 only suggests it.
 """
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import ValidationError
 
 from .product_template import WMS_KIND_SELECTION
 
@@ -111,3 +112,46 @@ class ProductCategory(models.Model):
             categ.wms_effective_req_pack = categ.wms_req_pack or bool(
                 parent and parent.wms_effective_req_pack
             )
+
+    # ---- Master-data governance: no near-duplicate categories ------------
+    @staticmethod
+    def _wms_norm_name(name):
+        return " ".join(name.split()) if name else name
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get("name"):
+                vals["name"] = self._wms_norm_name(vals["name"])
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if vals.get("name"):
+            vals["name"] = self._wms_norm_name(vals["name"])
+        return super().write(vals)
+
+    @api.constrains("name", "parent_id")
+    def _check_wms_category_name_unique(self):
+        """Block case-/whitespace-only duplicate category names UNDER THE SAME
+        parent (a 'Cleaning' under both Consumables and Chemicals is legitimate,
+        but two 'Cleaning' under Consumables is garbage). Archive-inclusive."""
+        for cat in self:
+            name = (cat.name or "").strip()
+            if not name:
+                continue
+            dup = self.with_context(active_test=False).search(
+                [
+                    ("id", "!=", cat.id),
+                    ("parent_id", "=", cat.parent_id.id),
+                    ("name", "=ilike", name),
+                ],
+                limit=1,
+            )
+            if dup:
+                raise ValidationError(
+                    _(
+                        "A category named “%s” already exists under the same parent. "
+                        "Rename it or reuse the existing one."
+                    )
+                    % name
+                )
