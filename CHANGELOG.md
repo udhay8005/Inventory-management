@@ -5,6 +5,51 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.31.0.0] — 2026-06-16 — Product Master P0: EAN-13 internal range + duplicate-name warning
+
+First, no-regrets slice of the Enterprise Product-Master design sprint (see
+[docs/PRODUCT-MASTER-ARCHITECTURE.md](docs/PRODUCT-MASTER-ARCHITECTURE.md) for the
+full design + adversarial review + roadmap). Purely additive — touches **zero**
+existing stock / quant / audit / barcode data. Manifest bumps: `wms_location`
+**19.0.3.18.0 → 19.0.3.19.0** (data + post-migration), `wms_barcode`
+**19.0.1.38.0 → 19.0.1.39.0** (wizard onchange; `-u`, no migration).
+
+- **EAN-13 barcodes moved to the GS1 restricted-circulation range.** The
+  auto-minted EAN-13 alias sequence changes prefix `89011110` → `02` and padding
+  `4` → `10`. `89011110` sat in the GS1-India `890` *registered-manufacturer*
+  range; `02…` is the range GS1 reserves for codes used only **inside** one
+  organisation, so an internally-minted EAN-13 can never overlap a supplier pack's
+  real barcode. The body stays exactly **12 digits** (`2 + 10`), which is required
+  — `_next_ean13()` mints **no** barcode at all if the body isn't 12 digits, so a
+  naive "prefix `2`" change would have *silently stopped all EAN-13 generation*.
+  Capacity rises to 10 billion codes. Existing aliases are never rewritten
+  (`noupdate`); a `post-migration` repoints the sequence on already-installed
+  databases (the live `wms` DB adopts the new range on the next deploy).
+- **New: a live duplicate-name warning in the Onboard wizard.** Typing a product
+  name that already exists pops a soft, non-blocking warning ("a product named X
+  is already in the catalogue (SKU …) — open it instead of making a duplicate").
+  It never blocks the save (a genuinely different brand / form / size is a real new
+  product), needs no new field/model/step, and is the cheapest control against
+  master sprawl. The flat paste-200-rows onboarding flow is unchanged.
+- **Deferred by design** (see the architecture doc §0): the `wms.brand` model,
+  structured SKU composition, an 11-step stepper, Purchase-UoM conversion, and
+  reprint/replace-on-damage — each rejected or parked by the adversarial review as
+  over-built or not-yet-needed for a single-site trust, pending the brand / form /
+  strength identity fields (P1).
+
+### Verification
+Full `wms` suite green on a fresh scratch DB, including the new
+`test_ean13_alias.py` (every new product gets a valid 13-digit `02…` EAN-13 with a
+correct GS1 check digit — guards the silent-no-barcode regression) and the new
+duplicate-name-warning tests in `test_onboard_validation.py` (warns on an existing
+name, silent on a new one, never blocks the save).
+
+### Important for the live server
+On `main` after CI. The live `wms` DB adopts the `02…` EAN-13 range only after you
+**deploy** with `scripts\upgrade-service.ps1` (which runs the post-migration).
+Already-printed labels keep working — old `890…` and new `02…` codes are both
+valid and never collide.
+
 ## [v19.0.30.0.0] — 2026-06-15 — Label UX: Products menu, kind→UoM, drop the PDF "Print"
 
 Closes the gaps found while using direct printing on the live server. Manifest

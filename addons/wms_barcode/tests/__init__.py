@@ -5,6 +5,7 @@ from . import (
     test_barcode_integrity,
     test_concurrency,
     test_direct_print,
+    test_ean13_alias,
     test_fpat_fx4,
     test_issue_approval,
     test_issue_dimensions,
