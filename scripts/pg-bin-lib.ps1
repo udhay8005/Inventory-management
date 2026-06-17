@@ -60,9 +60,12 @@ function Resolve-PgBin {
         $svc = Get-CimInstance Win32_Service -Filter "Name LIKE 'postgresql-x64-%'" -ErrorAction SilentlyContinue |
                Select-Object -First 1
         if ($svc -and $svc.PathName) {
-            $exe = if ($svc.PathName -match '^\s*"([^"]+)"') { $Matches[1] }
-                   else { ($svc.PathName -split '\s+')[0] }
-            if ($exe) { $candidates.Add((Split-Path -Parent $exe)) }
+            # Capture the bin directory directly (everything up to ...\bin, before
+            # pg_ctl.exe) so a space in the install path is handled whether or not
+            # the service PathName quotes the exe.
+            if ($svc.PathName -match '(?i)^\s*"?(.+?\\bin)\\pg_ctl\.exe') {
+                $candidates.Add($Matches[1])
+            }
         }
     } catch {
         # CIM unavailable / access denied — fall through to the other probes.
@@ -71,7 +74,7 @@ function Resolve-PgBin {
     # 3. Registry: every installed copy records its Base Directory.
     try {
         Get-ItemProperty 'HKLM:\SOFTWARE\PostgreSQL\Installations\*' -ErrorAction SilentlyContinue |
-            Sort-Object PSChildName -Descending |
+            Sort-Object { try { [int]($_.PSChildName -replace '^.*-', '') } catch { 0 } } -Descending |
             ForEach-Object {
                 $base = $_.'Base Directory'
                 if ($base) { $candidates.Add((Join-Path $base 'bin')) }
@@ -123,7 +126,9 @@ function Use-PgBin {
             "Install PostgreSQL (15, 16, or 17) or add its 'bin' folder to PATH, then re-run."
         )
     }
-    if ($env:Path -notlike "*$bin*") {
+    # Exact-entry membership (not a substring/wildcard match) so a PATH that
+    # merely contains the bin path as a fragment doesn't suppress the prepend.
+    if (($env:Path -split ';') -notcontains $bin) {
         $env:Path = "$bin;$env:Path"
     }
     return $bin

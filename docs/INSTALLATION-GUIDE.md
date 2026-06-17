@@ -631,7 +631,7 @@ scripts\restore-drill.ps1 -DryRun:$false    # full restore into a throwaway wms_
 ### 4 — Verify recovery (real restore runbook)
 A genuine restore (after disaster) uses:
 ```powershell
-scripts\restore-native.ps1 -BackupPath backups\wms-<timestamp>.dump.gpg
+scripts\restore-native.ps1 -BackupFile backups\wms-<timestamp>.dump.gpg
 ```
 See `docs/07-deployment.md` and `docs/18-restore-drill.md`.
 
@@ -639,8 +639,9 @@ See `docs/07-deployment.md` and `docs/18-restore-drill.md`.
 > PostgreSQL's `bin\` (from the `postgresql-x64` service / registry / standard
 > install dirs, newest version first), so `psql`/`pg_restore` do **not** need to
 > be on PATH. They connect as the `db_user` in `config\odoo.native.conf` and
-> read its `db_password` into `PGPASSWORD` for the run (then clear it). If that
-> conf line is absent, set `$env:PGPASSWORD = '<odoo role password>'` before
+> read its `db_password` into `PGPASSWORD` for the run (`restore-drill.ps1`
+> clears it afterwards; `restore-native.ps1` leaves it set for the session). If
+> that conf line is absent, set `$env:PGPASSWORD = '<odoo role password>'` before
 > running. A full restore into a fresh DB also needs the role to have
 > **CREATEDB** — the installer grants this to `odoo`.
 

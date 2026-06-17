@@ -244,6 +244,9 @@ try {
 } catch {
     Write-Drill 'ERROR' $_.Exception.Message
     Write-DrillEvent -EventId 307 -EntryType Error -Message "PostgreSQL client tools missing"
+    # This exit is BEFORE the main try/finally, so wipe a PGPASSWORD we set
+    # (never a caller-supplied one) here too, mirroring the finally below.
+    if ($script:WeSetPgPassword) { Remove-Item env:PGPASSWORD -ErrorAction SilentlyContinue }
     exit $EXIT_TOOLS_MISSING
 }
 
