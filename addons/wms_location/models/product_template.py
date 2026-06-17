@@ -1194,16 +1194,22 @@ class ProductTemplate(models.Model):
     )
     def _compute_wms_location_summary(self):
         Quant = self.env["stock.quant"].sudo()
+        # Count only WAREHOUSE STORAGE (lot-stock + its slot/rack/floor children).
+        # The 'Trust internal use' sink (Scan Issue destination, never drains) and
+        # the Damage/Repair locations are also usage=internal, so a blanket
+        # usage='internal' sum overstates on-hand from a Scan Issue alone. Mirror
+        # the lot_stock_id child_of scope used by the value/expiry reports.
+        lot_stock_ids = self.env["stock.warehouse"].sudo().search([]).mapped("lot_stock_id").ids
         for tmpl in self:
             variant_ids = tmpl.product_variant_ids.ids
-            if not variant_ids:
+            if not variant_ids or not lot_stock_ids:
                 tmpl.wms_total_on_hand = 0.0
                 tmpl.wms_location_count = 0
                 continue
             quants = Quant.search(
                 [
                     ("product_id", "in", variant_ids),
-                    ("location_id.usage", "=", "internal"),
+                    ("location_id", "child_of", lot_stock_ids),
                     ("quantity", ">", 0),
                 ]
             )

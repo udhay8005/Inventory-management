@@ -176,10 +176,21 @@ class WmsRackGridController(http.Controller):
         _bk = snap.get("last_backup_age_hours")
         last_backup_label = ("%s h ago" % _bk) if _bk is not None else "never"
         total_products = sc("product.product", [("is_storable", "=", True), ("active", "=", True)])
-        on_hand = sum(
-            Quant.search([("location_id.usage", "=", "internal"), ("quantity", ">", 0)]).mapped(
-                "quantity"
+        # Count only WAREHOUSE STORAGE (lot-stock + its slot/rack/floor children).
+        # The 'Trust internal use' sink (where Scan Issue sends consumed goods and
+        # which never drains) and the Damage/Repair locations are also usage=internal,
+        # so a blanket usage='internal' sum grows without bound and double-counts
+        # consumed/set-aside stock. Mirrors the lot_stock_id child_of scope used by
+        # wms_value_reports / wms_expiry_alert.
+        lot_stock_ids = env["stock.warehouse"].sudo().search([]).mapped("lot_stock_id").ids
+        on_hand = (
+            sum(
+                Quant.search(
+                    [("location_id", "child_of", lot_stock_ids), ("quantity", ">", 0)]
+                ).mapped("quantity")
             )
+            if lot_stock_ids
+            else 0.0
         )
         loc_counts = {
             t: sc("stock.location", [("wms_location_type", "=", t)])

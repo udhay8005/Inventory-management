@@ -106,6 +106,18 @@ if (-not $DbHost) { $DbHost = 'localhost' }
 if (-not $DbPort) { $DbPort = 5432 }
 if (-not $DbUser) { $DbUser = 'odoo' }
 
+# --- Ensure pg_dump / pg_restore / psql are callable ---------------------
+# The daily backup + pre-upgrade rollback backup run as SYSTEM-context
+# scheduled tasks, which use the MACHINE PATH — and PostgreSQL's bin\ is
+# usually only on the *user* PATH. Without this, the bare pg_dump call further
+# down throws and NO backup is produced, while the restore drill (which already
+# resolves the bin) keeps reporting DR green — the dangerous split. Auto-detect
+# the bin and prepend it to PATH; fail loud if PostgreSQL is absent. Mirrors
+# restore-native.ps1 / restore-drill.ps1.
+. (Join-Path $PSScriptRoot 'pg-bin-lib.ps1')
+try { $null = Use-PgBin }
+catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 1 }
+
 New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
 
 # --- Resolve passphrase from .env if not supplied ------------------------
