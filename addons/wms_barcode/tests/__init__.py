@@ -11,6 +11,7 @@ from . import (
     test_issue_dimensions,
     test_label_geometry,
     test_onboard_validation,
+    test_product_create_wizard,
     test_quantity_integrity,
     test_receipt_photo,
     test_returnable_items,
