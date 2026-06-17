@@ -90,6 +90,33 @@ class TestDirectPrint(TransactionCase):
         with self.assertRaises(UserError):
             self._tspl([{"title": "", "subtitle": "", "barcode": ""}])
 
+    def test_non_ascii_barcode_rejected(self):
+        # A non-ASCII barcode would be silently truncated by _ascii, so the
+        # printed bars would no longer match the stored barcode and fail to scan
+        # back. We reject it with a clear error instead of printing a bad label.
+        with self.assertRaises(UserError):
+            self._tspl([{"title": "Bad", "barcode": "CAFÉ-01"}])
+
+    def test_quote_in_barcode_rejected(self):
+        # A double-quote terminates the TSPL string literal (and _ascii rewrites
+        # it to '), so a quoted barcode would print a different code than stored.
+        with self.assertRaises(UserError):
+            self._tspl([{"title": "Bad", "barcode": 'AB"CD'}])
+
+    def test_control_char_in_barcode_rejected(self):
+        with self.assertRaises(UserError):
+            self._tspl([{"title": "Bad", "barcode": "AB\tCD"}])
+
+    def test_ascii_barcode_with_symbols_allowed(self):
+        # The structured Business SKU uses hyphens; plain ASCII must still print.
+        tspl = self._tspl([{"title": "OK", "barcode": "MED-PARA-CIP-TAB-500MG-10"}])
+        self.assertIn(b'"MED-PARA-CIP-TAB-500MG-10"', tspl)
+
+    def test_title_only_label_with_blank_barcode_ok(self):
+        # An empty barcode is allowed (title-only labels) — the guard is a no-op.
+        tspl = self._tspl([{"title": "Shelf A", "barcode": ""}])
+        self.assertIn(b"Shelf A", tspl)
+
     def test_dry_run_returns_tspl(self):
         out = self.printer.with_context(wms_print_dry_run=True).print_labels([{"barcode": "Z9"}])
         self.assertIsInstance(out, bytes)

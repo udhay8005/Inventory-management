@@ -86,6 +86,16 @@ if (-not $DbHost) { $DbHost = 'localhost' }
 if (-not $DbPort) { $DbPort = 5432 }
 if (-not $DbUser) { $DbUser = 'odoo' }
 
+# --- Ensure psql.exe + pg_restore.exe are callable -----------------------
+# A recovery host often does NOT have PostgreSQL's bin\ on PATH (the installer
+# does not add it). Auto-detect it (service / registry / standard install dirs,
+# newest version first) and prepend it to PATH so the bare psql/pg_restore calls
+# below resolve. Fail up front with a clear message rather than a cryptic
+# "term not recognized" mid-restore. No version is hard-coded.
+. (Join-Path $PSScriptRoot 'pg-bin-lib.ps1')
+try { $null = Use-PgBin }
+catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 1 }
+
 if (-not (Test-Path $BackupFile)) {
     Write-Host "Backup not found: $BackupFile" -ForegroundColor Red
     exit 1

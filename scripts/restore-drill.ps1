@@ -47,7 +47,9 @@
     scripts\restore-drill.ps1 -BackupPath D:\offsite\wms-20260520-152106.dump.gpg
 
 .NOTES
-    Requires: gpg.exe on PATH (or Gpg4win), psql + pg_restore on PATH,
+    Requires: gpg.exe on PATH (or Gpg4win); PostgreSQL client tools
+              (psql + pg_restore) — auto-detected from the postgresql-x64
+              service / registry / standard install dirs, no PATH setup needed;
               BACKUP_PASSPHRASE set in .env (not the placeholder).
     Never touches: the production database. Refuses to act if drill DB
                    name does not match the wms_drill_<ts> pattern.
@@ -84,6 +86,7 @@ $EXIT_DECRYPT_FAILED  = 2
 $EXIT_TOC_FAILED      = 3
 $EXIT_RESTORE_FAILED  = 4
 $EXIT_PROD_COLLISION  = 5
+$EXIT_TOOLS_MISSING   = 6
 
 # --- Logging: dual sink - file + Windows Event Log (best-effort) ----------
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -230,6 +233,19 @@ if (Test-Path $ConfPath) {
 if (-not $DbHost) { $DbHost = 'localhost' }
 if (-not $DbPort) { $DbPort = 5432 }
 if (-not $DbUser) { $DbUser = 'odoo' }
+
+# --- Ensure psql.exe + pg_restore.exe are callable ------------------------
+# The drill shells out to pg_restore/psql by bare name. On a clean host their
+# bin\ is usually not on PATH, so auto-detect it (service / registry / standard
+# install dirs, newest version first) and prepend it. No version is hard-coded.
+. (Join-Path $PSScriptRoot 'pg-bin-lib.ps1')
+try {
+    $null = Use-PgBin
+} catch {
+    Write-Drill 'ERROR' $_.Exception.Message
+    Write-DrillEvent -EventId 307 -EntryType Error -Message "PostgreSQL client tools missing"
+    exit $EXIT_TOOLS_MISSING
+}
 
 # --- Resolve passphrase ---------------------------------------------------
 if (-not $Passphrase) {

@@ -43,6 +43,28 @@ A weekly drill catches all three within 7 days of the bug landing.
    run) and (best-effort) a Windows Application Event Log entry under source
    `WMS_Backup_Drill`.
 
+## Prerequisites
+
+Both are auto-handled on a standard install — listed here for clean recovery
+hosts:
+
+- **PostgreSQL client tools** (`psql`, `pg_restore`). The script auto-detects
+  them from the `postgresql-x64` service / the `HKLM\SOFTWARE\PostgreSQL`
+  registry keys / the standard `C:\Program Files\PostgreSQL\<ver>\bin` dirs
+  (newest version first), so PostgreSQL's `bin\` does **not** need to be on
+  PATH. If detection fails the drill exits **6** with a message naming
+  everywhere it looked.
+- **PostgreSQL authentication.** `psql`/`pg_restore` connect as the `db_user`
+  from `config\odoo.native.conf`. The script reads `db_password` from that file
+  into `PGPASSWORD` for the run (and clears it afterwards). If your conf has no
+  `db_password`, set it yourself before running:
+  ```powershell
+  $env:PGPASSWORD = '<the odoo role password>'
+  scripts\restore-drill.ps1
+  ```
+  A full restore (`-DryRun:$false`) also needs the role to have **CREATEDB**
+  (the installer grants this to `odoo`; see the troubleshooting note below).
+
 ## Scheduling
 
 ### One-time setup as admin
@@ -102,6 +124,7 @@ The drill DB is named `wms_drill_<timestamp>` and dropped on exit.
 | 3 | TOC check failed | The `.dump.gpg` is likely truncated. Re-run `scripts\backup-native.ps1` to produce a fresh dump. |
 | 4 | Restore into drill DB failed | Schema drift or pg_restore version mismatch. Check the PostgreSQL major version on the drill cluster matches the source. |
 | 5 | Safety-pattern collision | Should never happen unless the script was modified. Revert. |
+| 6 | PostgreSQL client tools missing | `psql`/`pg_restore` not found. Install PostgreSQL (15/16/17) or add its `bin\` to PATH. The message names the service / registry / install dirs it searched. |
 
 ## When a real restore is needed
 
