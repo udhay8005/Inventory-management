@@ -5,6 +5,28 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.37.0.0] — 2026-06-17 — Training: Product Master Help Center articles
+
+Closes the one documentation gap the operational acceptance test (HOAT) found: the
+Help Center had no content for the new Product Master (registers, structured SKU,
+PRD code, guided wizard, policy). Manifest: `wms_training` **19.0.1.12.0 →
+19.0.1.13.0** (new `noupdate` data file — all new slugs, no rewrite of existing
+articles; `-u`, no migration).
+
+- **10 new Help Center articles** (`data/help_articles_product_master.xml`):
+  *Product Master overview*, *Create a product (guided)*, *Product Master policy*
+  (admin); *Family*, *Brand*, *Form / Model*, *The structured SKU*, *Internal
+  product code (PRD-…)*, *Why the SKU & barcode lock after stock* (terminology, for
+  everyone — they read codes on labels); and *"SKU already exists"*
+  (troubleshooting). Plain language, gaushala examples, cross-linked.
+- Terminology articles are audience **Everyone**; the creation/policy guides target
+  **Admin / Manager** — so a new admin can learn product creation end-to-end from
+  the Help Center.
+
+### Verification
+Full `wms` suite green on a fresh install, incl. new `test_help_product_master.py`
+(all 10 load, valid category/audience, unique slugs, create/policy are admin-targeted).
+
 ## [v19.0.36.0.0] — 2026-06-17 — Product Master P3: Guided Product Creation wizard
 
 The usability layer on the Product Master: a focused, single-screen **Create
