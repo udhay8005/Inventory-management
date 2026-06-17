@@ -220,6 +220,30 @@ class WmsLabelPrinter(models.Model):
             _logger.exception("label logo render failed; printing without it")
             return b""
 
+    @staticmethod
+    def _assert_printable_barcode(barcode):
+        """Reject a barcode the thermal printer's ASCII symbology cannot reproduce.
+
+        TSPL built-in barcode symbologies are ASCII-only. ``_ascii`` would
+        silently strip a non-ASCII character (and rewrite a double-quote, which
+        also terminates the TSPL string literal), so the printed bars would no
+        longer match the stored barcode and would fail to scan back. We surface
+        a clear error up front instead of printing a label that cannot be
+        scanned. This validates the print INPUT only — it does not change how
+        barcodes are generated, stored, or formatted. An empty/blank barcode is
+        allowed (title-only labels)."""
+        for ch in barcode or "":
+            if ord(ch) < 0x20 or ord(ch) > 0x7E or ch == '"':
+                raise UserError(
+                    _(
+                        "Barcode %(code)r cannot be printed: it contains a "
+                        "character (%(char)r) the label printer does not support. "
+                        "Barcodes must use plain ASCII letters, digits and basic "
+                        "symbols. Correct the product's barcode, then print again."
+                    )
+                    % {"code": barcode, "char": ch}
+                )
+
     def build_tspl(self, labels, copies=1):
         """Build a TSPL job (bytes) for ``labels`` — one physical label each.
 
@@ -256,6 +280,11 @@ class WmsLabelPrinter(models.Model):
         for lbl in labels:
             title = _ascii(lbl.get("title"))
             subtitle = _ascii(lbl.get("subtitle"))
+            # Validate BEFORE _ascii so we reject (rather than silently drop) any
+            # character the TSPL barcode symbology cannot reproduce. Otherwise the
+            # printed bars would differ from the stored barcode and fail to scan
+            # back. An empty barcode is allowed (some labels are title-only).
+            self._assert_printable_barcode(lbl.get("barcode"))
             code = _ascii(lbl.get("barcode"))
             if not (title or code):
                 continue
@@ -340,8 +369,13 @@ class WmsLabelPrinter(models.Model):
                 )
                 % {"name": self.system_name, "list": ", ".join(available) or "(none)"}
             )
-        handle = win32print.OpenPrinter(self.system_name)
+        # OpenPrinter is INSIDE the try so a printer that goes offline/locked
+        # between the availability check above and here surfaces as the clean
+        # UserError below rather than a raw pywin32 traceback. handle starts as
+        # None so the finally only closes a handle we actually opened.
+        handle = None
         try:
+            handle = win32print.OpenPrinter(self.system_name)
             win32print.StartDocPrinter(handle, 1, ("WMS label", None, "RAW"))
             win32print.StartPagePrinter(handle)
             win32print.WritePrinter(handle, payload)
@@ -350,10 +384,20 @@ class WmsLabelPrinter(models.Model):
         except Exception as exc:  # noqa: BLE001 - surface a clean operator error
             _logger.exception("Direct print to %s failed", self.system_name)
             raise UserError(
-                _("Printing to '%(name)s' failed: %(err)s") % {"name": self.system_name, "err": exc}
+                _(
+                    "Printing to '%(name)s' failed: %(err)s\n\nCheck the printer "
+                    "is on, connected, and not paused, then try again."
+                )
+                % {"name": self.system_name, "err": exc}
             )
         finally:
-            win32print.ClosePrinter(handle)
+            if handle is not None:
+                # A failure while closing must not mask the real print error
+                # above, nor leak a traceback to the operator — best-effort.
+                try:
+                    win32print.ClosePrinter(handle)
+                except Exception:  # noqa: BLE001 - cleanup is best-effort
+                    _logger.exception("ClosePrinter cleanup failed for %s", self.system_name)
         return True
 
     def print_labels(self, labels, copies=1):
