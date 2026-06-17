@@ -4,7 +4,7 @@
 
         <menuitem id="menu_wms_root"
                   name="WMS"
-                  sequence="10"
+                  sequence="1"
                   web_icon="wms_location,static/description/icon.png"/>
 
         <menuitem id="menu_wms_operations"
