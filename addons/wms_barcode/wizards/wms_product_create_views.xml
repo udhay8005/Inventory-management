@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_product_create_form" model="ir.ui.view">
+            <field name="name">wms.product.create.form</field>
+            <field name="model">wms.product.create</field>
+            <field name="arch" type="xml">
+                <form string="Create Product">
+                    <sheet>
+                        <div class="oe_title">
+                            <label for="name" string="Product"/>
+                            <h1><field name="name" placeholder="e.g. Paracetamol 500mg Tablet 10s (Cipla)"/></h1>
+                        </div>
+
+                        <group>
+                            <group string="Classification">
+                                <field name="categ_id"
+                                       options="{'no_quick_create': True}"/>
+                                <field name="wms_product_kind"/>
+                                <field name="uom_id"
+                                       options="{'no_create': True, 'no_open': True}"/>
+                                <field name="standard_price"/>
+                            </group>
+                            <group string="Identity">
+                                <!-- Inline master create: no_quick_create forces the
+                                     "Create and edit" popup so the stable code is entered.
+                                     Required follows the category's rules. -->
+                                <field name="wms_family_id" required="1"
+                                       options="{'no_quick_create': True}"/>
+                                <field name="wms_brand_id" required="req_brand"
+                                       options="{'no_quick_create': True}"/>
+                                <field name="wms_form_id" required="req_form"
+                                       options="{'no_quick_create': True}"/>
+                                <field name="wms_variant"/>
+                                <field name="wms_dosage" required="req_strength"/>
+                                <field name="wms_pack_size" required="req_pack"/>
+                                <field name="req_brand" invisible="1"/>
+                                <field name="req_form" invisible="1"/>
+                                <field name="req_strength" invisible="1"/>
+                                <field name="req_pack" invisible="1"/>
+                                <field name="form_is_model" invisible="1"/>
+                            </group>
+                        </group>
+
+                        <!-- Live preview, updates as you fill the identity fields -->
+                        <group string="Preview (generated automatically)">
+                            <field name="sku_preview" readonly="1"
+                                   placeholder="Fill Kind + Family + Brand to preview the SKU"/>
+                            <field name="code128_preview" readonly="1"/>
+                            <field name="pid_preview" string="Internal product code" readonly="1"/>
+                            <field name="ean_preview" string="EAN-13" readonly="1"/>
+                        </group>
+
+                        <div class="alert alert-warning" role="alert"
+                             invisible="not dup_warning">
+                            <i class="fa fa-exclamation-triangle me-1" title="Warning"/>
+                            <field name="dup_warning" readonly="1" nolabel="1" class="d-inline"/>
+                            — adjust the Brand / Variant / Pack / Strength to make it distinct.
+                        </div>
+                        <div class="alert alert-info" role="alert">
+                            The <b>SKU</b>, <b>internal code</b> and <b>barcode</b> are generated
+                            for you on <b>Create</b>. A duplicate identity is blocked automatically.
+                        </div>
+                    </sheet>
+                    <footer>
+                        <button name="action_create" type="object"
+                                string="Create" class="btn-primary"/>
+                        <button name="action_create_and_new" type="object"
+                                string="Create &amp; New" class="btn-secondary"/>
+                        <button special="cancel" string="Cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_product_create" model="ir.actions.act_window">
+            <field name="name">Create Product</field>
+            <field name="res_model">wms.product.create</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_wms_product_create"
+                  name="Create Product (guided)"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_product_create"
+                  groups="wms_location.group_wms_manager"
+                  sequence="34"/>
+    </data>
+</odoo>

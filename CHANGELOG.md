@@ -5,6 +5,42 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+## [v19.0.36.0.0] — 2026-06-17 — Product Master P3: Guided Product Creation wizard
+
+The usability layer on the Product Master: a focused, single-screen **Create
+Product** wizard (Operations → **Create Product (guided)**) that turns the
+multi-step "create masters, go back, create product, save, see SKU" chore into one
+guided form with a **live preview**. Manifest: `wms_barcode`
+**19.0.1.40.0 → 19.0.1.41.0** (`-u`, no migration). Pure additive UI — no impact on
+stock, existing products, or any other flow.
+
+- **Live SKU + barcode preview** — as you fill Family/Brand/Form/Strength/Pack the
+  **SKU** (`MED-PARA-CIP-TAB-500MG-10`) and **Code128** update instantly; the
+  **internal code (PRD-…)** and **EAN-13** show their next value (assigned on
+  Create).
+- **Category drives the form** — picking a category sets the **WMS Kind** and marks
+  which identity fields are **required** (Medicine → Brand/Form/Strength/Pack; Feed
+  → Brand/Pack; Tools → Brand/Form…). A missing required field is blocked with a
+  plain-language message.
+- **Inline master creation** — add a new Family / Brand / Form from a popup (Name +
+  Code) without leaving the wizard; it's auto-selected on save.
+- **Duplicate detection** — a live warning if the identity already exists, and a
+  hard block on Create (no near-duplicate ever gets in).
+- **Cleaner screen** — only Identity / Classification / SKU / Barcode, none of the
+  full product form's Sales/Purchase noise. **Create** opens the finished product;
+  **Create & New** keeps going for the next item.
+
+Under the hood the wizard is a thin front-end over the proven
+`product.template.create()` engine (P2) — it composes the SKU, stamps the PRD code,
+mints the barcodes and blocks duplicates. Required-field enforcement lives in the
+wizard (the guided path), **not** as a global constraint, so bulk Onboard / CSV
+import / the plain product form keep working.
+
+### Verification
+Full `wms` suite green on a fresh install, incl. new `test_product_create_wizard.py`
+(kind-from-category, live SKU preview, form-suggests-UoM, required-by-category block,
+classified product created with structured SKU + PRD + barcode, duplicate blocked).
+
 ## [v19.0.35.0.0] — 2026-06-16 — Fix F1: the WMS Products menu opens the classified Product-Master form
 
 **Critical usability fix from live acceptance testing.** The WMS app's
