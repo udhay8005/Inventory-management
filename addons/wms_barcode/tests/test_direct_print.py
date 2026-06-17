@@ -130,6 +130,18 @@ class TestDirectPrint(TransactionCase):
         tspl = self._tspl([{"title": "OK", "barcode": "MED-PARA-CIP-TAB-500MG-10"}])
         self.assertIn(b'"MED-PARA-CIP-TAB-500MG-10"', tspl)
 
+    def test_overlong_barcode_rejected(self):
+        # >48 chars would be silently truncated in the TSPL BARCODE payload, so the
+        # printed bars would differ from the stored value. Reject up front.
+        with self.assertRaises(UserError):
+            self._tspl([{"title": "Bad", "barcode": "A" * 49}])
+
+    def test_48char_barcode_allowed(self):
+        # 48 chars is the encodable limit and must still print in full.
+        code = "A" * 48
+        tspl = self._tspl([{"title": "OK", "barcode": code}])
+        self.assertIn(('"%s"' % code).encode("ascii"), tspl)
+
     def test_title_only_label_with_blank_barcode_ok(self):
         # An empty barcode is allowed (title-only labels) — the guard is a no-op.
         tspl = self._tspl([{"title": "Shelf A", "barcode": ""}])

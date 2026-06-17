@@ -232,7 +232,21 @@ class WmsLabelPrinter(models.Model):
         scanned. This validates the print INPUT only — it does not change how
         barcodes are generated, stored, or formatted. An empty/blank barcode is
         allowed (title-only labels)."""
-        for ch in barcode or "":
+        bc = barcode or ""
+        # The TSPL BARCODE command below encodes code[:48]; a longer barcode would
+        # print bars (and human-readable digits) that DIFFER from the stored value,
+        # so it would scan back to the wrong/no record. Reject up front rather than
+        # silently truncate. (Auto-generated SKUs stay well under 48.)
+        if len(bc) > 48:
+            raise UserError(
+                _(
+                    "Barcode %(code)r is too long to print: %(n)d characters, but a "
+                    "label can encode at most 48. Shorten the product's barcode, "
+                    "then print again."
+                )
+                % {"code": barcode, "n": len(bc)}
+            )
+        for ch in bc:
             if ord(ch) < 0x20 or ord(ch) > 0x7E or ch == '"':
                 raise UserError(
                     _(

@@ -191,10 +191,20 @@ try {
     }
     if ($exists) {
         Write-Host "Dropping existing database '$DbName' (-Force given)" -ForegroundColor Yellow
-        & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -c "DROP DATABASE $DbName;" | Out-Null
+        # Fail LOUD, not silent. A native exe's nonzero exit is NOT turned into a
+        # terminating error by $ErrorActionPreference='Stop', so we must add
+        # ON_ERROR_STOP + an explicit $LASTEXITCODE check (the pg_restore call
+        # below already does this). WITH (FORCE) terminates other sessions (PG13+)
+        # so an up Odoo service cannot block the drop and leave the restore to
+        # layer onto a live database.
+        & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -w -v ON_ERROR_STOP=1 `
+            -c "DROP DATABASE IF EXISTS $DbName WITH (FORCE);"
+        if ($LASTEXITCODE -ne 0) { throw "DROP DATABASE $DbName failed (exit $LASTEXITCODE)." }
     }
     Write-Host "Creating database '$DbName'" -ForegroundColor Cyan
-    & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -c "CREATE DATABASE $DbName OWNER odoo;" | Out-Null
+    & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -w -v ON_ERROR_STOP=1 `
+        -c "CREATE DATABASE $DbName OWNER odoo;"
+    if ($LASTEXITCODE -ne 0) { throw "CREATE DATABASE $DbName failed (exit $LASTEXITCODE)." }
 
     # --- 3. pg_restore -----------------------------------------------------
     Write-Host "Restoring dump into '$DbName'" -ForegroundColor Cyan

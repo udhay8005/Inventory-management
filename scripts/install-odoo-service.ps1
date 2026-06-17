@@ -157,16 +157,34 @@ Write-Host "Starting service '$ServiceName'..." -ForegroundColor Cyan
 Start-Service $ServiceName
 
 Write-Host "Waiting for http://localhost:$Port/wms/health ..." -ForegroundColor Cyan
+# Treat ANY HTTP response as "service is up" — only connection-refused/timeout
+# keeps us waiting. /wms/health returns 404 before wms_reports is installed and
+# 401 once the health token is set, so a 200-only gate false-fails a perfectly
+# healthy install (exit 1). Mirrors the fixed upgrade-service.ps1 health gate.
 $healthy = $false
 for ($i = 1; $i -le 36; $i++) {
+    $code = $null; $body = $null
     try {
         $resp = Invoke-WebRequest "http://localhost:$Port/wms/health" -UseBasicParsing -TimeoutSec 5
-        if ($resp.StatusCode -eq 200) {
-            $status = ($resp.Content | ConvertFrom-Json).status
-            Write-Host "  Healthy after ~$($i*5)s : $status" -ForegroundColor Green
-            $healthy = $true; break
+        $code = [int]$resp.StatusCode; $body = $resp.Content
+    } catch {
+        # PS 5.1 throws on 4xx/5xx; the response (if any) carries the code.
+        if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+    }
+    if ($code) {
+        $secs = $i * 5
+        if ($code -eq 200) {
+            $status = try { ($body | ConvertFrom-Json).status } catch { 'OK' }
+            Write-Host "  Healthy after ~${secs}s : $status (HTTP 200)" -ForegroundColor Green
+        } elseif ($code -eq 503) {
+            Write-Host "  Service up after ~${secs}s but health=CRITICAL (HTTP 503) - check /wms/health." -ForegroundColor Yellow
+        } elseif ($code -in 401, 403) {
+            Write-Host "  Service up after ~${secs}s (HTTP $code - /wms/health is token-gated)." -ForegroundColor Green
+        } else {
+            Write-Host "  Service responding after ~${secs}s (HTTP $code)." -ForegroundColor Green
         }
-    } catch { }
+        $healthy = $true; break
+    }
     Start-Sleep -Seconds 5
 }
 
