@@ -303,6 +303,29 @@ class WmsScanIssue(models.TransientModel):
         for line in self.plan_line_ids:
             by_product.setdefault(line.product_id, 0.0)
             by_product[line.product_id] += line.take
+        # Delegate to the product-keyed core so the deferred approval path
+        # (wms.issue.approval.action_approve) enforces the SAME caps.
+        self._enforce_overuse_caps_for(by_product)
+
+    @api.model
+    def _enforce_overuse_caps_for(self, by_product):
+        """Core cap enforcement, keyed by ``{product: requested_qty}``.
+
+        Shared by the inline path (action_validate -> _enforce_overuse_caps)
+        and the deferred approval path
+        (wms.issue.approval.action_approve), so the per-issue + rolling-24h
+        daily caps are enforced identically whether an issue goes through
+        immediately or is approved later. The approval path in particular
+        MUST re-run this: stock that was within the daily cap when a request
+        was held can be over the cap by the time a Manager approves it (other
+        issues consumed the 24h window in between) — without this, the
+        approval is a back door around the daily cap.
+
+        Callers MUST hold a per-product FOR UPDATE lock first (both do) so the
+        rolling-24h read can't be raced.
+        """
+        if not by_product:
+            return
 
         from datetime import timedelta
 
@@ -353,6 +376,9 @@ class WmsScanIssue(models.TransientModel):
                             ("state", "=", "done"),
                             ("create_date", ">=", cutoff),
                             ("picking_id.wms_is_scan_issue", "=", True),
+                            # An undone (reversed) issue nets zero consumption,
+                            # so it must not count toward the rolling 24h cap.
+                            ("picking_id.wms_reversed_by_id", "=", False),
                         ]
                     )
                 )
@@ -509,6 +535,9 @@ class WmsScanIssue(models.TransientModel):
                         ("create_date", ">=", cutoff),
                         ("picking_id.wms_is_scan_issue", "=", True),
                         ("picking_id.wms_department_id", "=", self.department_id.id),
+                        # An undone (reversed) issue didn't really happen — exclude
+                        # it from the min-life re-request gate.
+                        ("picking_id.wms_reversed_by_id", "=", False),
                     ],
                     order="create_date desc",
                     limit=1,

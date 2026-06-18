@@ -674,7 +674,15 @@ class ProductTemplate(models.Model):
                     if seq_code:
                         new_sku = self.env["ir.sequence"].next_by_code(seq_code)
                         if new_sku:
+                            # Route the fallback through the same friendly gate as
+                            # the composed / caller-supplied branches: a clash with
+                            # a hand-typed KIND-NNNNN (or another row in this batch)
+                            # now raises a clear UserError instead of a raw
+                            # IntegrityError. next_by_code stays monotonic, so the
+                            # normal path is unaffected.
+                            self._wms_block_sku_collision(new_sku, seen=seen_skus)
                             vals["default_code"] = new_sku
+                            seen_skus.add(new_sku)
             else:
                 # Caller supplied the SKU (import / data file): give it the same
                 # friendly collision gate instead of a raw DB IntegrityError.

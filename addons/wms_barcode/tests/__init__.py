@@ -13,6 +13,7 @@ from . import (
     test_onboard_validation,
     test_product_create_wizard,
     test_quantity_integrity,
+    test_receipt_lot,
     test_receipt_photo,
     test_returnable_items,
     test_undo,

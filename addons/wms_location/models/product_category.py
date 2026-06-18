@@ -139,11 +139,14 @@ class ProductCategory(models.Model):
             name = (cat.name or "").strip()
             if not name:
                 continue
+            # Escape LIKE wildcards so a literal % or _ in the name can't widen
+            # the match (=ilike passes the term straight to SQL ILIKE).
+            esc = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             dup = self.with_context(active_test=False).search(
                 [
                     ("id", "!=", cat.id),
                     ("parent_id", "=", cat.parent_id.id),
-                    ("name", "=ilike", name),
+                    ("name", "=ilike", esc),
                 ],
                 limit=1,
             )

@@ -193,6 +193,21 @@ class WmsIssueApproval(models.Model):
             by_product.setdefault(line.product_id, 0.0)
             by_product[line.product_id] += line.take
 
+        # ---- Re-enforce overuse caps as-of-now ------------------------------
+        # The per-issue + rolling-24h daily caps were checked when the request
+        # was HELD, but other issues may have consumed the 24h window since.
+        # Lock the products (id order, deadlock-free — mirrors the wizard's own
+        # lock) and re-run the SAME cap core, so approving a held request can
+        # never sneak an issue over the daily cap. Done before the re-plan so
+        # the stock read below is serialised under the same lock too.
+        locked_ids = sorted(p.id for p in by_product)
+        if locked_ids:
+            self.env.cr.execute(
+                "SELECT id FROM product_product WHERE id IN %s ORDER BY id FOR UPDATE",
+                (tuple(locked_ids),),
+            )
+        self.env["wms.scan.issue"]._enforce_overuse_caps_for(by_product)
+
         replanned = []  # (product, [(quant, take), ...])
         for product, qty in by_product.items():
             plan, missing = StockLocation.find_oldest_quants_for_product(

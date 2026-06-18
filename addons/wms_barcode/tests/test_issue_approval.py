@@ -520,3 +520,47 @@ class TestIssueApproval(TransactionCase):
             approval.activity_ids.filtered(lambda a: a.activity_type_id == todo),
             "deciding the request must clear the held-issue activity badge",
         )
+
+    # =====================================================================
+    # Daily-cap is re-checked at approval time (approve is NOT a back door
+    # around the rolling-24h cap)
+    # =====================================================================
+    def test_daily_cap_rechecked_on_approve(self):
+        """A held high-value issue passed the daily cap when it was held, but
+        other issues can consume the 24h window before a Manager approves. The
+        approve path MUST re-run the cap so it can't issue over the limit."""
+        # Cap the pricey product at 3 per 24h.
+        self.pricey.product_tmpl_id.wms_daily_cap = 3.0
+        # Hold a high-value issue of 2 (8000 > 5000) — under the cap at hold time.
+        wiz = self._make_wizard(
+            last_scan="APRPRICEY1", requested_qty=2.0, keeper_reason="vet authorised"
+        )
+        wiz.action_plan()
+        result = wiz.action_validate()
+        approval = self.env["wms.issue.approval"].browse(result["res_id"])
+        self.assertEqual(approval.state, "pending")
+
+        # Consume the 24h window with an inline issue of 2 (gate off so it
+        # issues immediately rather than being held too).
+        self.param.set_param("wms_barcode.issue_approval_enabled", "0")
+        try:
+            consume = self._make_wizard(last_scan="APRPRICEY1", requested_qty=2.0)
+            consume.action_plan()
+            consume.action_validate()
+            self.assertTrue(consume.picking_id, "the inline consume issue should be created")
+        finally:
+            self.param.set_param("wms_barcode.issue_approval_enabled", "1")
+
+        # Approving the held 2 now would make 2 + 2 = 4 > 3 — must be blocked.
+        on_hand = self.env["stock.quant"]._get_available_quantity(self.pricey, self.stock)
+        with self.assertRaises(UserError):
+            approval.with_user(self.manager).action_approve()
+        approval.invalidate_recordset()
+        self.assertFalse(approval.picking_id, "an over-cap approval must issue nothing")
+        self.assertEqual(approval.state, "pending", "a blocked approve leaves it pending")
+        self.assertAlmostEqual(
+            self.env["stock.quant"]._get_available_quantity(self.pricey, self.stock),
+            on_hand,
+            places=3,
+            msg="no stock may move when the daily cap blocks the approve",
+        )
