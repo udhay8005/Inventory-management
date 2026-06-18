@@ -11,6 +11,7 @@ SQL-view dashboard. Optional: posts a Discuss message to WMS Managers.
 """
 
 import logging
+from datetime import datetime, time
 
 from markupsafe import Markup
 from odoo import api, fields, models, tools
@@ -61,13 +62,18 @@ class StockLocationCount(models.Model):
         for loc in stockables:
             # Use Odoo's last_count_date where available; fall back to the
             # latest quant in_date so freshly-stocked slots aren't flagged.
-            loc.wms_last_counted = (
-                max(
-                    (q.last_count_date or q.in_date or q.create_date for q in loc.quant_ids),
-                    default=False,
-                )
-                or False
-            )
+            # last_count_date is a Date while in_date/create_date are Datetime,
+            # so a slot holding BOTH a counted quant (date) and a freshly-received
+            # quant (datetime) made max() raise "can't compare datetime to date".
+            # Normalise every candidate to a datetime (date -> midnight) before
+            # max(), which also matches this field's Datetime type.
+            stamps = []
+            for q in loc.quant_ids:
+                val = q.last_count_date or q.in_date or q.create_date
+                if not val:
+                    continue
+                stamps.append(val if isinstance(val, datetime) else datetime.combine(val, time.min))
+            loc.wms_last_counted = max(stamps) if stamps else False
 
     @api.depends("wms_last_counted")
     def _compute_wms_days_since_count(self):

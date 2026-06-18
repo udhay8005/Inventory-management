@@ -12,7 +12,7 @@ intended store/compute_sudo flags, and (b) the count-age values + the
 wms.cycle.count.due SQL view still behave as before.
 """
 
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 
 from odoo import fields
 from odoo.tests import TransactionCase, tagged
@@ -76,6 +76,40 @@ class TestCycleCountFields(TransactionCase):
         self.assertEqual(self.floor.wms_last_counted, in_date)
         # ~40 days; allow for the clock ticking during the test run.
         self.assertIn(self.floor.wms_days_since_count, (39, 40))
+
+    def test_mixed_date_and_datetime_quants_no_crash(self):
+        """Regression: a slot holding one COUNTED quant (last_count_date = a
+        Date) and one freshly-RECEIVED quant (in_date = a Datetime) must not
+        raise 'can't compare datetime.datetime to datetime.date' when
+        wms_last_counted recomputes. Surfaced live by receiving a 2nd product
+        into a slot that already held counted stock (the receipt validate
+        rolled back on the recompute). The compute now normalises every
+        candidate to a datetime before max()."""
+        Quant = self.env["stock.quant"]
+        p2 = self.env["product.product"].create(
+            {
+                "name": "Cycle Count Probe 2",
+                "type": "consu",
+                "is_storable": True,
+                "wms_product_kind": "consumable",
+            }
+        )
+        # Quant 1: counted -> last_count_date is a DATE.
+        Quant._update_available_quantity(self.product, self.floor, 3.0)
+        Quant.search(
+            [("product_id", "=", self.product.id), ("location_id", "=", self.floor.id)]
+        ).write({"last_count_date": date.today()})
+        # Quant 2: freshly received -> in_date is a DATETIME.
+        Quant._update_available_quantity(p2, self.floor, 7.0)
+        Quant.search([("product_id", "=", p2.id), ("location_id", "=", self.floor.id)]).write(
+            {"in_date": fields.Datetime.now()}
+        )
+        self.floor.invalidate_recordset(["wms_last_counted", "wms_days_since_count"])
+
+        # Must not raise, and must yield a Datetime (date normalised to midnight).
+        val = self.floor.wms_last_counted
+        self.assertTrue(val)
+        self.assertIsInstance(val, datetime)
 
     def test_non_stockable_location_reads_zero(self):
         """A view/rack location is not counted: null date, zero delta."""
