@@ -27,7 +27,16 @@ _PROBES = [
     (
         "Negative on-hand",
         "fail",
-        "SELECT count(*) FROM stock_quant WHERE quantity < 0",
+        # Only USABLE (internal) locations matter here. Virtual locations —
+        # Vendors, Customers, Production, Inventory adjustment, our own
+        # "internal use" sink — are negative by normal double-entry design
+        # (every receipt drives Vendors negative), so counting them made this
+        # check FAIL on every live deployment. Restrict to usage='internal' so
+        # it flags a real oversell (issued more than a slot held), not the
+        # accounting counterparties.
+        "SELECT count(*) FROM stock_quant q "
+        "JOIN stock_location l ON l.id = q.location_id "
+        "WHERE q.quantity < 0 AND l.usage = 'internal'",
         "%s quant(s) below zero",
     ),
     (
@@ -90,17 +99,22 @@ class WmsSelfDiagnostics(models.TransientModel):
         try:
             snap = self.env["wms.backup.audit"].sudo()._health_snapshot()
             hs = snap.get("status", "CRITICAL")
+            # Guard the None case: a system with no backup yet has age=None, and
+            # "last_backup=%sh" would render the bare "last_backup=Noneh". Show
+            # "never" instead (matches the dashboard's last_backup_label).
+            age = snap.get("last_backup_age_hours")
+            last_backup_txt = ("%sh" % age) if age is not None else "never"
             checks.append(
                 {
                     "check": "System health (DB + backup file + disk free)",
                     "status": (
                         "pass" if hs == "HEALTHY" else ("warn" if hs == "DEGRADED" else "fail")
                     ),
-                    "detail": "status=%s; db_reachable=%s; last_backup=%sh; %s"
+                    "detail": "status=%s; db_reachable=%s; last_backup=%s; %s"
                     % (
                         hs,
                         snap.get("db_reachable"),
-                        snap.get("last_backup_age_hours"),
+                        last_backup_txt,
                         "; ".join(snap.get("warnings") or []) or "no warnings",
                     ),
                 }
