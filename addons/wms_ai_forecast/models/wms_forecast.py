@@ -43,8 +43,12 @@ class WmsForecast(models.Model):
         "tied up in non-moving stock the trust could free by consuming it.",
     )
 
-    @api.depends("on_hand", "product_id")
+    @api.depends("on_hand", "product_id", "product_id.standard_price")
     def _compute_stock_value(self):
+        # standard_price is in the dependency set so a later cost change
+        # re-rates the row, not just an on-hand change. (It is a
+        # company-dependent field; the ORM still flags dependents for
+        # recompute when it's written through the normal product cost path.)
         for rec in self:
             cost = rec.product_id.standard_price or 0.0
             rec.unit_cost = cost

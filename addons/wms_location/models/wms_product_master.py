@@ -73,8 +73,11 @@ class WmsCodedMaster(models.AbstractModel):
             name = (rec.name or "").strip()
             if not name:
                 continue
+            # Escape LIKE wildcards so a literal % or _ in the name can't widen
+            # the match (=ilike passes the term straight to SQL ILIKE).
+            esc = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             dup = self.with_context(active_test=False).search(
-                [("id", "!=", rec.id), ("name", "=ilike", name)], limit=1
+                [("id", "!=", rec.id), ("name", "=ilike", esc)], limit=1
             )
             if dup:
                 raise ValidationError(

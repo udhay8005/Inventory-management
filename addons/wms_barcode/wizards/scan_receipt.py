@@ -250,10 +250,51 @@ class WmsScanReceipt(models.TransientModel):
             )
         picking.action_confirm()
         picking.action_assign()
+        MoveLine = self.env["stock.move.line"]
         for move in picking.move_ids:
-            for ml in move.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or move.product_uom_qty
+            # Scans that carried a specific lot for THIS move. Match product +
+            # destination so two slots of the same product (which stay on
+            # separate moves) keep their own lines. The scanned lot is captured
+            # per scan on the wizard line but used to be dropped here, so a
+            # lot-tracked receipt landed stock with no batch/expiry link.
+            lot_lines = [
+                ln
+                for ln in self.line_ids
+                if ln.product_id == move.product_id
+                and ln.location_dest_id == move.location_dest_id
+                and ln.lot_id
+            ]
+            if not lot_lines:
+                # Non-lot receipt: unchanged proven path — just fill the qty.
+                for ml in move.move_line_ids:
+                    if not ml.quantity:
+                        ml.quantity = ml.quantity_product_uom or move.product_uom_qty
+                continue
+            # Carry each scanned lot onto its own done line. Reuse the line
+            # action_assign already made (keeps the move's reservation state)
+            # and add extras when several lots of one product were scanned.
+            existing = list(move.move_line_ids)
+            for idx, ln in enumerate(lot_lines):
+                if idx < len(existing):
+                    ml = existing[idx]
+                    ml.quantity = ln.quantity
+                    ml.lot_id = ln.lot_id.id
+                else:
+                    MoveLine.create(
+                        {
+                            "move_id": move.id,
+                            "picking_id": picking.id,
+                            "product_id": move.product_id.id,
+                            "product_uom_id": move.product_id.uom_id.id,
+                            "location_id": move.location_id.id,
+                            "location_dest_id": move.location_dest_id.id,
+                            "quantity": ln.quantity,
+                            "lot_id": ln.lot_id.id,
+                        }
+                    )
+            # Drop any surplus auto lines beyond the lots we authored.
+            for ml in existing[len(lot_lines) :]:
+                ml.unlink()
         picking.button_validate()
 
         # Audit-trail message — matches the Scan Issue chatter pattern.
