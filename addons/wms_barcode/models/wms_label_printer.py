@@ -324,11 +324,20 @@ class WmsLabelPrinter(models.Model):
                 )
             if code:
                 sym, narrow, wide, bx = self._barcode_params(code, rx, right_edge)
-                bar_h = max(d(8.0), d(min(11.0, h - 14.0)))
+                bar_top = yo + d(10.0)
+                # Reserve room UNDER the bars for the human-readable digits
+                # (HRI=1). A fixed 11 mm bar height ignored both the y-offset and
+                # that readable line, so on the 100x25 mm stock the digits printed
+                # off the bottom edge into the die-cut gap (confirmed on real
+                # TE244 output — the SKU under each barcode was clipped). Size the
+                # bars to the space that actually remains above a bottom margin.
+                hri_reserve = d(5.0)  # human-readable line (~3 mm) + bottom margin
+                avail = d(h) - hri_reserve - bar_top
+                bar_h = max(d(8.0), min(avail, d(11.0)))
                 parts.append(
                     (
                         'BARCODE %d,%d,"%s",%d,1,0,%d,%d,"%s"'
-                        % (bx, yo + d(10.0), sym, bar_h, narrow, wide, code[:48])
+                        % (bx, bar_top, sym, bar_h, narrow, wide, code[:48])
                     ).encode("ascii")
                 )
             parts.append(("PRINT 1,%d" % copies).encode("ascii"))

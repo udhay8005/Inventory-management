@@ -73,6 +73,26 @@ class TestDirectPrint(TransactionCase):
     def test_copies_in_print_command(self):
         self.assertIn(b"PRINT 1,3", self._tspl([{"barcode": "X1"}], copies=3))
 
+    def test_barcode_and_digits_fit_within_label(self):
+        """Regression: on the 100x25 mm stock the bars + the human-readable SKU
+        printed below them (HRI=1) must fit inside the label height. A fixed
+        11 mm bar height ignored the offset + that readable line, so the digits
+        clipped off the bottom edge into the die-cut gap on real TE244 output."""
+        import re
+
+        tspl = self._tspl([{"title": "X", "barcode": "MED-CAL-CIP-INJ-100MG-30ML"}]).decode("ascii")
+        m = re.search(r'BARCODE (\d+),(\d+),"[^"]+",(\d+),', tspl)
+        self.assertTrue(m, "expected a BARCODE command in the TSPL")
+        y, height = int(m.group(2)), int(m.group(3))
+        label_dots = round(self.printer.label_height_mm / 25.4 * (self.printer.dpi or 203))
+        # bars must end with at least ~3 mm (24 dots) of room below for the HRI
+        # digits, or the readable SKU prints off the bottom edge.
+        self.assertLessEqual(
+            y + height,
+            label_dots - 24,
+            "barcode bars leave no room for the readable SKU below — it clips",
+        )
+
     def test_output_is_ascii_and_quote_safe(self):
         # Non-ASCII dropped, the double-quote that would break a TSPL literal
         # is replaced. With no logo the job is pure ASCII.
