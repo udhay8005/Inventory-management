@@ -36,9 +36,9 @@ jobs:
     name: Lint & static checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.12
           cache: pip
@@ -130,9 +130,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.12
           cache: pip
@@ -149,7 +149,7 @@ jobs:
       - name: pip-audit (dependency CVEs)
         run: pip-audit -r requirements.txt --strict
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-reports
@@ -184,9 +184,9 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.12
           cache: pip
@@ -290,7 +290,7 @@ jobs:
 
           echo "✔ WMS test suite passed (0 skipped)."
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: odoo-test-log-19.0
@@ -333,14 +333,14 @@ jobs:
       ADDONS: wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Full history + tags so we can check out the previous release's
           # addons/ tree; the default shallow checkout has neither.
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.12
           cache: pip
@@ -469,7 +469,7 @@ jobs:
           fi
           echo "✔ Upgrade path ${PREV_TAG} -> HEAD completed cleanly."
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: odoo-upgrade-logs-19.0
@@ -502,9 +502,9 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.12
           cache: pip

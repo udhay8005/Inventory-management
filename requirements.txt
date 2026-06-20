@@ -1,8 +1,8 @@
 numpy>=1.26,<2.0
 pandas>=2.0,<3.0
-statsmodels>=0.14
-Pillow>=10.0
-reportlab>=4.0
+statsmodels>=0.14.6
+Pillow>=12.2.0
+reportlab>=4.5.1
 # reportlab 4.x ships without a built-in renderPM backend; without one,
 # Odoo's ir.actions.report.barcode() raises RenderPMError at PDF time
 # and our thermal label endpoint returns HTTP 500. Has a precompiled
