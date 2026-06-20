@@ -67,8 +67,16 @@ class TestDirectPrint(TransactionCase):
         # Code 39 gives more bars for short codes (the fuller "normal barcode").
         self.assertIn(b'"39"', self._tspl([{"barcode": "R09"}]))
 
-    def test_long_code_uses_code128(self):
-        self.assertIn(b'"128"', self._tspl([{"barcode": "8901234567890"}]))
+    def test_long_code39_compatible_uses_code39(self):
+        # Upper-case structured SKUs are Code39-compatible, so they print as the
+        # fuller, wider Code 39 (more bars per char) to fill more of the label
+        # beside the big logo — and Code 39 scans more reliably at this density.
+        self.assertIn(b'"39"', self._tspl([{"barcode": "MED-CAL-CIP-INJ-100MG-30ML"}]))
+
+    def test_code128_fallback_for_non_code39(self):
+        # A value Code 39 can't carry (lower case here) falls back to the compact
+        # Code 128 so it still prints and scans.
+        self.assertIn(b'"128"', self._tspl([{"barcode": "prod-90210-abc"}]))
 
     def test_copies_in_print_command(self):
         self.assertIn(b"PRINT 1,3", self._tspl([{"barcode": "X1"}], copies=3))

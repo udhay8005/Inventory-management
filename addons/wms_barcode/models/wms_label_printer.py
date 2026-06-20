@@ -87,11 +87,16 @@ class WmsLabelPrinter(models.Model):
     speed = fields.Integer(default=3, help="Print speed in inches/sec (TE244: 2-6).")
     x_offset_mm = fields.Float(
         string="Shift right (mm)",
-        default=2.0,
-        help="Nudge everything right. Use with 'Shift down' to align the print "
-        "inside the sticker.",
+        default=0.0,
+        help="Registration nudge: shift everything right to correct a die-cut "
+        "that sits off the printer origin. Leave 0 for even margins; only set it "
+        "if the print lands off-centre on the sticker.",
     )
-    y_offset_mm = fields.Float(string="Shift down (mm)", default=1.5)
+    y_offset_mm = fields.Float(
+        string="Shift down (mm)",
+        default=0.0,
+        help="Registration nudge down. Leave 0 for even margins.",
+    )
     brand_line = fields.Char(
         string="Brand line",
         default="Mercy & Care For Cows Dakshin Vrindavan PCT",
@@ -162,20 +167,41 @@ class WmsLabelPrinter(models.Model):
     _CODE39_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%"
 
     def _barcode_params(self, code, x_left, x_right):
-        """Pick symbology + module width + a centred x so the barcode fills the
-        right zone. Short, Code39-compatible codes use **Code 39** (more bars =
-        a fuller, normal-looking barcode); everything else uses the compact
-        **Code 128**. The encoded value is never altered, so scanning is
-        unaffected."""
+        """Pick symbology + bar width + a centred x so the barcode is as wide as
+        the zone sensibly allows. A Code39-compatible value (upper-case + the
+        Code39 symbol set) prints as **Code 39**: it uses more bars per character
+        than Code 128, so the same SKU comes out a good bit wider and fuller
+        beside the logo, and at this print density it scans *better* — Code 39 has
+        only two bar widths to tell apart (narrow vs wide, here 1:3) where Code
+        128 has four. The widest standard 3:1 (else 2:1) ratio that fits is used,
+        with the narrow bar widened to fill the zone (short codes get fat bars; a
+        long SKU lands on a 1-dot narrow bar). Anything Code 39 can't carry (lower
+        case, Code128-only symbols) or that is too long to fit as Code 39 falls
+        back to the compact **Code 128**. The encoded value is never altered."""
         avail = max(1, x_right - x_left)
         c39 = set(self._CODE39_CHARS)
-        if code and len(code) <= 8 and code == code.upper() and all(ch in c39 for ch in code):
-            sym, modules, cap = "39", 13 * (len(code) + 2), 5
-        else:
-            sym, modules, cap = "128", 11 * (len(code) + 2) + 13, 4
-        narrow = max(_MIN_NARROW_DOTS, min(cap, int(0.80 * avail / max(modules, 1))))
+        if code and code == code.upper() and all(ch in c39 for ch in code):
+            # Code 39 width per char (incl. the inter-char gap), in narrow-bar
+            # units: 3 wide + 6 narrow + 1 gap = 3*ratio + 7. (len + 2) counts
+            # the auto start/stop '*'. Prefer the fuller 3:1, then 2:1.
+            for ratio in (3, 2):
+                unit = (3 * ratio + 7) * (len(code) + 2)
+                if unit <= avail:
+                    narrow = min(6, max(1, avail // unit))
+                    width = unit * narrow
+                    bx = x_left + max(0, (avail - width) // 2)
+                    return "39", narrow, narrow * ratio, bx
+            # too long to fit as Code 39 here -> compact Code 128 below
+        modules = 11 * (len(code) + 2) + 13
+        narrow = max(_MIN_NARROW_DOTS, min(4, int(0.80 * avail / max(modules, 1))))
+        if modules * narrow > avail:
+            # The preferred >= 2-dot module overruns this zone (a long code in a
+            # narrow zone). Fall to the widest module that still fits — down to
+            # 1 dot — so the bars never run off the label. Denser, but it stays
+            # on the sticker and scans at close range.
+            narrow = max(1, avail // max(modules, 1))
         bx = x_left + max(0, (avail - modules * narrow) // 2)
-        return sym, narrow, narrow * 2, bx
+        return "128", narrow, narrow * 2, bx
 
     def _logo_bytes(self, x, y, box_w, box_h):
         """Render the trust logo as a 1-bit TSPL BITMAP for the left zone.
@@ -210,8 +236,14 @@ class WmsLabelPrinter(models.Model):
                 img = flat.convert("RGB")
             grey = ImageOps.autocontrast(ImageOps.grayscale(img))
             grey.thumbnail((int(box_w), int(box_h)))
-            one = grey.convert("1")  # 1 = white, 0 = black (PIL)
-            data = one.point(lambda p: 0 if p else 255).tobytes()  # dark -> printed
+            one = grey.convert("1")  # PIL "1": white=255, black=0
+            # TSPL BITMAP polarity: a 0 bit prints black, a 1 bit stays white.
+            # PIL .tobytes() already packs white->1, black->0, so the dark logo
+            # strokes print black on a white (unprinted) background. The old code
+            # inverted this with point(0 if p else 255), which made the whole
+            # logo box print SOLID BLACK with the logo knocked out in white
+            # ("ulta" on real TE244 output).
+            data = one.tobytes()
             w, h = one.size
             cx = x + max(0, (box_w - w) // 2)
             cy = y + max(0, (box_h - h) // 2)
@@ -271,11 +303,27 @@ class WmsLabelPrinter(models.Model):
         w, h = self.label_width_mm, self.label_height_mm
         d = self._dots
         xo, yo = d(self.x_offset_mm), d(self.y_offset_mm)
-        right_edge = d(w) - d(2.0)
-        logo_x, logo_y = xo + d(2.0), yo + d(1.5)
-        logo_bw, logo_bh = d(22.0), d(max(6.0, h - 3.0))
-        div_x = xo + d(25.4)  # end of the 1-inch logo zone
-        rx = div_x + d(2.5)
+        W, Hh = d(w), d(h)
+        m = d(2.0)  # uniform margin on all four sides (offsets default to 0)
+        # A full-size square logo on the LEFT (filling the label height inside its
+        # bordered frame), the rest for details. A 26-char SKU barcode can't be
+        # both wide AND fit beside a logo this size on a 100 mm label, so the
+        # barcode uses the 1-dot module here — it scans fine, it just doesn't fill
+        # the zone. The owner chose the big logo over a gap-filling barcode
+        # (2026-06-20); a SKU <= ~22 chars would fill the zone beside this logo.
+        zone_w = d(25.4)  # ~1-inch logo zone
+        logo_x, logo_y = m, m
+        logo_w = zone_w - m - d(1.0)  # logo box within the zone
+        logo_h = Hh - 2 * m  # logo fills the label height
+        pad = max(2, d(0.6))  # inner padding inside the frame
+        rx = zone_w + d(1.5)  # details begin just past the logo zone
+        txt_right = W - m
+        org_y, title_y, sub_y = m, m + d(3.0), m + d(6.5)
+        bar_top = m + d(8.5)  # start the bars right under the sub-line
+        sku_h = d(2.8)  # the enlarged readable SKU line printed below the bars
+        sku_y = Hh - m - sku_h  # pinned just above the bottom margin
+        bar_h = max(d(6.0), sku_y - d(0.6) - bar_top)  # taller bars fill the gap
+        title_cap = max(8, int((txt_right - rx) / max(1, d(2.2))))
         brand = _ascii(self.brand_line or "")
         no_logo = self.env.context.get("wms_print_no_logo")
 
@@ -288,7 +336,13 @@ class WmsLabelPrinter(models.Model):
                 "SPEED %d" % int(self.speed or 3),
             ]
         ).encode("ascii")
-        logo_cmd = b"" if no_logo else self._logo_bytes(logo_x, logo_y, logo_bw, logo_bh)
+        logo_cmd = (
+            b""
+            if no_logo
+            else self._logo_bytes(
+                xo + logo_x + pad, yo + logo_y + pad, logo_w - 2 * pad, logo_h - 2 * pad
+            )
+        )
 
         blocks = []
         for lbl in labels:
@@ -303,42 +357,47 @@ class WmsLabelPrinter(models.Model):
             if not (title or code):
                 continue
             parts = [b"CLS"]
+            if logo_cmd:
+                parts.append(logo_cmd)
+            # a thin frame around the logo zone (the "small border")
             parts.append(
-                logo_cmd
-                or ("BOX %d,%d,%d,%d,2" % (logo_x, logo_y, logo_bw, logo_bh)).encode("ascii")
-            )
-            parts.append(
-                ("BAR %d,%d,2,%d" % (div_x, yo + d(1.0), d(max(4.0, h - 2.0)))).encode("ascii")
+                (
+                    "BOX %d,%d,%d,%d,2"
+                    % (xo + logo_x, yo + logo_y, xo + logo_x + logo_w, yo + logo_y + logo_h)
+                ).encode("ascii")
             )
             if brand:
                 parts.append(
-                    ('TEXT %d,%d,"1",0,1,1,"%s"' % (rx, yo + d(0.8), brand[:52])).encode("ascii")
+                    ('TEXT %d,%d,"1",0,1,1,"%s"' % (xo + rx, yo + org_y, brand[:52])).encode(
+                        "ascii"
+                    )
                 )
             if title:
                 parts.append(
-                    ('TEXT %d,%d,"3",0,1,1,"%s"' % (rx, yo + d(3.0), title[:26])).encode("ascii")
+                    (
+                        'TEXT %d,%d,"3",0,1,1,"%s"' % (xo + rx, yo + title_y, title[:title_cap])
+                    ).encode("ascii")
                 )
             if subtitle:
                 parts.append(
-                    ('TEXT %d,%d,"1",0,1,1,"%s"' % (rx, yo + d(7.5), subtitle[:48])).encode("ascii")
+                    ('TEXT %d,%d,"1",0,1,1,"%s"' % (xo + rx, yo + sub_y, subtitle[:48])).encode(
+                        "ascii"
+                    )
                 )
             if code:
-                sym, narrow, wide, bx = self._barcode_params(code, rx, right_edge)
-                bar_top = yo + d(10.0)
-                # Reserve room UNDER the bars for the human-readable digits
-                # (HRI=1). A fixed 11 mm bar height ignored both the y-offset and
-                # that readable line, so on the 100x25 mm stock the digits printed
-                # off the bottom edge into the die-cut gap (confirmed on real
-                # TE244 output — the SKU under each barcode was clipped). Size the
-                # bars to the space that actually remains above a bottom margin.
-                hri_reserve = d(5.0)  # human-readable line (~3 mm) + bottom margin
-                avail = d(h) - hri_reserve - bar_top
-                bar_h = max(d(8.0), min(avail, d(11.0)))
+                # Barcode in the 3-inch details zone. HRI off (5th param 0) — we
+                # print the SKU ourselves one size larger (font "2") so the
+                # readable line isn't tiny; bar height + that line are sized
+                # (above) to sit inside the label.
+                sym, narrow, wide, bx = self._barcode_params(code, xo + rx, xo + txt_right)
                 parts.append(
                     (
-                        'BARCODE %d,%d,"%s",%d,1,0,%d,%d,"%s"'
-                        % (bx, bar_top, sym, bar_h, narrow, wide, code[:48])
+                        'BARCODE %d,%d,"%s",%d,0,0,%d,%d,"%s"'
+                        % (bx, yo + bar_top, sym, bar_h, narrow, wide, code[:48])
                     ).encode("ascii")
+                )
+                parts.append(
+                    ('TEXT %d,%d,"2",0,1,1,"%s"' % (bx, yo + sku_y, code[:48])).encode("ascii")
                 )
             parts.append(("PRINT 1,%d" % copies).encode("ascii"))
             blocks.append(b"\r\n".join(parts))
