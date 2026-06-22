@@ -12,4 +12,4 @@ reportlab>=4.0,<5.0
 # Odoo's ir.actions.report.barcode() raises RenderPMError at PDF time
 # and our thermal label endpoint returns HTTP 500. Has a precompiled
 # wheel for cp311 (we're not on 3.13 where it fails to build).
-rl-renderPM>=4.0
+rl-renderPM>=4.0.3
