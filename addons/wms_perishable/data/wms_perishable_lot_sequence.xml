@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            V20-005 — auto-lot naming. When a perishable is received without an
+            explicit batch number, the receipt creates a lot named LOT-NNNNNN
+            from this sequence (noupdate so the counter survives upgrades).
+        -->
+        <record id="seq_wms_lot_auto" model="ir.sequence">
+            <field name="name">WMS Auto Lot</field>
+            <field name="code">wms.lot.auto</field>
+            <field name="prefix">LOT-</field>
+            <field name="padding">6</field>
+            <field name="implementation">standard</field>
+        </record>
+    </data>
+</odoo>

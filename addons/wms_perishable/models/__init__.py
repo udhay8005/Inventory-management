@@ -1,5 +1,8 @@
-from . import product_template  # V20-002: new perishable kinds
+from . import product_template  # V20-002 kinds; V20-003 auto-enable lot+expiry
 from . import stock_lot  # V20-007: lot lifecycle + supplier/expiry metadata
+from . import (  # V20-004/005: lot-aware receipt (batch/expiry/supplier, find-or-create lot)
+    scan_receipt,
+)
 
 # Wave 1 models continue here, per the frozen spec in docs/v20-perishable-engine/.
 # Planned (NOT yet implemented):

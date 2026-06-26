@@ -39,11 +39,23 @@ class TestReceiptLot(TransactionCase):
                 "wms_location_type": "floor",
             }
         )
+        # v20: medicine is use_expiration_date=True, so lots carry an expiry
+        # (a no-expiry lot stalls the perishable receipt validation).
         cls.lot_a = cls.env["stock.lot"].create(
-            {"name": "RLOT-A", "product_id": cls.product.id, "company_id": cls.env.company.id}
+            {
+                "name": "RLOT-A",
+                "product_id": cls.product.id,
+                "company_id": cls.env.company.id,
+                "expiration_date": "2027-12-31 00:00:00",
+            }
         )
         cls.lot_b = cls.env["stock.lot"].create(
-            {"name": "RLOT-B", "product_id": cls.product.id, "company_id": cls.env.company.id}
+            {
+                "name": "RLOT-B",
+                "product_id": cls.product.id,
+                "company_id": cls.env.company.id,
+                "expiration_date": "2027-06-30 00:00:00",
+            }
         )
 
     def _wizard(self):

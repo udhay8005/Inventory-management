@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            V20-004 — batch / expiry / supplier columns on the Scan Receipt
+            line list, so an operator can capture per-batch detail at receipt.
+            Inherits the frozen v19 receipt form; adds columns after lot_id.
+        -->
+        <record id="view_wms_scan_receipt_form_perishable" model="ir.ui.view">
+            <field name="name">wms.scan.receipt.form.perishable</field>
+            <field name="model">wms.scan.receipt</field>
+            <field name="inherit_id" ref="wms_barcode.view_wms_scan_receipt_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='line_ids']/list/field[@name='lot_id']" position="after">
+                    <field name="wms_batch" optional="show"/>
+                    <field name="wms_expiry" optional="show"/>
+                    <field name="wms_supplier_id" optional="hide"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

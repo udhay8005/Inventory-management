@@ -54,7 +54,18 @@ class TestReturnableItems(TransactionCase):
             }
         )
         cls.env["stock.quant"]._update_available_quantity(cls.tool, cls.stock, 50.0)
-        cls.env["stock.quant"]._update_available_quantity(cls.feed, cls.stock, 50.0)
+        # Feed is a perishable kind -> lot-tracked under v20; seed it with a lot.
+        cls.feed_lot = cls.env["stock.lot"].create(
+            {
+                "name": "RET-FEED-LOT",
+                "product_id": cls.feed.id,
+                "company_id": cls.env.company.id,
+                "expiration_date": "2027-12-31 00:00:00",
+            }
+        )
+        cls.env["stock.quant"]._update_available_quantity(
+            cls.feed, cls.stock, 50.0, lot_id=cls.feed_lot
+        )
 
         # A floor zone so Scan Return's _auto_assign_slot has a destination
         # to land on. A fresh --without-demo warehouse has no rack slots or
