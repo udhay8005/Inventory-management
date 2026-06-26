@@ -41,6 +41,29 @@ class StockQuant(models.Model):
             else:
                 q.wms_effective_expiry = q.product_id.product_tmpl_id.wms_expiry_date or False
 
+    def _get_gather_domain(
+        self, product_id, location_id, lot_id=None, package_id=None, owner_id=None, strict=False
+    ):
+        # V20-011c disposal carve-out. product_expiry adds a hard removal_date
+        # exclusion to the gather domain whenever `with_expiration` is in the
+        # context (set per-move for use_expiration_date products), so expired
+        # stock can't be reserved for ANYTHING — including a manual Damage/scrap
+        # to clear it off the shelf. When a disposal/override flow sets
+        # `wms_allow_expired_removal`, we neutralise `with_expiration` for this
+        # one domain build so expired stock becomes reservable for disposal.
+        # Surgical: every reservation WITHOUT that flag is byte-for-byte v19.
+        records = self
+        if self.env.context.get("wms_allow_expired_removal"):
+            records = self.with_context(with_expiration=False)
+        return super(StockQuant, records)._get_gather_domain(
+            product_id,
+            location_id,
+            lot_id=lot_id,
+            package_id=package_id,
+            owner_id=owner_id,
+            strict=strict,
+        )
+
     def _wms_sorted_for_removal(self):
         """V20-009 — FEFO now reads the per-quant STORED wms_effective_expiry
         (lot expiry, else template fallback) instead of the v19 template-only
