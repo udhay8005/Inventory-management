@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_lot_quarantine_form" model="ir.ui.view">
+            <field name="name">wms.lot.quarantine.form</field>
+            <field name="model">wms.lot.quarantine</field>
+            <field name="arch" type="xml">
+                <form string="Lot Quarantine">
+                    <header>
+                        <button name="action_release" type="object" string="Release (QC pass)"
+                                class="btn-primary" invisible="state != 'held'"
+                                confirm="Release these lots back to issuable 'available' state?"/>
+                        <button name="action_reject" type="object" string="Reject (QC fail)"
+                                class="btn-warning" invisible="state != 'held'"/>
+                        <button name="action_destroy" type="object" string="Destroy"
+                                class="btn-danger" invisible="state not in ('held', 'rejected')"
+                                confirm="Mark these lots DESTROYED? They become permanently un-issuable. Physical write-off is a separate Damage action."/>
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="held,released,rejected,destroyed"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1><field name="name" readonly="1"/></h1>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="held_on"/>
+                                <field name="held_by_id"/>
+                                <field name="unreserved_count"/>
+                            </group>
+                            <group>
+                                <field name="decided_on" invisible="state == 'held'"/>
+                                <field name="decided_by_id" invisible="state == 'held'"/>
+                            </group>
+                        </group>
+                        <field name="reason" placeholder="Why are these lots being held?"/>
+                        <field name="qc_notes" placeholder="QC findings / decision notes"/>
+                        <field name="lot_ids" readonly="state != 'held'">
+                            <list>
+                                <field name="name"/>
+                                <field name="product_id"/>
+                                <field name="expiration_date"/>
+                                <field name="wms_lot_state"/>
+                            </list>
+                        </field>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_quarantine_list" model="ir.ui.view">
+            <field name="name">wms.lot.quarantine.list</field>
+            <field name="model">wms.lot.quarantine</field>
+            <field name="arch" type="xml">
+                <list string="Lot Quarantine"
+                      decoration-warning="state == 'held'"
+                      decoration-danger="state in ('rejected', 'destroyed')"
+                      decoration-muted="state == 'released'">
+                    <field name="name"/>
+                    <field name="held_on"/>
+                    <field name="unreserved_count"/>
+                    <field name="state"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_quarantine" model="ir.actions.act_window">
+            <field name="name">Lot Quarantine</field>
+            <field name="res_model">wms.lot.quarantine</field>
+            <field name="view_mode">list,form</field>
+        </record>
+
+        <menuitem id="menu_wms_lot_quarantine"
+                  name="Lot Quarantine"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_lot_quarantine"
+                  groups="wms_location.group_wms_manager"
+                  sequence="81"/>
+    </data>
+</odoo>
