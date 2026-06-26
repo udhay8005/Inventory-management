@@ -2,10 +2,10 @@
     "name": "WMS — Universal Perishable Engine (Wave 1)",
     # v20 line, first version. Stays on the Odoo 19.0 series (this runs on
     # Odoo 19 CE — "v20" is the PROJECT major, not the Odoo major).
-    "version": "19.0.1.3.0",
+    "version": "19.0.1.4.0",
     "summary": (
         "Per-lot expiry + FEFO + quarantine/recall for the gaushala WMS. "
-        "Wave 1 in progress (kinds, lot model, lot-aware receipt)."
+        "Wave 1 in progress (kinds, lot model, lot-aware receipt, effective-expiry)."
     ),
     # Additive module: it _inherit-extends the FROZEN v19 addons (FEFO override
     # on the single chokepoint stock.quant._wms_sorted_for_removal, receipt
@@ -24,6 +24,8 @@
     "author": "WMS",
     "license": "LGPL-3",
     "category": "Inventory/Warehouse",
+    # V20-008 — partial index idx_quant_fefo for fast FEFO removal scans.
+    "post_init_hook": "post_init_hook",
     "data": [
         # V20-002 — SKU sequences for the new perishable kinds.
         "data/wms_perishable_sku_sequences.xml",
