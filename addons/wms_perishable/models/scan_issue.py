@@ -12,6 +12,7 @@ nothing to break down until the planner actually excludes those lots.
 """
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class WmsScanIssuePlan(models.TransientModel):
@@ -36,6 +37,12 @@ class WmsScanIssuePlan(models.TransientModel):
 
 class WmsScanIssue(models.TransientModel):
     _inherit = "wms.scan.issue"
+
+    wms_has_expired_shortfall = fields.Boolean(
+        readonly=True,
+        help="Set when the plan fell short and expired stock is on hand — a "
+        "Manager can override the expiry block to issue it.",
+    )
 
     def action_plan(self):
         res = super().action_plan()
@@ -70,10 +77,12 @@ class WmsScanIssue(models.TransientModel):
         # much physically-present stock is EXPIRED (excluded from the plan, since
         # the planner now drops it), so the operator isn't told "stock out" while
         # expired stock sits on the shelf, and knows a Manager can override.
+        self.wms_has_expired_shortfall = False
         if self.short_qty:
             product = self._wms_resolve_scanned_product()
             expired_qty = self._wms_expired_on_hand(product) if product else 0.0
             if expired_qty:
+                self.wms_has_expired_shortfall = True
                 self.feedback = (self.feedback or "") + (
                     " ⚠ %g unit(s) of %s on hand are EXPIRED and cannot be issued "
                     "(a Manager can override)." % (expired_qty, product.display_name)
@@ -119,3 +128,45 @@ class WmsScanIssue(models.TransientModel):
             ]
         )
         return sum(quants.mapped("quantity"))
+
+    # ---- V20-011b: Manager override to ISSUE expired stock ------------------
+    def _wms_is_manager(self):
+        return self.env.user.has_group("wms_location.group_wms_manager")
+
+    def _check_high_value(self):
+        # A Manager performing the expired-override is already the approving
+        # authority, so do NOT also route the issue through the keeper->manager
+        # approval gate — its approval replay would not carry the carve-out
+        # context and so could not reserve the expired stock. Outside the
+        # override (or for a non-manager) the v19 gate is unchanged.
+        if self.env.context.get("wms_expired_override") and self._wms_is_manager():
+            return False
+        return super()._check_high_value()
+
+    def _check_min_life(self):
+        if self.env.context.get("wms_expired_override") and self._wms_is_manager():
+            return (False, self.env["product.product"], False)
+        return super()._check_min_life()
+
+    def action_override_expired_issue(self):
+        """Manager-only: bypass the expiry block and issue expired stock.
+
+        Re-plans INCLUDING expired lots (the planner delegates to v19 when the
+        carve-out flag is set), then validates inline with the carve-out so the
+        picking reserves the expired lots. Manager-gated in-method (the button
+        is also group-restricted) and the authorising manager is stamped onto
+        the usage note for the audit trail.
+        """
+        self.ensure_one()
+        if not self._wms_is_manager():
+            raise UserError(
+                "Only a Manager can override the expiry block and issue expired "
+                "stock. The block keeps expired medicine off the floor — a "
+                "Manager must take responsibility to override it."
+            )
+        marker = "[EXPIRED-STOCK OVERRIDE authorised by %s]" % self.env.user.name
+        note = (self.usage_note or "").strip()
+        self.usage_note = (note + "\n" + marker) if note else marker
+        wiz = self.with_context(wms_allow_expired_removal=True, wms_expired_override=True)
+        wiz.action_plan()
+        return wiz.action_validate()

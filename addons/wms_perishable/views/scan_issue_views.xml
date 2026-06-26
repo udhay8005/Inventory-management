@@ -18,6 +18,20 @@
                 <xpath expr="//field[@name='plan_line_ids']/list/field[@name='take']" position="after">
                     <field name="resulting_balance" string="Left after" optional="show"/>
                 </xpath>
+                <!-- V20-011b — Manager override to issue expired stock. The
+                     button shows only to managers, only when the plan fell
+                     short because expired stock was excluded. -->
+                <xpath expr="//field[@name='plan_line_ids']" position="before">
+                    <field name="wms_has_expired_shortfall" invisible="1"/>
+                </xpath>
+                <xpath expr="//footer/button[@name='action_validate']" position="after">
+                    <button name="action_override_expired_issue" type="object"
+                            string="Override — issue expired (Manager)"
+                            class="btn-warning"
+                            groups="wms_location.group_wms_manager"
+                            invisible="not wms_has_expired_shortfall"
+                            confirm="Issue EXPIRED stock? This bypasses the expiry safety block. Only proceed if you, as Manager, take responsibility for using expired stock."/>
+                </xpath>
             </field>
         </record>
     </data>
