@@ -326,9 +326,10 @@ jobs:
 
     env:
       # The last green release tag whose addons we install BEFORE upgrading to
-      # HEAD. Bump this every release to the previous tag. Current release is
-      # v19.0.21.0.0, so the previous release tag is v19.0.20.0.0.
-      PREV_TAG: v19.0.20.0.0
+      # HEAD. Bump this every release to the previous tag so the upgrade job
+      # exercises the migration hop the live box will actually run. Last green
+      # release is v19.0.45.0.0 (the next release candidate is v19.0.46.0.0).
+      PREV_TAG: v19.0.45.0.0
       # Same module list + order as the `-i` install in odoo_tests.
       ADDONS: wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training
 
