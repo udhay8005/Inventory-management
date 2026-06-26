@@ -2,7 +2,7 @@
     "name": "WMS — Universal Perishable Engine (Wave 1)",
     # v20 line, first version. Stays on the Odoo 19.0 series (this runs on
     # Odoo 19 CE — "v20" is the PROJECT major, not the Odoo major).
-    "version": "19.0.1.17.0",
+    "version": "19.0.1.18.0",
     "summary": (
         "Per-lot expiry + FEFO + quarantine/recall for the gaushala WMS. Wave 1 in progress "
         "(kinds, lot, receipt+near-expiry guard, FEFO, issue, blocks, undo, recall, quarantine, reports, label)."
@@ -49,6 +49,8 @@
         "views/wms_lot_expiry_alert_views.xml",
         # V20-017 — lot timeline stat button + lifecycle fields on the lot form.
         "views/stock_lot_views.xml",
+        # V20-020 — legacy -> lot-tracking migration wizard.
+        "views/wms_lot_migration_views.xml",
         # Further Wave 1 data/security/views land here as tickets land
         # (see docs/v20-perishable-engine/04-implementation-plan-and-backlog.md).
     ],

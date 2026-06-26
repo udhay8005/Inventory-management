@@ -6,6 +6,7 @@ from . import stock_picking  # V20-012: lot-aware issue reversal (restore the or
 from . import stock_quant  # V20-008: stored+indexed wms_effective_expiry (FEFO sort key)
 from . import wms_damage  # V20-011c: disposal carve-out — damage can move expired stock
 from . import wms_lot_expiry_alert  # V20-015: per-lot expiry report (SQL view)
+from . import wms_lot_migration  # V20-020: legacy -> lot-tracking migration wizard
 from . import wms_lot_quarantine  # V20-014: QC hold + release/reject/destroy
 from . import wms_lot_recall  # V20-013: recall freeze + unreserve + release
 from . import (  # V20-004/005: lot-aware receipt (batch/expiry/supplier, find-or-create lot)

@@ -12,6 +12,7 @@ from . import (
     test_lot_receipt,
     test_lot_timeline,
     test_manager_override,
+    test_migration,
     test_quarantine,
     test_recall,
     test_reversal_lot,
