@@ -1,10 +1,12 @@
 name: CI
 
 # Triggers
-#   - Push to main or test branches.
-#   - Any PR targeting main or test.
+#   - Push to main, test, or v20 branches.
+#   - Any PR targeting main, test, or v20.
 #   - Manual via `workflow_dispatch`.
 # Workflow: push code to `test` → CI runs → if green, PR to `main` → merge.
+# v20 is the next-major development line (perishable engine, Wave 1+); it runs
+# the same CI (the module-tests job installs wms_perishable; PREV_TAG=v19.0.46.0.0).
 # Concurrency: cancel an in-flight run if a newer commit lands on the same ref.
 #
 # Native (no Docker) build — mirrors the local Windows setup: PostgreSQL +
@@ -14,9 +16,9 @@ name: CI
 
 on:
   push:
-    branches: [main, test]
+    branches: [main, test, v20]
   pull_request:
-    branches: [main, test]
+    branches: [main, test, v20]
   workflow_dispatch:
 
 concurrency:
