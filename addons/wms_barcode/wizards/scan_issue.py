@@ -607,6 +607,16 @@ class WmsScanIssue(models.TransientModel):
 
     def action_plan(self):
         self.ensure_one()
+        # Reject a non-positive quantity up front with a clear message. Without
+        # this, qty<=0 slips into the planner (which returns an empty plan) and
+        # is then mis-described downstream as a fake success ("Planned 0 x ...")
+        # for 0, or a bogus "STOCK OUT" for a negative — even when the product
+        # is fully in stock. Mirrors the receipt line's CHECK(quantity > 0).
+        if self.requested_qty <= 0:
+            raise UserError(
+                "Quantity must be greater than zero. Enter how many units "
+                "you want to issue (the default is 1)."
+            )
         if not self.last_scan:
             raise UserError(
                 "Scan a product barcode before planning the issue. "
@@ -700,8 +710,9 @@ class WmsScanIssue(models.TransientModel):
             return self._open_picking()
         if not self.plan_line_ids:
             raise UserError(
-                "You haven't chosen what to issue yet. Scan a product "
-                "and confirm the slots before validating the issue."
+                "There's nothing planned to issue. Scan a product that has "
+                "stock on hand and set a quantity above zero, then confirm "
+                "the slots before validating."
             )
         if self.short_qty:
             raise UserError(

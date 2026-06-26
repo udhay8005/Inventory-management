@@ -3,6 +3,8 @@ location / lot barcodes (a collision shadows the alias in resolve())."""
 
 from odoo.exceptions import ValidationError
 from odoo.tests import TransactionCase, tagged
+from odoo.tools import mute_logger
+from psycopg2 import IntegrityError
 
 
 @tagged("post_install", "-at_install", "wms", "wms_barcode_collision")
@@ -52,4 +54,25 @@ class TestAliasBarcodeCollision(TransactionCase):
 
     def test_unique_alias_is_allowed(self):
         alias = self._alias("CTN-UNIQUE-1")
+        self.assertTrue(alias.id)
+
+    def test_units_per_scan_must_be_positive(self):
+        """A carton alias multiplier must be > 0. A 0 or negative multiplier
+        makes every scan of that carton a silent dead-end on issues and a raw
+        IntegrityError on receipts; the CHECK blocks it at write time."""
+        for bad in (0, -2):
+            with mute_logger("odoo.sql_db"), self.assertRaises(IntegrityError):
+                with self.env.cr.savepoint():
+                    self.env["wms.barcode.alias"].create(
+                        {
+                            "barcode": "CTN-UPS-%s" % abs(bad),
+                            "product_id": self.target.id,
+                            "units_per_scan": bad,
+                        }
+                    )
+                    self.env.cr.flush()
+        # a positive multiplier is still accepted
+        alias = self.env["wms.barcode.alias"].create(
+            {"barcode": "CTN-UPS-24", "product_id": self.target.id, "units_per_scan": 24}
+        )
         self.assertTrue(alias.id)

@@ -203,6 +203,32 @@ class WmsScanReceipt(models.TransientModel):
                 "physically counted and inspected the delivery."
             )
 
+        # Damage / Repair locations hold broken or in-repair stock and are
+        # deliberately EXCLUDED from the FIFO issue picker, so good incoming
+        # stock landed there would be stranded (on-hand but un-issuable). Refuse
+        # a scanned/typed destination that points at one. (getattr keeps this
+        # dependency-free: the flags live in wms_repair_damage, which depends on
+        # this addon — so we can't import them — and are simply absent, i.e.
+        # there are no such locations, when that addon isn't installed.)
+        # Auto-assign only ever returns slot/floor, so guarding here — before
+        # the auto-assign loop below — checks exactly the operator-supplied
+        # destinations.
+        bad_dest = self.line_ids.filtered(
+            lambda ln: ln.location_dest_id
+            and (
+                getattr(ln.location_dest_id, "wms_is_damage", False)
+                or getattr(ln.location_dest_id, "wms_is_repair", False)
+            )
+        )
+        if bad_dest:
+            raise UserError(
+                "Cannot receive stock into a Damage or Repair location — %s is "
+                "for broken or in-repair stock only and is excluded from "
+                "issuing. Scan a storage slot or floor zone instead, or leave "
+                "the destination blank to auto-assign."
+                % ", ".join(bad_dest.mapped("location_dest_id.display_name"))
+            )
+
         # Auto-assign slot if operator didn't.
         for line in self.line_ids:
             if not line.location_dest_id:
@@ -410,8 +436,10 @@ class WmsScanReceipt(models.TransientModel):
           1. Rack slot or floor zone already holding this product (cluster).
           2. Any empty rack slot.
           3. Any empty floor zone.
-          4. Any rack slot (warning — will mix products).
-          5. Any floor zone.
+          4. Any rack slot (last resort — may share a slot already holding
+             another product; silent fallback by design, never refuses a
+             valid receipt).
+          5. Any floor zone (same silent last-resort fallback).
 
         Floor zones (`wms_location_type='floor'`) are open-area storage
         outside the rack hierarchy. They behave the same as slots for
