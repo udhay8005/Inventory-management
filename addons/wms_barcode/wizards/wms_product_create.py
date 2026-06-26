@@ -199,7 +199,7 @@ class WmsProductCreate(models.TransientModel):
         if self.req_form and not self.wms_form_id:
             missing.append(_("Form / Model"))
         if self.req_strength and not self.wms_dosage:
-            missing.append(_("Strength"))
+            missing.append(_("Strength / dosage / concentration"))
         if self.req_pack and not self.wms_pack_size:
             missing.append(_("Pack size"))
         if missing:

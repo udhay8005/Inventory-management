@@ -4,6 +4,7 @@ from . import (
     test_damage_photo,
     test_fpat_fx1,
     test_quantity_integrity,
+    test_receipt_damage_dest,
     test_repair_lifecycle,
     test_reservation_guard,
 )

@@ -27,6 +27,10 @@ class WmsBarcodeAlias(models.Model):
         "UNIQUE(barcode)",
         "Each carton barcode must be unique.",
     )
+    _units_per_scan_positive = models.Constraint(
+        "CHECK(units_per_scan > 0)",
+        "Units per scan must be greater than zero.",
+    )
 
     @api.constrains("barcode")
     def _check_barcode_no_collision(self):
