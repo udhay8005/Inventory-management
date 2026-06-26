@@ -2,6 +2,7 @@ from . import product_template  # V20-002 kinds; V20-003 auto-enable lot+expiry
 from . import scan_issue  # V20-010: per-lot expiry + resulting-balance on the issue plan
 from . import stock_location  # V20-011: exclude expired lots from the issue plan
 from . import stock_lot  # V20-007: lot lifecycle + supplier/expiry metadata
+from . import stock_picking  # V20-012: lot-aware issue reversal (restore the original lot)
 from . import stock_quant  # V20-008: stored+indexed wms_effective_expiry (FEFO sort key)
 from . import wms_damage  # V20-011c: disposal carve-out — damage can move expired stock
 from . import (  # V20-004/005: lot-aware receipt (batch/expiry/supplier, find-or-create lot)
