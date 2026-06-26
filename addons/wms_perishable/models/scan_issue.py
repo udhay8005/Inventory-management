@@ -66,6 +66,18 @@ class WmsScanIssue(models.TransientModel):
                     on_hand,
                     on_hand - planned,
                 )
+        # V20-011: shortfall breakdown — when the order can't be filled, say how
+        # much physically-present stock is EXPIRED (excluded from the plan, since
+        # the planner now drops it), so the operator isn't told "stock out" while
+        # expired stock sits on the shelf, and knows a Manager can override.
+        if self.short_qty:
+            product = self._wms_resolve_scanned_product()
+            expired_qty = self._wms_expired_on_hand(product) if product else 0.0
+            if expired_qty:
+                self.feedback = (self.feedback or "") + (
+                    " ⚠ %g unit(s) of %s on hand are EXPIRED and cannot be issued "
+                    "(a Manager can override)." % (expired_qty, product.display_name)
+                )
         return res
 
     @api.model
@@ -74,6 +86,29 @@ class WmsScanIssue(models.TransientModel):
 
         tmpl = product.product_tmpl_id
         return tmpl.wms_product_kind in EXPIRY_SENSITIVE_KINDS or bool(tmpl.wms_expiry_date)
+
+    def _wms_resolve_scanned_product(self):
+        if not self.last_scan:
+            return self.env["product.product"]
+        info = self.env["wms.barcode.alias"].resolve(self.last_scan)
+        return info.get("product") or self.env["product.product"]
+
+    def _wms_expired_on_hand(self, product):
+        """Physically-present-but-expired units (removal_date in the past) for
+        the scanned product — the stock the planner now excludes from issue."""
+        now = fields.Datetime.now()
+        quants = self.env["stock.quant"].search(
+            [
+                ("product_id", "in", product.product_tmpl_id.product_variant_ids.ids),
+                ("quantity", ">", 0),
+                ("location_id.usage", "=", "internal"),
+                ("location_id.wms_is_damage", "=", False),
+                ("location_id.wms_is_repair", "=", False),
+                ("removal_date", "!=", False),
+                ("removal_date", "<", now),
+            ]
+        )
+        return sum(q.quantity - q.reserved_quantity for q in quants)
 
     def _wms_product_on_hand(self, product):
         quants = self.env["stock.quant"].search(
