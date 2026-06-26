@@ -34,17 +34,22 @@ class StockLocation(models.Model):
         if (
             self.env.context.get("wms_allow_expired_removal")
             or not scanned
-            or not scanned.use_expiration_date
+            or scanned.tracking != "lot"
         ):
-            # Non-perishable, unknown product, or an explicit override/disposal
-            # path: plan exactly as v19 does (expired stock stays reachable).
+            # Non-lot product, unknown product, or an explicit override/disposal
+            # path: plan exactly as v19 does (expired/blocked stock stays reachable).
             return super().find_oldest_quants_for_product(
                 product_id, qty_needed, parent_location_id=parent_location_id
             )
 
-        # Perishable issue: same candidate set + ordering as v19, but with
-        # expired (removal_date in the past) quants excluded, mirroring the
-        # reservation gather domain so the plan matches what validate can do.
+        # Lot-tracked issue: same candidate set + ordering as v19, but excluding
+        # stock that cannot actually be issued:
+        #   * EXPIRED — removal_date in the past (V20-011), mirroring the
+        #     reservation gather domain so the plan matches what validate can do;
+        #   * NON-AVAILABLE lots — recalled / quarantined / destroyed
+        #     (V20-013/014); only a lot in state 'available' may be issued.
+        # No-lot quants (removal_date / lot_id NULL) are kept, so non-expiry
+        # lot-tracked stock behaves exactly as v19 until a lot is flagged.
         product_ids = scanned.product_tmpl_id.product_variant_ids.ids
         now = fields.Datetime.now()
         base_domain = [
@@ -56,6 +61,9 @@ class StockLocation(models.Model):
             "|",
             ("removal_date", "=", False),
             ("removal_date", ">=", now),
+            "|",
+            ("lot_id", "=", False),
+            ("lot_id.wms_lot_state", "=", "available"),
         ]
         strict = list(base_domain)
         if parent_location_id:

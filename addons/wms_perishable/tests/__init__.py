@@ -8,6 +8,7 @@ from . import (
     test_lot_model,
     test_lot_receipt,
     test_manager_override,
+    test_recall,
     test_reversal_lot,
     test_scaffold,
 )

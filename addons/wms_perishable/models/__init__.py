@@ -5,14 +5,14 @@ from . import stock_lot  # V20-007: lot lifecycle + supplier/expiry metadata
 from . import stock_picking  # V20-012: lot-aware issue reversal (restore the original lot)
 from . import stock_quant  # V20-008: stored+indexed wms_effective_expiry (FEFO sort key)
 from . import wms_damage  # V20-011c: disposal carve-out — damage can move expired stock
+from . import wms_lot_recall  # V20-013: recall freeze + unreserve + release
 from . import (  # V20-004/005: lot-aware receipt (batch/expiry/supplier, find-or-create lot)
     scan_receipt,
 )
 
 # Wave 1 models continue here, per the frozen spec in docs/v20-perishable-engine/.
 # Planned (NOT yet implemented):
-#   - wms_lot_recall.py   : supplier/manual recall + RECALL-ACTIVE freeze.
-#   - quarantine          : reuse the wms_is_* picker-exclusion pattern.
+#   - quarantine          : reuse the wms_lot_state picker-exclusion pattern (V20-014).
 #   - product_template.py : per-kind shelf-life table + near-expiry guards.
 #   - res_config / settings, per-lot reports, dashboard.
 #
