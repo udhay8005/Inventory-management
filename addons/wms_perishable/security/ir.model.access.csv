@@ -3,3 +3,4 @@ access_wms_lot_recall_manager,wms.lot.recall manager,model_wms_lot_recall,wms_lo
 access_wms_lot_recall_user,wms.lot.recall user,model_wms_lot_recall,wms_location.group_wms_user,1,0,0,0
 access_wms_lot_quarantine_manager,wms.lot.quarantine manager,model_wms_lot_quarantine,wms_location.group_wms_manager,1,1,1,1
 access_wms_lot_quarantine_user,wms.lot.quarantine user,model_wms_lot_quarantine,wms_location.group_wms_user,1,0,0,0
+access_wms_lot_expiry_alert_user,wms.lot.expiry.alert user,model_wms_lot_expiry_alert,wms_location.group_wms_user,1,0,0,0
