@@ -1,5 +1,7 @@
-# Wave 1 models land here, per the frozen spec in docs/v20-perishable-engine/.
-# Planned (NOT yet implemented — scaffold only):
+from . import product_template  # V20-002: new perishable kinds
+
+# Wave 1 models continue here, per the frozen spec in docs/v20-perishable-engine/.
+# Planned (NOT yet implemented):
 #   - stock_quant.py      : stored+indexed wms_effective_expiry (lot->template
 #                           fallback) + idx_quant_fefo; FEFO override on
 #                           _wms_sorted_for_removal ONLY (never _gather).
