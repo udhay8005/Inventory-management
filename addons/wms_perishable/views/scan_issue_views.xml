@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            V20-010 — per-lot visibility on the Scan Issue plan: the batch each
+            FEFO line draws from, and the balance left in that batch after the
+            take. Inherits the frozen v19 issue form. (The plan list already
+            shows expiry_date with near-expiry colour decorations.)
+        -->
+        <record id="view_wms_scan_issue_form_perishable" model="ir.ui.view">
+            <field name="name">wms.scan.issue.form.perishable</field>
+            <field name="model">wms.scan.issue</field>
+            <field name="inherit_id" ref="wms_barcode.view_wms_scan_issue_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='plan_line_ids']/list/field[@name='location_id']" position="after">
+                    <field name="lot_id" string="Batch" optional="show"/>
+                </xpath>
+                <xpath expr="//field[@name='plan_line_ids']/list/field[@name='take']" position="after">
+                    <field name="resulting_balance" string="Left after" optional="show"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>
