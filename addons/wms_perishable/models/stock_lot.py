@@ -9,6 +9,7 @@ manufacture date, and a computed expired flag.
 """
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class StockLot(models.Model):
@@ -89,4 +90,42 @@ class StockLot(models.Model):
             "view_mode": "list,form",
             "domain": [("lot_id", "=", self.id), ("state", "=", "done")],
             "context": {"create": False, "edit": False},
+        }
+
+    def _wms_lot_label_vals(self):
+        """V20-016 — printable lot-label content. The barcode is the lot name,
+        so scanning the printed label resolves straight back to this lot
+        (wms.barcode.alias.resolve -> kind 'lot'). Batch / expiry / supplier
+        are on the human-readable sub-line."""
+        self.ensure_one()
+        bits = ["Batch %s" % (self.name or "")]
+        if self.expiration_date:
+            bits.append("Exp %s" % self.expiration_date.date())
+        if self.wms_supplier_id:
+            bits.append(self.wms_supplier_id.name)
+        return {
+            "title": self.product_id.display_name,
+            "subtitle": " | ".join(bits),
+            "barcode": self.name or "",
+        }
+
+    def action_wms_print_lot_label(self):
+        """V20-016 — print this lot's label on the default WMS label printer."""
+        self.ensure_one()
+        printer = self.env["wms.label.printer"].get_default_printer()
+        if not printer:
+            raise UserError(
+                "No label printer is configured. An administrator can add one "
+                "under WMS settings before printing lot labels."
+            )
+        printer.print_labels([self._wms_lot_label_vals()])
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "type": "success",
+                "title": "Lot label sent",
+                "message": "Label for %s sent to %s." % (self.name, printer.name),
+                "sticky": False,
+            },
         }

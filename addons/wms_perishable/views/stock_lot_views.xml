@@ -17,6 +17,14 @@
                             invisible="wms_movement_count == 0">
                         <field name="wms_movement_count" widget="statinfo" string="Timeline"/>
                     </button>
+                    <!-- V20-016 — print this lot's label (product/batch/expiry/supplier,
+                         barcode = lot name so the print scans back to the lot). -->
+                    <button class="oe_stat_button" name="action_wms_print_lot_label"
+                            type="object" icon="fa-print">
+                        <div class="o_stat_info">
+                            <span class="o_stat_text">Print label</span>
+                        </div>
+                    </button>
                 </xpath>
                 <xpath expr="//field[@name='product_id']" position="after">
                     <field name="wms_lot_state"/>

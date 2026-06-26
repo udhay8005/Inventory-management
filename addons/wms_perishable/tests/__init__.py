@@ -5,6 +5,7 @@ from . import (
     test_fefo_removal,
     test_issue_preview,
     test_kind_extension,
+    test_lot_barcode,
     test_lot_expiry_report,
     test_lot_model,
     test_lot_receipt,
