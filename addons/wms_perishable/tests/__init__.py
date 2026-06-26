@@ -18,4 +18,5 @@ from . import (
     test_reversal_lot,
     test_scaffold,
     test_short_dated_receipt,
+    test_warehouse_simulation,
 )
