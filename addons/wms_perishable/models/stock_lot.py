@@ -11,6 +11,21 @@ manufacture date, and a computed expired flag.
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+# V20-019 — stable extension-hook API version. Future modules that override
+# _wms_lifecycle_hook should check this if they depend on the event vocabulary.
+WMS_HOOK_API_VERSION = "1.0"
+
+# The lifecycle events passed to _wms_lifecycle_hook (the stable vocabulary).
+WMS_LIFECYCLE_EVENTS = (
+    "received",  # a batch was received onto the shelf
+    "issued",  # a batch was issued out
+    "recalled",  # a lot was recalled (frozen)
+    "quarantined",  # a lot was put on QC hold
+    "released",  # a recall/quarantine was released back to available
+    "rejected",  # a QC hold was rejected
+    "destroyed",  # a lot was marked destroyed
+)
+
 
 class StockLot(models.Model):
     _inherit = "stock.lot"
@@ -91,6 +106,23 @@ class StockLot(models.Model):
             "domain": [("lot_id", "=", self.id), ("state", "=", "done")],
             "context": {"create": False, "edit": False},
         }
+
+    def _wms_lifecycle_hook(self, event, payload=None):
+        """V20-019 — stable extension point (v20 Hook API %s).
+
+        A NO-OP by default. Fired on ``self`` (the affected lots) at each
+        perishable lifecycle event in WMS_LIFECYCLE_EVENTS. Future modules
+        extend behaviour by overriding this method — e.g. to notify a
+        supplier-quality engine on 'recalled', or feed an analytics model on
+        'received' — WITHOUT touching the FEFO / recall / quarantine internals.
+
+        :param event: one of WMS_LIFECYCLE_EVENTS.
+        :param payload: the originating record (e.g. the wms.lot.recall /
+            wms.lot.quarantine, or the receipt line), for context.
+        """ % (
+            WMS_HOOK_API_VERSION,
+        )
+        return None
 
     def _wms_lot_label_vals(self):
         """V20-016 — printable lot-label content. The barcode is the lot name,

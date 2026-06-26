@@ -92,6 +92,7 @@ class WmsLotRecall(models.Model):
                     "unreserved_count": len(open_lines),
                 }
             )
+            rec.lot_ids._wms_lifecycle_hook("recalled", rec)  # V20-019
         return True
 
     def action_release(self):
@@ -110,4 +111,5 @@ class WmsLotRecall(models.Model):
                     "released_by_id": self.env.user.id,
                 }
             )
+            rec.lot_ids._wms_lifecycle_hook("released", rec)  # V20-019
         return True

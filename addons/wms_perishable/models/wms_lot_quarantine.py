@@ -87,6 +87,7 @@ class WmsLotQuarantine(models.Model):
                     "unreserved_count": len(open_lines),
                 }
             )
+            rec.lot_ids._wms_lifecycle_hook("quarantined", rec)  # V20-019
 
     def action_release(self):
         self._check_manager()
@@ -126,3 +127,5 @@ class WmsLotQuarantine(models.Model):
                 "decided_by_id": self.env.user.id,
             }
         )
+        # V20-019 — 'released' / 'rejected' / 'destroyed' are lifecycle events.
+        self.lot_ids._wms_lifecycle_hook(state, self)

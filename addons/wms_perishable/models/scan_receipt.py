@@ -53,7 +53,11 @@ class WmsScanReceipt(models.TransientModel):
         for line in self.line_ids:
             if line.product_id.tracking == "lot" and not line.lot_id:
                 line.lot_id = self._wms_find_or_create_lot(line)
-        return super().action_validate()
+        res = super().action_validate()
+        # V20-019 — fire the 'received' lifecycle hook for each received batch.
+        for line in self.line_ids.filtered("lot_id"):
+            line.lot_id._wms_lifecycle_hook("received", line)
+        return res
 
     def _wms_min_receive_days(self):
         """Minimum shelf life (days) a perishable must have left to be received

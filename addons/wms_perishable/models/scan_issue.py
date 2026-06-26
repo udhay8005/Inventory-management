@@ -89,6 +89,16 @@ class WmsScanIssue(models.TransientModel):
                 )
         return res
 
+    def action_validate(self):
+        res = super().action_validate()
+        # V20-019 — fire the 'issued' lifecycle hook for the lots actually
+        # issued (only when a picking was created, i.e. not the approval path).
+        if self.picking_id:
+            lots = self.picking_id.move_line_ids.lot_id
+            if lots:
+                lots._wms_lifecycle_hook("issued", self.picking_id)
+        return res
+
     @api.model
     def _wms_issue_is_perishable(self, product):
         from odoo.addons.wms_location.models.product_template import EXPIRY_SENSITIVE_KINDS

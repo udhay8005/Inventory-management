@@ -3,6 +3,7 @@ from . import (
     test_effective_expiry,
     test_expired_block,
     test_fefo_removal,
+    test_hooks,
     test_issue_preview,
     test_kind_extension,
     test_lot_barcode,
