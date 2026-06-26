@@ -13,6 +13,7 @@ the v19 action_validate runs, so its existing lot-carrying loop does the rest.
 """
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class WmsScanReceiptLine(models.TransientModel):
@@ -39,6 +40,12 @@ class WmsScanReceipt(models.TransientModel):
     _inherit = "wms.scan.receipt"
 
     def action_validate(self):
+        # V20-018: refuse short-dated stock (less than the minimum receiving
+        # shelf life) unless a Manager has approved it via the override below.
+        if not self.env.context.get("wms_allow_short_dated"):
+            short = self._wms_short_dated_lines()
+            if short:
+                raise UserError(self._wms_short_dated_message(short))
         # V20-005: ensure every lot-tracked line carries a lot BEFORE the v19
         # validate runs (its lot-carrying loop then lands the lot on the move
         # line). Idempotent — lines that already have a lot are left alone, so a
@@ -47,6 +54,58 @@ class WmsScanReceipt(models.TransientModel):
             if line.product_id.tracking == "lot" and not line.lot_id:
                 line.lot_id = self._wms_find_or_create_lot(line)
         return super().action_validate()
+
+    def _wms_min_receive_days(self):
+        """Minimum shelf life (days) a perishable must have left to be received
+        without a manager override. Global config, default 60 (OWNER-9); 0
+        disables the guard. Per-kind shelf-life refinement is V20-022."""
+        try:
+            return int(
+                self.env["ir.config_parameter"]
+                .sudo()
+                .get_param("wms_perishable.min_receive_shelf_life_days", "60")
+                or 0
+            )
+        except (TypeError, ValueError):
+            return 0
+
+    def _wms_line_expiry(self, line):
+        return line.wms_expiry or line.product_id.product_tmpl_id.wms_expiry_date
+
+    def _wms_short_dated_lines(self):
+        days = self._wms_min_receive_days()
+        out = self.env["wms.scan.receipt.line"]
+        if days <= 0:
+            return out
+        today = fields.Date.today()
+        for line in self.line_ids:
+            if line.product_id.tracking != "lot":
+                continue
+            exp = self._wms_line_expiry(line)
+            if exp and (exp - today).days < days:
+                out |= line
+        return out
+
+    def _wms_short_dated_message(self, lines):
+        days = self._wms_min_receive_days()
+        today = fields.Date.today()
+        rows = []
+        for line in lines:
+            exp = self._wms_line_expiry(line)
+            left = (exp - today).days if exp else 0
+            rows.append("- %s: %d day(s) of shelf life left" % (line.product_id.display_name, left))
+        return (
+            "Short-dated stock. These line(s) have less than %d days of shelf "
+            "life — the minimum for receiving:\n%s\n\nA Manager must approve "
+            "short-dated stock before it can be received." % (days, "\n".join(rows))
+        )
+
+    def action_receive_short_dated_override(self):
+        """V20-018 — Manager-only: accept short-dated stock and validate."""
+        self.ensure_one()
+        if not self.env.user.has_group("wms_location.group_wms_manager"):
+            raise UserError("Only a Manager can accept short-dated stock.")
+        return self.with_context(wms_allow_short_dated=True).action_validate()
 
     @api.model
     def _wms_find_or_create_lot(self, line):

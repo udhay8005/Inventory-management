@@ -16,6 +16,14 @@
                     <field name="wms_expiry" optional="show"/>
                     <field name="wms_supplier_id" optional="hide"/>
                 </xpath>
+                <!-- V20-018 — Manager override for short-dated stock. The normal
+                     Validate blocks short-dated lines; a Manager accepts them here. -->
+                <xpath expr="//footer" position="inside">
+                    <button name="action_receive_short_dated_override" type="object"
+                            string="Accept short-dated (Manager)" class="btn-warning"
+                            groups="wms_location.group_wms_manager"
+                            confirm="Accept stock below the minimum receiving shelf life? Only do this if you, as Manager, take responsibility for the short-dated batch."/>
+                </xpath>
             </field>
         </record>
     </data>
