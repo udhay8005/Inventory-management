@@ -8,6 +8,7 @@ from . import (
     test_lot_expiry_report,
     test_lot_model,
     test_lot_receipt,
+    test_lot_timeline,
     test_manager_override,
     test_quarantine,
     test_recall,

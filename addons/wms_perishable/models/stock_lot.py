@@ -54,8 +54,39 @@ class StockLot(models.Model):
         "product_expiry's expiration_date; not stored.",
     )
 
+    wms_movement_count = fields.Integer(
+        string="Movements",
+        compute="_compute_wms_movement_count",
+        help="Number of completed stock movements this lot has been through — "
+        "its full receive/move/issue/return/damage/repair history.",
+    )
+
     @api.depends("expiration_date")
     def _compute_wms_is_expired(self):
         now = fields.Datetime.now()
         for lot in self:
             lot.wms_is_expired = bool(lot.expiration_date and lot.expiration_date < now)
+
+    def _compute_wms_movement_count(self):
+        # Per-lot is fine here (the form computes one lot at a time); a done
+        # move line is an immutable record of one physical movement.
+        for lot in self:
+            lot.wms_movement_count = self.env["stock.move.line"].search_count(
+                [("lot_id", "=", lot.id), ("state", "=", "done")]
+            )
+
+    def action_wms_lot_timeline(self):
+        """V20-017 — open this lot's immutable movement timeline: every
+        completed move line (receive -> move -> issue -> return -> damage ->
+        repair), newest first. Move lines are immutable once done, so the
+        timeline can never be rewritten. Recall / quarantine / destroy events
+        are lifecycle states shown on the lot form (wms_lot_state) alongside."""
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Movement timeline — %s" % (self.name or ""),
+            "res_model": "stock.move.line",
+            "view_mode": "list,form",
+            "domain": [("lot_id", "=", self.id), ("state", "=", "done")],
+            "context": {"create": False, "edit": False},
+        }
