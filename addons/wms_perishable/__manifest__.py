@@ -2,10 +2,10 @@
     "name": "WMS — Universal Perishable Engine (Wave 1)",
     # v20 line, first version. Stays on the Odoo 19.0 series (this runs on
     # Odoo 19 CE — "v20" is the PROJECT major, not the Odoo major).
-    "version": "19.0.1.1.0",
+    "version": "19.0.1.2.0",
     "summary": (
         "Per-lot expiry + FEFO + quarantine/recall for the gaushala WMS. "
-        "Wave 1 in progress (V20-002: perishable kinds)."
+        "Wave 1 in progress (V20-002 kinds, V20-007 lot model)."
     ),
     # Additive module: it _inherit-extends the FROZEN v19 addons (FEFO override
     # on the single chokepoint stock.quant._wms_sorted_for_removal, receipt
