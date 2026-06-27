@@ -23,6 +23,7 @@
         "data/wms_occupancy_snapshot_cron.xml",
         "views/menus.xml",
         "views/wms_intelligence_dashboard.xml",
+        "views/wms_heatmap.xml",
         "views/wms_lot_expiry_risk_views.xml",
         "views/stock_lot_views.xml",
         "views/wms_supplier_scorecard_views.xml",
