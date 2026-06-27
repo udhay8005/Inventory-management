@@ -2,7 +2,7 @@
     "name": "WMS — Universal Perishable Engine (Wave 1)",
     # v20 line, first version. Stays on the Odoo 19.0 series (this runs on
     # Odoo 19 CE — "v20" is the PROJECT major, not the Odoo major).
-    "version": "19.0.1.19.0",
+    "version": "19.0.1.20.0",
     "summary": (
         "Per-lot expiry + FEFO + quarantine/recall for the gaushala WMS. Wave 1 in progress "
         "(kinds, lot, receipt+near-expiry guard, FEFO, issue, blocks, undo, recall, quarantine, reports, label)."
@@ -37,6 +37,9 @@
         "data/wms_perishable_recall_sequence.xml",
         # V20-014 — QC hold number sequence.
         "data/wms_perishable_quarantine_sequence.xml",
+        # V20-022 — global shelf-life fallback parameters + per-kind policy table.
+        "data/wms_perishable_config_data.xml",
+        "data/wms_shelf_life_policy_data.xml",
         # V20-004 — batch/expiry/supplier columns on the receipt line.
         "views/scan_receipt_views.xml",
         # V20-010 — batch + resulting-balance columns on the issue plan.
@@ -51,6 +54,11 @@
         "views/stock_lot_views.xml",
         # V20-020 — legacy -> lot-tracking migration wizard.
         "views/wms_lot_migration_views.xml",
+        # V20-022 — per-product shelf-life overrides on the product form;
+        # per-kind policy table + global settings under WMS Configuration.
+        "views/product_template_views.xml",
+        "views/wms_shelf_life_policy_views.xml",
+        "views/wms_shelf_life_settings_views.xml",
         # Further Wave 1 data/security/views land here as tickets land
         # (see docs/v20-perishable-engine/04-implementation-plan-and-backlog.md).
     ],

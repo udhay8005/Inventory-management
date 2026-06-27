@@ -43,6 +43,12 @@ class WmsScanIssue(models.TransientModel):
         help="Set when the plan fell short and expired stock is on hand — a "
         "Manager can override the expiry block to issue it.",
     )
+    wms_has_short_dated_issue = fields.Boolean(
+        readonly=True,
+        help="V20-022 — set when the FEFO plan draws near-expiry stock with less "
+        "than the product's minimum issue shelf life left (but not yet expired). "
+        "A Manager can approve issuing it.",
+    )
 
     def action_plan(self):
         res = super().action_plan()
@@ -87,9 +93,27 @@ class WmsScanIssue(models.TransientModel):
                     " ⚠ %g unit(s) of %s on hand are EXPIRED and cannot be issued "
                     "(a Manager can override)." % (expired_qty, product.display_name)
                 )
+        # V20-022 — flag when the FEFO plan draws near-expiry stock below the
+        # product's min-issue shelf life so the manager-approval button shows.
+        self.wms_has_short_dated_issue = bool(self._wms_short_dated_issue_lines())
+        if self.wms_has_short_dated_issue and not self.short_qty:
+            self.feedback = (self.feedback or "") + (
+                " ⚠ Some planned stock is short-dated (below the min issue shelf "
+                "life) — a Manager must approve issuing it."
+            )
         return res
 
     def action_validate(self):
+        # V20-022 — short-dated-at-issue guard (warn + manager approval, spec
+        # §2.8/3.7). Skipped when a Manager has approved short-dated issue, or
+        # during the expired override (a Manager already owns that decision).
+        if not (
+            self.env.context.get("wms_allow_short_dated_issue")
+            or self.env.context.get("wms_expired_override")
+        ):
+            short = self._wms_short_dated_issue_lines()
+            if short:
+                raise UserError(self._wms_short_dated_issue_message(short))
         res = super().action_validate()
         # V20-019 — fire the 'issued' lifecycle hook for the lots actually
         # issued (only when a picking was created, i.e. not the approval path).
@@ -98,6 +122,60 @@ class WmsScanIssue(models.TransientModel):
             if lots:
                 lots._wms_lifecycle_hook("issued", self.picking_id)
         return res
+
+    # ---- V20-022: short-dated-at-issue guard --------------------------------
+    def _wms_short_dated_issue_lines(self):
+        """Planned plan lines whose drawn lot has LESS than the product's
+        min-issue shelf life remaining, but is NOT already expired (expired is
+        blocked separately by the planner exclusion). Returns a recordset of
+        wms.scan.issue.plan lines."""
+        out = self.plan_line_ids.browse()
+        today = fields.Date.today()
+        for line in self.plan_line_ids:
+            if not line.lot_id:
+                continue
+            min_issue = line.product_id.product_tmpl_id._wms_resolve_shelf_life()["min_issue"]
+            if min_issue <= 0:
+                continue
+            exp = line.expiry_date or (
+                line.quant_id.wms_effective_expiry if line.quant_id else False
+            )
+            if not exp:
+                continue
+            days_left = (exp - today).days
+            if 0 <= days_left < min_issue:
+                out |= line
+        return out
+
+    def _wms_short_dated_issue_message(self, lines):
+        today = fields.Date.today()
+        rows = []
+        for line in lines:
+            exp = line.expiry_date
+            left = (exp - today).days if exp else 0
+            need = line.product_id.product_tmpl_id._wms_resolve_shelf_life()["min_issue"]
+            rows.append(
+                "- %s / %s: %d day(s) left (needs >= %d)"
+                % (line.product_id.display_name, line.lot_id.name or "?", left, need)
+            )
+        return (
+            "Short-dated at issue. The earliest-expiry stock for these line(s) has "
+            "less remaining shelf life than the minimum for issuing:\n%s\n\nA "
+            "Manager must approve issuing short-dated stock." % "\n".join(rows)
+        )
+
+    def action_override_short_dated_issue(self):
+        """Manager-only: approve issuing short-dated (near-expiry) stock."""
+        self.ensure_one()
+        if not self._wms_is_manager():
+            raise UserError(
+                "Only a Manager can approve issuing short-dated stock. The guard "
+                "keeps near-expiry stock from leaving without sign-off."
+            )
+        marker = "[SHORT-DATED ISSUE approved by %s]" % self.env.user.name
+        note = (self.usage_note or "").strip()
+        self.usage_note = (note + "\n" + marker) if note else marker
+        return self.with_context(wms_allow_short_dated_issue=True).action_validate()
 
     @api.model
     def _wms_issue_is_perishable(self, product):
@@ -177,6 +255,10 @@ class WmsScanIssue(models.TransientModel):
         marker = "[EXPIRED-STOCK OVERRIDE authorised by %s]" % self.env.user.name
         note = (self.usage_note or "").strip()
         self.usage_note = (note + "\n" + marker) if note else marker
-        wiz = self.with_context(wms_allow_expired_removal=True, wms_expired_override=True)
+        wiz = self.with_context(
+            wms_allow_expired_removal=True,
+            wms_expired_override=True,
+            wms_allow_short_dated_issue=True,
+        )
         wiz.action_plan()
         return wiz.action_validate()

@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- V20-022 — global shelf-life fallback settings (wizard pattern, like
+             wms_reports' Google-Drive settings). -->
+        <record id="view_wms_shelf_life_settings_form" model="ir.ui.view">
+            <field name="name">wms.shelf.life.settings.form</field>
+            <field name="model">wms.shelf.life.settings</field>
+            <field name="arch" type="xml">
+                <form string="Shelf-life Settings">
+                    <sheet>
+                        <group string="Global fallback shelf life (days)">
+                            <field name="min_receive_days"/>
+                            <field name="min_issue_days"/>
+                        </group>
+                        <p>
+                            These globals apply only to perishable kinds without
+                            their own row in the <b>Shelf-life Policy</b> table.
+                            A per-product override beats both. 0 disables a guard.
+                        </p>
+                    </sheet>
+                    <footer>
+                        <button name="action_save" type="object" string="Save"
+                                class="btn-primary"/>
+                        <button name="action_open_policy" type="object"
+                                string="Open policy table" class="btn-secondary"/>
+                        <button special="cancel" string="Cancel" class="btn-secondary"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_shelf_life_settings" model="ir.actions.act_window">
+            <field name="name">Shelf-life Settings</field>
+            <field name="res_model">wms.shelf.life.settings</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_wms_shelf_life_settings"
+                  name="Shelf-life Settings"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_shelf_life_settings"
+                  groups="wms_location.group_wms_manager"
+                  sequence="51"/>
+    </data>
+</odoo>

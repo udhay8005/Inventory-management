@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+      V20-022 — global shelf-life fallback parameters (editable via WMS >
+      Configuration > Shelf-life Settings, or Technical > System Parameters).
+      noupdate="1": seeded once; admin edits survive upgrades.
+        * min_receive_shelf_life_days default 60 (OWNER-9; preserves the v19
+          near-expiry receiving guard for kinds without their own policy row).
+        * min_issue_shelf_life_days default 0 (disabled globally; the spec's
+          per-kind min-issue values live in the Shelf-life Policy table so only
+          named perishable kinds are guarded at issue).
+    -->
+    <data noupdate="1">
+        <record id="param_min_receive_shelf_life" model="ir.config_parameter">
+            <field name="key">wms_perishable.min_receive_shelf_life_days</field>
+            <field name="value">60</field>
+        </record>
+        <record id="param_min_issue_shelf_life" model="ir.config_parameter">
+            <field name="key">wms_perishable.min_issue_shelf_life_days</field>
+            <field name="value">0</field>
+        </record>
+    </data>
+</odoo>

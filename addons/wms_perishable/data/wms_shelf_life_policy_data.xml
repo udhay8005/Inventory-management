@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+      V20-022 — default per-kind shelf-life table (functional spec §2.8,
+      OWNER-9 defaults). noupdate="1": seeded once; an admin's later edits in the
+      Shelf-life Policy table are preserved across module upgrades.
+      total_days = 0 means "per product / not enforced".
+    -->
+    <data noupdate="1">
+        <record id="shelf_life_vaccine" model="wms.shelf.life.policy">
+            <field name="product_kind">vaccine</field>
+            <field name="total_days">180</field>
+            <field name="min_receive_days">120</field>
+            <field name="min_issue_days">30</field>
+        </record>
+        <record id="shelf_life_medicine" model="wms.shelf.life.policy">
+            <field name="product_kind">medicine</field>
+            <field name="total_days">730</field>
+            <field name="min_receive_days">180</field>
+            <field name="min_issue_days">60</field>
+        </record>
+        <record id="shelf_life_feed" model="wms.shelf.life.policy">
+            <field name="product_kind">feed</field>
+            <field name="total_days">90</field>
+            <field name="min_receive_days">30</field>
+            <field name="min_issue_days">7</field>
+        </record>
+        <record id="shelf_life_chemical" model="wms.shelf.life.policy">
+            <field name="product_kind">chemical</field>
+            <field name="total_days">365</field>
+            <field name="min_receive_days">90</field>
+            <field name="min_issue_days">30</field>
+        </record>
+        <!-- Per-product group (total per product): fluid / food / supplement /
+             fertilizer / pooja — min-receive 60, min-issue 30. -->
+        <record id="shelf_life_fluid" model="wms.shelf.life.policy">
+            <field name="product_kind">fluid</field>
+            <field name="total_days">0</field>
+            <field name="min_receive_days">60</field>
+            <field name="min_issue_days">30</field>
+        </record>
+        <record id="shelf_life_food" model="wms.shelf.life.policy">
+            <field name="product_kind">food</field>
+            <field name="total_days">0</field>
+            <field name="min_receive_days">60</field>
+            <field name="min_issue_days">30</field>
+        </record>
+        <record id="shelf_life_supplement" model="wms.shelf.life.policy">
+            <field name="product_kind">supplement</field>
+            <field name="total_days">0</field>
+            <field name="min_receive_days">60</field>
+            <field name="min_issue_days">30</field>
+        </record>
+        <record id="shelf_life_fertilizer" model="wms.shelf.life.policy">
+            <field name="product_kind">fertilizer</field>
+            <field name="total_days">0</field>
+            <field name="min_receive_days">60</field>
+            <field name="min_issue_days">30</field>
+        </record>
+        <record id="shelf_life_pooja" model="wms.shelf.life.policy">
+            <field name="product_kind">pooja</field>
+            <field name="total_days">0</field>
+            <field name="min_receive_days">60</field>
+            <field name="min_issue_days">30</field>
+        </record>
+    </data>
+</odoo>
