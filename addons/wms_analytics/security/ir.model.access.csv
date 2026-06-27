@@ -1,3 +1,23 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_wms_lot_expiry_risk_user,wms.lot.expiry.risk user,model_wms_lot_expiry_risk,wms_location.group_wms_user,1,0,0,0
 access_wms_lot_expiry_risk_manager,wms.lot.expiry.risk manager,model_wms_lot_expiry_risk,wms_location.group_wms_manager,1,0,0,0
+access_wms_supplier_scorecard_user,wms.supplier.scorecard user,model_wms_supplier_scorecard,wms_location.group_wms_user,1,0,0,0
+access_wms_supplier_scorecard_manager,wms.supplier.scorecard manager,model_wms_supplier_scorecard,wms_location.group_wms_manager,1,0,0,0
+access_wms_supplier_ledger_user,wms.supplier.ledger user,model_wms_supplier_ledger,wms_location.group_wms_user,1,0,0,0
+access_wms_supplier_ledger_manager,wms.supplier.ledger manager,model_wms_supplier_ledger,wms_location.group_wms_manager,1,0,0,0
+access_wms_disposal_report_user,wms.disposal.report user,model_wms_disposal_report,wms_location.group_wms_user,1,0,0,0
+access_wms_disposal_report_manager,wms.disposal.report manager,model_wms_disposal_report,wms_location.group_wms_manager,1,0,0,0
+access_wms_stock_health_user,wms.stock.health user,model_wms_stock_health,wms_location.group_wms_user,1,0,0,0
+access_wms_stock_health_manager,wms.stock.health manager,model_wms_stock_health,wms_location.group_wms_manager,1,0,0,0
+access_wms_lot_ledger_user,wms.lot.ledger user,model_wms_lot_ledger,wms_location.group_wms_user,1,0,0,0
+access_wms_lot_ledger_manager,wms.lot.ledger manager,model_wms_lot_ledger,wms_location.group_wms_manager,1,0,0,0
+access_wms_product_ledger_user,wms.product.ledger user,model_wms_product_ledger,wms_location.group_wms_user,1,0,0,0
+access_wms_product_ledger_manager,wms.product.ledger manager,model_wms_product_ledger,wms_location.group_wms_manager,1,0,0,0
+access_wms_warehouse_ledger_user,wms.warehouse.ledger user,model_wms_warehouse_ledger,wms_location.group_wms_user,1,0,0,0
+access_wms_warehouse_ledger_manager,wms.warehouse.ledger manager,model_wms_warehouse_ledger,wms_location.group_wms_manager,1,0,0,0
+access_wms_department_usage_user,wms.department.usage user,model_wms_department_usage,wms_location.group_wms_user,1,0,0,0
+access_wms_department_usage_manager,wms.department.usage manager,model_wms_department_usage,wms_location.group_wms_manager,1,0,0,0
+access_wms_animal_usage_user,wms.animal.usage user,model_wms_animal_usage,wms_location.group_wms_user,1,0,0,0
+access_wms_animal_usage_manager,wms.animal.usage manager,model_wms_animal_usage,wms_location.group_wms_manager,1,0,0,0
+access_wms_medicine_consumption_user,wms.medicine.consumption user,model_wms_medicine_consumption,wms_location.group_wms_user,1,0,0,0
+access_wms_medicine_consumption_manager,wms.medicine.consumption manager,model_wms_medicine_consumption,wms_location.group_wms_manager,1,0,0,0
