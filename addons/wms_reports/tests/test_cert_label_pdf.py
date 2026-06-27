@@ -12,7 +12,6 @@ was confirmed on the operator's printer.
 """
 
 from odoo.tests import TransactionCase, tagged
-from odoo.tools import find_in_path
 
 from ._cert_roles import CertRolesMixin
 
