@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_lot_expiry_risk_user,wms.lot.expiry.risk user,model_wms_lot_expiry_risk,wms_location.group_wms_user,1,0,0,0
+access_wms_lot_expiry_risk_manager,wms.lot.expiry.risk manager,model_wms_lot_expiry_risk,wms_location.group_wms_manager,1,0,0,0
