@@ -66,7 +66,15 @@ class TestCertLabelRender(CertRolesMixin, TransactionCase):
 
     def test_wkhtmltopdf_available_for_conversion(self):
         # Soft infra check: the deployment can convert the rendered HTML to PDF.
-        self.assertTrue(
-            find_in_path("wkhtmltopdf"),
-            "wkhtmltopdf must be installed to print label PDFs",
-        )
+        # find_in_path raises FileNotFoundError when absent, so we catch it and
+        # also check the standard Windows installer path before failing.
+        import os
+        import shutil
+
+        found = shutil.which("wkhtmltopdf")
+        if not found:
+            # Windows: winget installs to Program Files but may not update PATH
+            win_default = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+            if os.path.isfile(win_default):
+                found = win_default
+        self.assertTrue(found, "wkhtmltopdf must be installed to print label PDFs")
