@@ -12,6 +12,10 @@
 # addons/wms_reports/                   @udhay8005
 # docs/                                 @udhay8005
 
+# v20 perishable engine — owned by the primary maintainer
+addons/wms_perishable/                  @udhay8005
+docs/v20-perishable-engine/             @udhay8005
+
 # Critical files — require an extra review
 .github/workflows/                      @udhay8005
 scripts/                                @udhay8005

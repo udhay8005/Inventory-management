@@ -32,10 +32,11 @@ body:
       label: Environment
       value: |
         - Odoo version: 19.0
+        - Branch / release: (main / v20 / v19.0.46.0.0 / ...)
         - PostgreSQL version:
         - Python version:
         - OS / browser:
-        - Module touched (if known):
+        - Module touched (if known): (wms_location / wms_fifo / wms_barcode / wms_repair_damage / wms_ai_forecast / wms_reports / wms_training / wms_perishable)
     validations: { required: false }
 
   - type: textarea
