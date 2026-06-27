@@ -59,5 +59,9 @@ class WmsStockAlert(models.AbstractModel):
             "<p>&#128201; <b>%d product(s) at or below reorder level.</b></p>"
             "<ul>%s</ul>%s"
             "<p>Open <i>WMS &#8594; Forecast / Reorder</i> to raise a purchase.</p>"
-        ) % (len(low), Markup(rows), Markup(extra))  # nosec B704
+        ) % (
+            len(low),
+            Markup(rows),
+            Markup(extra),
+        )  # nosec B704
         notify_wms_managers(self.env, body, "WMS — %d product(s) need reordering" % len(low))
