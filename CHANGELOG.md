@@ -5,6 +5,48 @@ All notable changes to this project are documented here. The project follows
 semantic version tags (`v19.0.<release>`). Each entry maps to a published
 [GitHub Release](https://github.com/udhay8005/Inventory-management/releases).
 
+---
+
+## [v20.0.0-beta1] — 2026-06-26 — Wave 1 Universal Perishable Engine (pilot build)
+
+**Branch:** `v20` · **NOT merged to `main`** · Pilot build only; v19 (`v19.0.46.0.0`)
+remains the production line. The 2–4 week warehouse pilot and any production
+cutover are human-run and owner-approved.
+
+New additive addon `wms_perishable` (19.0.1.19.0) extends the frozen v19 addons
+without editing a single v19 file. Full suite: **519 tests, 0 failed / 0 skipped**.
+CI green on every commit (lint, security, module-tests, v19→HEAD upgrade path,
+native smoke). Independent 6-team read-only audit (architecture / security /
+performance / QA / docs / devops) all GREEN.
+
+### Added (`wms_perishable`)
+
+- **V20-002** New perishable kinds: vaccine, supplement, chemical, fertilizer, food
+- **V20-003/004/005** Perishables auto lot-tracked on creation; lot-aware Scan Receipt (batch / expiry / supplier; find-or-create lot)
+- **V20-007** `stock.lot` lifecycle (available / quarantine / recalled / destroyed) + supplier / batch / invoice metadata + computed expired flag
+- **V20-008** Stored + indexed `stock.quant.wms_effective_expiry` (`idx_quant_fefo`)
+- **V20-009** Per-lot FEFO removal (overrides `_wms_sorted_for_removal` only) + auto-split
+- **V20-010** Per-lot expiry / batch / resulting-balance on the Scan Issue plan
+- **V20-011a/b/c** Expired stock blocked from issue; manager override (audited); disposal carve-out
+- **V20-012** Lot-aware issue reversal — restores the original lot
+- **V20-013** Lot recall: freeze + cancel reservations + exclude from issue + release
+- **V20-014** Lot quarantine: hold / release / reject / destroy
+- **V20-015** Per-lot expiry report (180/90/60/30/15/7/expired threshold bands)
+- **V20-016** Lot barcode label — print + scan-back
+- **V20-017** Lot timeline + lifecycle on the lot form
+- **V20-018** Near-expiry receiving guard with manager override
+- **V20-019** Stable extension hook API — v20 Hook API 1.0 (received / issued / recalled / quarantined / released / destroyed)
+- **V20-020** Perishable lot-tracking migration wizard (zero-stock flip + legacy-lot path)
+- **V20-021** Warehouse-simulation + scaled-FEFO hardening tests (106 tests)
+
+**After the pilot:** collect verified floor feedback → fix + retest → tag `v20.0.0-rc1`
+→ owner approval → merge `v20 → main` → tag `v20.0.0` (production release).
+
+Full ticket notes: [`addons/wms_perishable/CHANGELOG.md`](addons/wms_perishable/CHANGELOG.md)
+Pilot guide: [`docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md`](docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md)
+
+---
+
 ## [v19.0.37.0.0] — 2026-06-17 — Training: Product Master Help Center articles
 
 Closes the one documentation gap the operational acceptance test (HOAT) found: the
