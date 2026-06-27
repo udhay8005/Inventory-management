@@ -55,9 +55,9 @@ class WmsStockAlert(models.AbstractModel):
             for f in low[:50]
         )
         extra = "" if len(low) <= 50 else "<p>...and %d more.</p>" % (len(low) - 50)
-        body = Markup(
+        body = Markup(  # nosec B704 — template literal; rows/extra use escape()
             "<p>&#128201; <b>%d product(s) at or below reorder level.</b></p>"
             "<ul>%s</ul>%s"
             "<p>Open <i>WMS &#8594; Forecast / Reorder</i> to raise a purchase.</p>"
-        ) % (len(low), Markup(rows), Markup(extra))
+        ) % (len(low), Markup(rows), Markup(extra))  # nosec B704
         notify_wms_managers(self.env, body, "WMS — %d product(s) need reordering" % len(low))

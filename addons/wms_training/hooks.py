@@ -337,7 +337,7 @@ def apply_visual_enrichment(env):
         block = _build_block(env, slug, fname, width, action_xmlid, alt)
         # Both operands are Markup, so the HTML is NOT escaped on concat; the
         # Html field still sanitizes on write (keeps the safe tag set).
-        art.body = Markup(clean) + Markup(block)
+        art.body = Markup(clean) + Markup(block)  # nosec B704 — Odoo sanitizes Html field on write
         enriched += 1
     _logger.info(
         "STEP7 visual enrichment: %s articles enriched, %s slugs missing",
