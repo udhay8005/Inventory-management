@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #7 — Occupancy over time: list / graph / pivot + search. -->
+        <record id="view_wms_occupancy_snapshot_list" model="ir.ui.view">
+            <field name="name">wms.occupancy.snapshot.list</field>
+            <field name="model">wms.occupancy.snapshot</field>
+            <field name="arch" type="xml">
+                <list string="Occupancy snapshots" create="false"
+                      default_order="snapshot_date desc, occupancy_pct desc">
+                    <field name="snapshot_date"/>
+                    <field name="location_id"/>
+                    <field name="location_kind"/>
+                    <field name="capacity"/>
+                    <field name="on_hand" sum="On hand"/>
+                    <field name="occupancy_pct" widget="percentage"
+                           decoration-danger="occupancy_pct >= 90"
+                           decoration-warning="occupancy_pct >= 70"/>
+                    <field name="distinct_products"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_occupancy_snapshot_graph" model="ir.ui.view">
+            <field name="name">wms.occupancy.snapshot.graph</field>
+            <field name="model">wms.occupancy.snapshot</field>
+            <field name="arch" type="xml">
+                <graph string="Occupancy over time" type="line">
+                    <field name="snapshot_date" interval="day" type="row"/>
+                    <field name="occupancy_pct" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_occupancy_snapshot_pivot" model="ir.ui.view">
+            <field name="name">wms.occupancy.snapshot.pivot</field>
+            <field name="model">wms.occupancy.snapshot</field>
+            <field name="arch" type="xml">
+                <pivot string="Occupancy over time">
+                    <field name="snapshot_date" interval="day" type="col"/>
+                    <field name="location_id" type="row"/>
+                    <field name="occupancy_pct" type="measure"/>
+                    <field name="on_hand" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_occupancy_snapshot_search" model="ir.ui.view">
+            <field name="name">wms.occupancy.snapshot.search</field>
+            <field name="model">wms.occupancy.snapshot</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="location_id"/>
+                    <field name="snapshot_date"/>
+                    <filter name="kind_slot" string="Rack slots"
+                            domain="[('location_kind','=','slot')]"/>
+                    <filter name="kind_floor" string="Floor zones"
+                            domain="[('location_kind','=','floor')]"/>
+                    <separator/>
+                    <filter name="group_date" string="Date"
+                            context="{'group_by': 'snapshot_date'}"/>
+                    <filter name="group_location" string="Location"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="group_kind" string="Kind"
+                            context="{'group_by': 'location_kind'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_occupancy_snapshot" model="ir.actions.act_window">
+            <field name="name">Occupancy Over Time</field>
+            <field name="res_model">wms.occupancy.snapshot</field>
+            <field name="view_mode">graph,pivot,list</field>
+            <field name="search_view_id" ref="view_wms_occupancy_snapshot_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No occupancy snapshots yet</p>
+                <p>A daily background job records how full each rack slot and floor
+                   zone is. Come back after it has run for a few days to see
+                   occupancy trended over time.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_occupancy_snapshot"
+                  name="Occupancy Over Time"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_occupancy_snapshot"
+                  sequence="70"/>
+    </data>
+</odoo>

@@ -21,3 +21,13 @@ access_wms_animal_usage_user,wms.animal.usage user,model_wms_animal_usage,wms_lo
 access_wms_animal_usage_manager,wms.animal.usage manager,model_wms_animal_usage,wms_location.group_wms_manager,1,0,0,0
 access_wms_medicine_consumption_user,wms.medicine.consumption user,model_wms_medicine_consumption,wms_location.group_wms_user,1,0,0,0
 access_wms_medicine_consumption_manager,wms.medicine.consumption manager,model_wms_medicine_consumption,wms_location.group_wms_manager,1,0,0,0
+access_wms_lot_traceability_user,wms.lot.traceability user,model_wms_lot_traceability,wms_location.group_wms_user,1,0,0,0
+access_wms_lot_traceability_manager,wms.lot.traceability manager,model_wms_lot_traceability,wms_location.group_wms_manager,1,0,0,0
+access_wms_cold_chain_reading_user,wms.cold.chain.reading user,model_wms_cold_chain_reading,wms_location.group_wms_user,1,0,1,0
+access_wms_cold_chain_reading_manager,wms.cold.chain.reading manager,model_wms_cold_chain_reading,wms_location.group_wms_manager,1,1,1,1
+access_wms_occupancy_snapshot_user,wms.occupancy.snapshot user,model_wms_occupancy_snapshot,wms_location.group_wms_user,1,0,0,0
+access_wms_occupancy_snapshot_manager,wms.occupancy.snapshot manager,model_wms_occupancy_snapshot,wms_location.group_wms_manager,1,1,1,1
+access_wms_fefo_compliance_user,wms.fefo.compliance user,model_wms_fefo_compliance,wms_location.group_wms_user,1,0,0,0
+access_wms_fefo_compliance_manager,wms.fefo.compliance manager,model_wms_fefo_compliance,wms_location.group_wms_manager,1,0,0,0
+access_wms_cycle_count_priority_user,wms.cycle.count.priority user,model_wms_cycle_count_priority,wms_location.group_wms_user,1,0,0,0
+access_wms_cycle_count_priority_manager,wms.cycle.count.priority manager,model_wms_cycle_count_priority,wms_location.group_wms_manager,1,0,0,0
