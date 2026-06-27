@@ -5,6 +5,7 @@ from . import (
     test_disposal_report,
     test_expiry_risk,
     test_forecast_risk,
+    test_intelligence_dashboard,
     test_ledgers,
     test_lot_audit_score,
     test_lot_traceability,
