@@ -5,8 +5,11 @@ name: CI
 #   - Any PR targeting main, test, or v20.
 #   - Manual via `workflow_dispatch`.
 # Workflow: push code to `test` → CI runs → if green, PR to `main` → merge.
-# v20 is the next-major development line (perishable engine, Wave 1+); it runs
-# the same CI (the module-tests job installs wms_perishable; PREV_TAG=v19.0.46.0.0).
+# v20 is the next-major development line; the module-tests job installs ALL
+# addons including the v20 Wave 1/2/3 ones (wms_perishable, wms_analytics,
+# wms_pharmacy). PREV_TAG=v19.0.46.0.0 is the upgrade baseline; the v20 addons
+# are absent there and so are fresh-install-verified, not upgrade-tested.
+# A PR from a v20 feature branch into v20 or main runs this full CI.
 # Concurrency: cancel an in-flight run if a newer commit lands on the same ref.
 #
 # Native (no Docker) build — mirrors the local Windows setup: PostgreSQL +
