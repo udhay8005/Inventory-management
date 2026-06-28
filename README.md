@@ -164,8 +164,13 @@ Inventory_mngt/
     ├── wms_ai_forecast/        offline statsmodels forecasting + reorder
     ├── wms_reports/            SQL-view dashboards (Where-is-it, FIFO age, occupancy, ...)
     ├── wms_training/           Help Center, guided tours, visual academy, SOPs
-    └── wms_perishable/         [v20] Universal Perishable Engine — per-lot FEFO, expiry, recall,
-                                quarantine, lot labels, near-expiry guard, extension hook API
+    ├── wms_perishable/         [v20 Wave 1] Universal Perishable Engine — per-lot FEFO, expiry, recall,
+    │                           quarantine, lot labels, near-expiry guard, per-kind shelf-life, hook API
+    ├── wms_analytics/          [v20 Wave 2] Warehouse Intelligence — KPI dashboard, expiry-risk engine,
+    │                           supplier/disposal analytics, stock-health, ledgers, recall dashboard,
+    │                           lot audit, heat map, cold chain, bulk ops, cycle-count, traceability
+    └── wms_pharmacy/           [v20 Wave 3] Pharmacy packaging engine — Box→Strip→Tablet, nested
+                                barcodes, open-strip tracking, dose dispensing, genealogy, med history
 ```
 
 ## Read the docs

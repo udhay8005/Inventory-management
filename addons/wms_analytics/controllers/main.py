@@ -36,10 +36,13 @@ class WmsIntelligenceDashboard(http.Controller):
         def sc(model, domain):
             return env[model].sudo().search_count(domain)
 
+        # wms.stock.health is one row per company (tiny) — mapped is fine.
         health = env["wms.stock.health"].sudo().search([])
         total_qty = sum(health.mapped("total_qty"))
         healthy = sum(health.mapped("healthy_qty"))
-        inv_value = sum(env["wms.forecast"].sudo().search([]).mapped("stock_value"))
+        # Inventory value: aggregate in SQL rather than loading every forecast row.
+        value_groups = env["wms.forecast"].sudo()._read_group([], aggregates=["stock_value:sum"])
+        inv_value = value_groups[0][0] or 0.0 if value_groups else 0.0
         return {
             "total_products": sc("product.product", [("is_storable", "=", True)]),
             "total_on_hand": total_qty,
@@ -68,16 +71,11 @@ class WmsIntelligenceDashboard(http.Controller):
             return request.not_found()
         return request.render("wms_analytics.heatmap_page", {"groups": self._heatmap(env)})
 
-    def _loc_status(self, env, location_ids):
-        """Highest-priority perishable status among lots with live stock in
-        these locations: recall > quarantine > expired > near-expiry > None."""
-        if not location_ids:
-            return None
-        quants = (
-            env["stock.quant"]
-            .sudo()
-            .search([("location_id", "in", list(location_ids)), ("quantity", ">", 0)])
-        )
+    @staticmethod
+    def _status_from_quants(quants):
+        """Highest-priority perishable status for an in-memory quant set:
+        recall > quarantine > expired > near-expiry > None. Pure (no query) so
+        the heat map can resolve every tile from ONE batched quant search."""
         if not quants:
             return None
         states = set(quants.mapped("lot_id.wms_lot_state"))
@@ -105,9 +103,8 @@ class WmsIntelligenceDashboard(http.Controller):
             return "#f59e0b", "Most full"
         return "#16a34a", "OK"
 
-    def _tile(self, env, rec, location_ids, pct, on_hand):
+    def _tile(self, rec, pct, on_hand, status):
         """One tile dict: status colour wins over occupancy colour."""
-        status = self._loc_status(env, location_ids)
         if status:
             color, label = _STATUS[status]
         else:
@@ -120,8 +117,15 @@ class WmsIntelligenceDashboard(http.Controller):
         }
 
     def _heatmap(self, env):
+        """Status-aware heat map. Builds the tile structure first, then resolves
+        every tile's perishable status from a SINGLE batched stock.quant query
+        (no per-tile search — avoids an N+1 over racks/floors)."""
         Location = env["stock.location"].sudo()
+        Quant = env["stock.quant"].sudo()
         zones = Location.search([("wms_location_type", "=", "zone")], order="complete_name")
+
+        specs = []  # [{label, tiles: [{rec, pct, on_hand, loc_ids}]}]
+        all_loc_ids = set()
 
         def build(parent, label):
             racks = Location.search(
@@ -140,14 +144,44 @@ class WmsIntelligenceDashboard(http.Controller):
                 on_hand = sum(slots.mapped("wms_current_qty"))
                 occupied = sum(1 for s in slots if s.wms_current_qty > 0)
                 pct = (occupied / len(slots) * 100.0) if slots else 0.0
-                tiles.append(self._tile(env, r, slots.ids, pct, on_hand))
+                tiles.append({"rec": r, "pct": pct, "on_hand": on_hand, "loc_ids": set(slots.ids)})
+                all_loc_ids.update(slots.ids)
             for f in floors:
-                tiles.append(self._tile(env, f, [f.id], f.wms_occupancy_pct, f.wms_current_qty))
+                tiles.append(
+                    {
+                        "rec": f,
+                        "pct": f.wms_occupancy_pct,
+                        "on_hand": f.wms_current_qty,
+                        "loc_ids": {f.id},
+                    }
+                )
+                all_loc_ids.add(f.id)
             return {"label": label, "tiles": tiles}
 
-        groups = [build(z, z.name) for z in zones]
+        for z in zones:
+            specs.append(build(z, z.name))
         for wh in env["stock.warehouse"].sudo().search([]):
             g = build(wh.lot_stock_id, "%s / Unzoned" % wh.display_name)
             if g["tiles"]:
-                groups.append(g)
-        return [g for g in groups if g["tiles"]]
+                specs.append(g)
+
+        # ONE quant query for every contributing location, grouped by location.
+        quants_by_loc = {}
+        if all_loc_ids:
+            for q in Quant.search([("location_id", "in", list(all_loc_ids)), ("quantity", ">", 0)]):
+                quants_by_loc.setdefault(q.location_id.id, Quant)
+                quants_by_loc[q.location_id.id] |= q
+
+        groups = []
+        for g in specs:
+            tiles = []
+            for t in g["tiles"]:
+                tq = Quant
+                for lid in t["loc_ids"]:
+                    tq |= quants_by_loc.get(lid, Quant)
+                tiles.append(
+                    self._tile(t["rec"], t["pct"], t["on_hand"], self._status_from_quants(tq))
+                )
+            if tiles:
+                groups.append({"label": g["label"], "tiles": tiles})
+        return groups

@@ -230,7 +230,9 @@ class WmsSupplierScorecard(models.Model):
                      ELSE 'poor'
                    END AS quality_band
               FROM agg a
-        """.format(
+        """.format(  # nosec B608 — only module-level integer constants are
+            # interpolated (the penalty weights below); no user input ever
+            # reaches this SQL, so this is not an injection vector.
             recall_w=PENALTY_PER_RECALL,
             reject_w=PENALTY_PER_REJECTION,
             damage_w=PENALTY_PER_DAMAGE,

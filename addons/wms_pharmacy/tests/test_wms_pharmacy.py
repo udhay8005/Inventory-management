@@ -572,6 +572,48 @@ class TestWmsPharmacy(TransactionCase):
             "Quarantined lot must be excluded; wizard should pick the available lot",
         )
 
+    def test_fefo_skips_expired_lot(self):
+        """An already-expired lot is excluded from FEFO even though its expiry is
+        the earliest — the wizard must draw from the next non-expired lot."""
+        expired = self._create_lot(
+            self.product, "LOT-EXP-PAST", fields.Datetime.now() - timedelta(days=5)
+        )
+        lot_ok = self._create_lot(self.product, "LOT-EXP-OK", self.exp_far)
+        self._give_stock(self.product, self.location, 50, expired)
+        self._give_stock(self.product, self.location, 50, lot_ok)
+
+        wiz = self._make_wizard(self.product, self.location, 5)
+        wiz.action_dispense()
+
+        log = self.env["wms.dispense.log"].search(
+            [("product_id", "=", self.product.id)], order="id desc", limit=1
+        )
+        self.assertEqual(
+            log.lot_id.id, lot_ok.id, "expired lot must be excluded; pick the non-expired lot"
+        )
+        # The expired lot's stock must be untouched.
+        expired_qty = self.env["stock.quant"]._get_available_quantity(
+            self.product, self.location, lot_id=expired
+        )
+        self.assertEqual(expired_qty, 50, "expired stock must not be drawn down")
+
+    def test_dispense_log_is_append_only(self):
+        """The genealogy log is an audit trail: content edits and deletion are
+        blocked (even for a manager); a free-text note edit stays allowed."""
+        lot = self._create_lot(self.product, "LOT-IMMUT-01", self.exp_far)
+        self._give_stock(self.product, self.location, 20, lot)
+        self._make_wizard(self.product, self.location, 3).action_dispense()
+        log = self.env["wms.dispense.log"].search(
+            [("product_id", "=", self.product.id)], order="id desc", limit=1
+        )
+        self.assertTrue(log)
+        with self.assertRaises(UserError):
+            log.quantity = 999
+        with self.assertRaises(UserError):
+            log.unlink()
+        log.note = "vet annotation"  # note is not a protected field
+        self.assertEqual(log.note, "vet annotation")
+
     def test_dispense_raises_when_no_stock(self):
         """UserError is raised when there is no available stock."""
         # Use a product with no stock at all.

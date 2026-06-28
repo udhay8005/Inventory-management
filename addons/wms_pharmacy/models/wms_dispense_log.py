@@ -11,6 +11,23 @@
 # Dependencies: product.product, stock.lot, wms.animal, res.users, stock.picking
 
 from odoo import fields, models
+from odoo.exceptions import UserError
+
+# Genealogy content that must never change once recorded (the pharmaceutical
+# audit trail). animal_id / picking_id are intentionally excluded so their
+# ondelete='set null' cascades still work; note stays editable.
+_PROTECTED_FIELDS = frozenset(
+    {
+        "product_id",
+        "lot_id",
+        "quantity",
+        "strips_opened",
+        "tablets_per_strip",
+        "tablets_per_box",
+        "dispense_date",
+        "dispensed_by",
+    }
+)
 
 
 class WmsDispenseLog(models.Model):
@@ -116,3 +133,21 @@ class WmsDispenseLog(models.Model):
         help="The outbound picking created for this dispense (if any). "
         "Provides a link to the full stock.move audit trail.",
     )
+
+    def write(self, vals):
+        """Append-only audit trail: the genealogy content cannot be edited once
+        recorded (even by a manager). Cascade set-null on animal_id / picking_id
+        and free-text note edits remain allowed."""
+        if _PROTECTED_FIELDS.intersection(vals):
+            raise UserError(
+                "Dispense genealogy records are immutable — the pharmaceutical "
+                "audit trail cannot be edited."
+            )
+        return super().write(vals)
+
+    def unlink(self):
+        """Append-only audit trail: genealogy records cannot be deleted."""
+        raise UserError(
+            "Dispense genealogy records cannot be deleted — they are the "
+            "pharmaceutical audit trail."
+        )
