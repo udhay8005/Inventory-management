@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 — Disposal / loss analytics: list / pivot / graph + search. -->
+        <record id="view_wms_disposal_report_list" model="ir.ui.view">
+            <field name="name">wms.disposal.report.list</field>
+            <field name="model">wms.disposal.report</field>
+            <field name="arch" type="xml">
+                <list string="Disposals" create="false" default_order="disposal_date desc">
+                    <field name="disposal_date"/>
+                    <field name="source"
+                           decoration-danger="source == 'destroyed'"
+                           decoration-warning="source == 'damage'"
+                           widget="badge"/>
+                    <field name="reason"/>
+                    <field name="product_id"/>
+                    <field name="quantity" sum="Quantity"/>
+                    <field name="disposal_value" sum="Disposal value"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_disposal_report_pivot" model="ir.ui.view">
+            <field name="name">wms.disposal.report.pivot</field>
+            <field name="model">wms.disposal.report</field>
+            <field name="arch" type="xml">
+                <pivot string="Disposals">
+                    <field name="month" type="row"/>
+                    <field name="source" type="col"/>
+                    <field name="disposal_value" type="measure"/>
+                    <field name="quantity" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_disposal_report_graph" model="ir.ui.view">
+            <field name="name">wms.disposal.report.graph</field>
+            <field name="model">wms.disposal.report</field>
+            <field name="arch" type="xml">
+                <graph string="Disposals" type="bar">
+                    <field name="month" type="row"/>
+                    <field name="disposal_value" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_disposal_report_search" model="ir.ui.view">
+            <field name="name">wms.disposal.report.search</field>
+            <field name="model">wms.disposal.report</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="reason"/>
+                    <filter name="src_damage" string="Damage events"
+                            domain="[('source','=','damage')]"/>
+                    <filter name="src_destroyed" string="Destroyed lots"
+                            domain="[('source','=','destroyed')]"/>
+                    <separator/>
+                    <filter name="group_month" string="Month"
+                            context="{'group_by': 'month'}"/>
+                    <filter name="group_reason" string="Reason"
+                            context="{'group_by': 'reason'}"/>
+                    <filter name="group_source" string="Source"
+                            context="{'group_by': 'source'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_disposal_report" model="ir.actions.act_window">
+            <field name="name">Disposal / Loss Analytics</field>
+            <field name="res_model">wms.disposal.report</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_disposal_report_search"/>
+            <field name="context">{'search_default_group_month': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No disposals recorded</p>
+                <p>This report unions confirmed damage events and destroyed lots,
+                   so you can track what the trust loses, why, and what it costs —
+                   trended by month.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_disposal_report"
+                  name="Disposal / Loss Analytics"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_disposal_report"
+                  sequence="20"/>
+    </data>
+</odoo>

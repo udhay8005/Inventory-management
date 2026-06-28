@@ -17,6 +17,7 @@ from . import (
     test_recall,
     test_reversal_lot,
     test_scaffold,
+    test_shelf_life_policy,
     test_short_dated_receipt,
     test_warehouse_simulation,
 )

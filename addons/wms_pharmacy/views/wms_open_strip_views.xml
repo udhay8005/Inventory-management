@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============================================================
+             wms.open.strip — list view
+             ============================================================ -->
+        <record id="view_wms_open_strip_list" model="ir.ui.view">
+            <field name="name">wms.open.strip.list</field>
+            <field name="model">wms.open.strip</field>
+            <field name="arch" type="xml">
+                <list string="Open strips">
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="location_id"/>
+                    <field name="tablets_remaining"/>
+                    <field name="opened_on"/>
+                    <field name="opened_by"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- ============================================================
+             wms.open.strip — form view
+             ============================================================ -->
+        <record id="view_wms_open_strip_form" model="ir.ui.view">
+            <field name="name">wms.open.strip.form</field>
+            <field name="model">wms.open.strip</field>
+            <field name="arch" type="xml">
+                <form string="Open strip">
+                    <sheet>
+                        <group>
+                            <group string="Location">
+                                <field name="product_id"/>
+                                <field name="lot_id"/>
+                                <field name="location_id"/>
+                            </group>
+                            <group string="State">
+                                <field name="tablets_remaining"/>
+                                <field name="opened_on"/>
+                                <field name="opened_by"/>
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- ============================================================
+             wms.open.strip — search view
+             ============================================================ -->
+        <record id="view_wms_open_strip_search" model="ir.ui.view">
+            <field name="name">wms.open.strip.search</field>
+            <field name="model">wms.open.strip</field>
+            <field name="arch" type="xml">
+                <search string="Search open strips">
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="location_id"/>
+                    <separator/>
+                    <filter string="By product" name="group_product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter string="By location" name="group_location"
+                            context="{'group_by': 'location_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <!-- ============================================================
+             Action
+             ============================================================ -->
+        <record id="action_wms_open_strip" model="ir.actions.act_window">
+            <field name="name">Open Strips</field>
+            <field name="res_model">wms.open.strip</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_wms_open_strip_search"/>
+        </record>
+
+    </data>
+</odoo>

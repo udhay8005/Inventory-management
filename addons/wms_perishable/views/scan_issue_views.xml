@@ -23,6 +23,7 @@
                      short because expired stock was excluded. -->
                 <xpath expr="//field[@name='plan_line_ids']" position="before">
                     <field name="wms_has_expired_shortfall" invisible="1"/>
+                    <field name="wms_has_short_dated_issue" invisible="1"/>
                 </xpath>
                 <xpath expr="//footer/button[@name='action_validate']" position="after">
                     <button name="action_override_expired_issue" type="object"
@@ -31,6 +32,14 @@
                             groups="wms_location.group_wms_manager"
                             invisible="not wms_has_expired_shortfall"
                             confirm="Issue EXPIRED stock? This bypasses the expiry safety block. Only proceed if you, as Manager, take responsibility for using expired stock."/>
+                    <!-- V20-022 — Manager approval to issue short-dated (near-expiry,
+                         not yet expired) stock below the kind's min-issue shelf life. -->
+                    <button name="action_override_short_dated_issue" type="object"
+                            string="Approve — issue short-dated (Manager)"
+                            class="btn-warning"
+                            groups="wms_location.group_wms_manager"
+                            invisible="not wms_has_short_dated_issue"
+                            confirm="Issue SHORT-DATED (near-expiry) stock? It has less than the minimum remaining shelf life for issuing. Proceed only if you, as Manager, accept it."/>
                 </xpath>
             </field>
         </record>

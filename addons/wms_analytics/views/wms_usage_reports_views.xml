@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- ============================================================ -->
+        <!-- Department usage                                              -->
+        <!-- ============================================================ -->
+        <record id="view_wms_department_usage_list" model="ir.ui.view">
+            <field name="name">wms.department.usage.list</field>
+            <field name="model">wms.department.usage</field>
+            <field name="arch" type="xml">
+                <list string="Department usage" create="false" default_order="period desc, usage_value desc">
+                    <field name="period"/>
+                    <field name="department_id"/>
+                    <field name="product_id"/>
+                    <field name="categ_id" optional="hide"/>
+                    <field name="qty_out" sum="Issued qty"/>
+                    <field name="usage_value" sum="Usage value"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_department_usage_pivot" model="ir.ui.view">
+            <field name="name">wms.department.usage.pivot</field>
+            <field name="model">wms.department.usage</field>
+            <field name="arch" type="xml">
+                <pivot string="Department usage">
+                    <field name="department_id" type="row"/>
+                    <field name="usage_value" type="measure"/>
+                    <field name="qty_out" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_department_usage_graph" model="ir.ui.view">
+            <field name="name">wms.department.usage.graph</field>
+            <field name="model">wms.department.usage</field>
+            <field name="arch" type="xml">
+                <graph string="Department usage" type="bar">
+                    <field name="department_id"/>
+                    <field name="usage_value" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_department_usage_search" model="ir.ui.view">
+            <field name="name">wms.department.usage.search</field>
+            <field name="model">wms.department.usage</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="department_id"/>
+                    <field name="product_id"/>
+                    <field name="categ_id"/>
+                    <filter name="group_department" string="Department"
+                            context="{'group_by': 'department_id'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_category" string="Category"
+                            context="{'group_by': 'categ_id'}"/>
+                    <separator/>
+                    <filter name="group_period" string="Month"
+                            context="{'group_by': 'period'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_department_usage" model="ir.actions.act_window">
+            <field name="name">Department Usage</field>
+            <field name="res_model">wms.department.usage</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_department_usage_search"/>
+            <field name="context">{'search_default_group_department': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No department consumption recorded yet</p>
+                <p>Consumption quantity and value broken down by department / cost centre,
+                   from validated Scan Issue transfers.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_department_usage"
+                  name="Department Usage"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_department_usage"
+                  sequence="40"/>
+
+        <!-- ============================================================ -->
+        <!-- Animal usage                                                  -->
+        <!-- ============================================================ -->
+        <record id="view_wms_animal_usage_list" model="ir.ui.view">
+            <field name="name">wms.animal.usage.list</field>
+            <field name="model">wms.animal.usage</field>
+            <field name="arch" type="xml">
+                <list string="Animal usage" create="false" default_order="period desc, usage_value desc">
+                    <field name="period"/>
+                    <field name="animal_id"/>
+                    <field name="product_id"/>
+                    <field name="categ_id" optional="hide"/>
+                    <field name="qty_out" sum="Issued qty"/>
+                    <field name="usage_value" sum="Usage value"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_animal_usage_pivot" model="ir.ui.view">
+            <field name="name">wms.animal.usage.pivot</field>
+            <field name="model">wms.animal.usage</field>
+            <field name="arch" type="xml">
+                <pivot string="Animal usage">
+                    <field name="animal_id" type="row"/>
+                    <field name="usage_value" type="measure"/>
+                    <field name="qty_out" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_animal_usage_graph" model="ir.ui.view">
+            <field name="name">wms.animal.usage.graph</field>
+            <field name="model">wms.animal.usage</field>
+            <field name="arch" type="xml">
+                <graph string="Animal usage" type="bar">
+                    <field name="animal_id"/>
+                    <field name="usage_value" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_animal_usage_search" model="ir.ui.view">
+            <field name="name">wms.animal.usage.search</field>
+            <field name="model">wms.animal.usage</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="animal_id"/>
+                    <field name="product_id"/>
+                    <field name="categ_id"/>
+                    <filter name="group_animal" string="Animal"
+                            context="{'group_by': 'animal_id'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <separator/>
+                    <filter name="group_period" string="Month"
+                            context="{'group_by': 'period'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_animal_usage" model="ir.actions.act_window">
+            <field name="name">Animal Usage</field>
+            <field name="res_model">wms.animal.usage</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_animal_usage_search"/>
+            <field name="context">{'search_default_group_animal': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No per-animal consumption recorded yet</p>
+                <p>Consumption quantity and value for issues that named a specific animal
+                   (e.g. a treatment or feed ration for a named cow).</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_animal_usage"
+                  name="Animal Usage"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_animal_usage"
+                  sequence="41"/>
+
+        <!-- ============================================================ -->
+        <!-- Medicine consumption                                          -->
+        <!-- ============================================================ -->
+        <record id="view_wms_medicine_consumption_list" model="ir.ui.view">
+            <field name="name">wms.medicine.consumption.list</field>
+            <field name="model">wms.medicine.consumption</field>
+            <field name="arch" type="xml">
+                <list string="Medicine consumption" create="false" default_order="period desc, consumption_value desc">
+                    <field name="period"/>
+                    <field name="product_id"/>
+                    <field name="department_id" optional="show"/>
+                    <field name="animal_id" optional="show"/>
+                    <field name="qty_out" sum="Issued qty"/>
+                    <field name="unit_cost" optional="hide"/>
+                    <field name="consumption_value" sum="Consumption value"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_medicine_consumption_pivot" model="ir.ui.view">
+            <field name="name">wms.medicine.consumption.pivot</field>
+            <field name="model">wms.medicine.consumption</field>
+            <field name="arch" type="xml">
+                <pivot string="Medicine consumption">
+                    <field name="product_id" type="row"/>
+                    <field name="period" type="col"/>
+                    <field name="consumption_value" type="measure"/>
+                    <field name="qty_out" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_medicine_consumption_graph" model="ir.ui.view">
+            <field name="name">wms.medicine.consumption.graph</field>
+            <field name="model">wms.medicine.consumption</field>
+            <field name="arch" type="xml">
+                <graph string="Medicine consumption" type="line">
+                    <field name="period"/>
+                    <field name="consumption_value" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_medicine_consumption_search" model="ir.ui.view">
+            <field name="name">wms.medicine.consumption.search</field>
+            <field name="model">wms.medicine.consumption</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="department_id"/>
+                    <field name="animal_id"/>
+                    <filter name="group_product" string="Medicine"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_department" string="Department"
+                            context="{'group_by': 'department_id'}"/>
+                    <filter name="group_animal" string="Animal"
+                            context="{'group_by': 'animal_id'}"/>
+                    <separator/>
+                    <filter name="group_period" string="Month"
+                            context="{'group_by': 'period'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_medicine_consumption" model="ir.actions.act_window">
+            <field name="name">Medicine Consumption</field>
+            <field name="res_model">wms.medicine.consumption</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_medicine_consumption_search"/>
+            <field name="context">{'search_default_group_product': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No medicine consumption recorded yet</p>
+                <p>Veterinary medicine consumed over time (per product, per month), with the
+                   department and animal it was issued for.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_medicine_consumption"
+                  name="Medicine Consumption"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_medicine_consumption"
+                  sequence="42"/>
+    </data>
+</odoo>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+          Wave 2 #11 — status-aware warehouse heat map. Colour priority:
+          Recall > Quarantine > Expired > Near-expiry > occupancy (Full / Most
+          full / OK / Stocked / Empty). Server-rendered, web.html_container.
+        -->
+        <template id="heatmap_page" name="WMS Heat Map">
+            <t t-call="web.html_container">
+                <head>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <title>Warehouse Heat Map</title>
+                    <style>
+                        * { box-sizing: border-box; }
+                        body { margin: 0; background: #f3f4f6; color: #111827;
+                               font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+                        .wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
+                        h1 { font-size: 22px; margin: 4px 0 2px; }
+                        .sub { color: #6b7280; font-size: 13px; margin-bottom: 14px; }
+                        .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+                        .legend span { font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+                        .sw { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+                        .grp { margin-bottom: 18px; }
+                        .grp h2 { font-size: 14px; margin: 0 0 8px; color: #374151; }
+                        .tiles { display: grid; gap: 8px;
+                                 grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+                        .tile { border-radius: 8px; padding: 10px; color: #fff;
+                                min-height: 60px; }
+                        .tile .n { font-weight: 700; font-size: 13px; }
+                        .tile .s { font-size: 11px; opacity: .95; }
+                    </style>
+                </head>
+                <body>
+                    <div class="wrap">
+                        <h1>Warehouse Heat Map</h1>
+                        <div class="sub">Each rack / floor coloured by the worst status of the stock it
+                            holds, falling back to how full it is.</div>
+                        <div class="legend">
+                            <span><i class="sw" style="background:#7f1d1d"/>Recall</span>
+                            <span><i class="sw" style="background:#b45309"/>Quarantine</span>
+                            <span><i class="sw" style="background:#b91c1c"/>Expired</span>
+                            <span><i class="sw" style="background:#d97706"/>Near expiry</span>
+                            <span><i class="sw" style="background:#dc2626"/>Full</span>
+                            <span><i class="sw" style="background:#f59e0b"/>Most full</span>
+                            <span><i class="sw" style="background:#16a34a"/>OK</span>
+                            <span><i class="sw" style="background:#3b82f6"/>Stocked</span>
+                            <span><i class="sw" style="background:#e5e7eb;border:1px solid #d1d5db"/>Empty</span>
+                        </div>
+                        <t t-foreach="groups" t-as="g">
+                            <div class="grp">
+                                <h2 t-esc="g['label']"/>
+                                <div class="tiles">
+                                    <t t-foreach="g['tiles']" t-as="t">
+                                        <div class="tile" t-attf-style="background:{{t['color']}}">
+                                            <div class="n" t-esc="t['name']"/>
+                                            <div class="s"><t t-esc="t['label']"/> · <t t-esc="t['on_hand']"/> u</div>
+                                        </div>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                </body>
+            </t>
+        </template>
+
+        <record id="action_wms_heatmap" model="ir.actions.act_url">
+            <field name="name">Heat Map</field>
+            <field name="url">/wms/intelligence/heatmap</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_wms_heatmap"
+                  name="Heat Map"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_heatmap"
+                  sequence="8"/>
+    </data>
+</odoo>

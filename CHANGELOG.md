@@ -7,6 +7,39 @@ semantic version tags (`v19.0.<release>`). Each entry maps to a published
 
 ---
 
+## [Unreleased] — branch `v20-wave2-3` — Wave 2 (Intelligence) + Wave 3 (Pharmacy)
+
+**Not released. Not merged to `main`.** Built ahead of the warehouse pilot on the
+`v20-wave2-3` branch by owner decision (2026-06-27), held for the approval gate.
+Two new additive addons; no Wave 1 file edited beyond additive `_inherit`.
+
+Engineering evidence at time of writing: full local suite **616 tests, 0 failed /
+0 error** (Wave 1 527 + Wave 2 60 + Wave 3 29); black / isort / flake8 clean.
+
+### Added — Wave 1 completion
+
+- **V20-022** per-kind shelf-life policy (`wms.shelf.life.policy`) + per-product
+  overrides + short-dated-at-issue guard + global settings (`wms_perishable`
+  `19.0.1.20.0`).
+
+### Added — `wms_analytics` 19.0.2.0.0 (Wave 2 — Warehouse Intelligence, 15 features)
+
+KPI dashboard, Expiry Risk Engine, AI-forecast risk, Supplier Analytics + ledger,
+Disposal Analytics, Stock Health Score, KPI trends (occupancy snapshots + FEFO
+compliance), Advanced Ledgers (lot/product/warehouse + department/animal/medicine),
+Recall Dashboard, Lot Audit Score, status-aware Heat Map, Cold Chain, Bulk
+Operations, Cycle-Count Intelligence, Advanced Traceability. See
+[`addons/wms_analytics/CHANGELOG.md`](addons/wms_analytics/CHANGELOG.md).
+
+### Added — `wms_pharmacy` 19.0.3.0.0 (Wave 3 — Pharmacy Packaging Engine)
+
+Box→Strip→Tablet hierarchy, nested packaging barcodes, open-strip tracking,
+strip-level FEFO dispensing with open-package optimisation, pharmaceutical
+genealogy, and animal medication history. See
+[`addons/wms_pharmacy/CHANGELOG.md`](addons/wms_pharmacy/CHANGELOG.md).
+
+---
+
 ## [v20.0.0-beta1] — 2026-06-26 — Wave 1 Universal Perishable Engine (pilot build)
 
 **Branch:** `v20` · **NOT merged to `main`** · Pilot build only; v19 (`v19.0.46.0.0`)

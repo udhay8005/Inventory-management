@@ -60,9 +60,11 @@ class WmsScanReceipt(models.TransientModel):
         return res
 
     def _wms_min_receive_days(self):
-        """Minimum shelf life (days) a perishable must have left to be received
-        without a manager override. Global config, default 60 (OWNER-9); 0
-        disables the guard. Per-kind shelf-life refinement is V20-022."""
+        """Global fallback minimum shelf life (days) to receive a perishable
+        without a manager override. Default 60 (OWNER-9); 0 disables. As of
+        V20-022 this is only the FALLBACK — the per-line minimum is resolved
+        per product via ``product.template._wms_resolve_shelf_life`` (per-kind
+        policy + per-product override), see ``_wms_line_min_receive``."""
         try:
             return int(
                 self.env["ir.config_parameter"]
@@ -73,17 +75,22 @@ class WmsScanReceipt(models.TransientModel):
         except (TypeError, ValueError):
             return 0
 
+    def _wms_line_min_receive(self, line):
+        """V20-022 — the min-receive shelf life that applies to THIS line's
+        product (per-product override > per-kind policy > global fallback)."""
+        return line.product_id.product_tmpl_id._wms_resolve_shelf_life()["min_receive"]
+
     def _wms_line_expiry(self, line):
         return line.wms_expiry or line.product_id.product_tmpl_id.wms_expiry_date
 
     def _wms_short_dated_lines(self):
-        days = self._wms_min_receive_days()
         out = self.env["wms.scan.receipt.line"]
-        if days <= 0:
-            return out
         today = fields.Date.today()
         for line in self.line_ids:
             if line.product_id.tracking != "lot":
+                continue
+            days = self._wms_line_min_receive(line)
+            if days <= 0:
                 continue
             exp = self._wms_line_expiry(line)
             if exp and (exp - today).days < days:
@@ -91,17 +98,20 @@ class WmsScanReceipt(models.TransientModel):
         return out
 
     def _wms_short_dated_message(self, lines):
-        days = self._wms_min_receive_days()
         today = fields.Date.today()
         rows = []
         for line in lines:
             exp = self._wms_line_expiry(line)
             left = (exp - today).days if exp else 0
-            rows.append("- %s: %d day(s) of shelf life left" % (line.product_id.display_name, left))
+            need = self._wms_line_min_receive(line)
+            rows.append(
+                "- %s: %d day(s) of shelf life left (needs >= %d)"
+                % (line.product_id.display_name, left, need)
+            )
         return (
-            "Short-dated stock. These line(s) have less than %d days of shelf "
-            "life — the minimum for receiving:\n%s\n\nA Manager must approve "
-            "short-dated stock before it can be received." % (days, "\n".join(rows))
+            "Short-dated stock. These line(s) have less than their kind's minimum "
+            "shelf life for receiving:\n%s\n\nA Manager must approve short-dated "
+            "stock before it can be received." % "\n".join(rows)
         )
 
     def action_receive_short_dated_override(self):

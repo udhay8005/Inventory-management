@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Pharmacy root menu — child of the WMS root menu (wms_location.menu_wms_root).
+            Visible to all WMS users; sub-menus gate specific capabilities.
+        -->
+        <menuitem id="menu_wms_pharmacy"
+                  name="Pharmacy"
+                  parent="wms_location.menu_wms_root"
+                  sequence="30"/>
+
+        <!-- Dispense wizard — available to store keepers with scan-issue capability -->
+        <menuitem id="menu_wms_dispense_wizard"
+                  name="Dispense Medicine"
+                  parent="menu_wms_pharmacy"
+                  action="action_wms_dispense_wizard"
+                  groups="wms_location.group_wms_can_scan_issue"
+                  sequence="10"/>
+
+        <!-- Medication history / genealogy log — readable by all WMS users -->
+        <menuitem id="menu_wms_dispense_log"
+                  name="Medication History"
+                  parent="menu_wms_pharmacy"
+                  action="action_wms_dispense_log"
+                  groups="wms_location.group_wms_user"
+                  sequence="20"/>
+
+        <!-- Genealogy view (product/lot grouped) -->
+        <menuitem id="menu_wms_dispense_genealogy"
+                  name="Packaging Genealogy"
+                  parent="menu_wms_pharmacy"
+                  action="action_wms_dispense_genealogy"
+                  groups="wms_location.group_wms_user"
+                  sequence="25"/>
+
+        <!-- Open strips — manager only (sensitive physical state) -->
+        <menuitem id="menu_wms_open_strip"
+                  name="Open Strips"
+                  parent="menu_wms_pharmacy"
+                  action="action_wms_open_strip"
+                  groups="wms_location.group_wms_manager"
+                  sequence="30"/>
+
+        <!-- Packaging barcodes — manager only (catalog data) -->
+        <menuitem id="menu_wms_pharma_packaging_barcode"
+                  name="Packaging Barcodes"
+                  parent="menu_wms_pharmacy"
+                  action="action_wms_pharma_packaging_barcode"
+                  groups="wms_location.group_wms_manager"
+                  sequence="40"/>
+
+    </data>
+</odoo>

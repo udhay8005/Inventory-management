@@ -74,6 +74,53 @@ class ProductTemplate(models.Model):
         ondelete={k: "set null" for k, _ in NEW_PERISHABLE_KINDS},
     )
 
+    # V20-022 — per-product shelf-life overrides (functional spec §2.8). These
+    # are DISTINCT from the v19 ``wms_min_life_days`` (a per-department min
+    # re-request interval feeding the Scan Issue approval gate). 0 = no override,
+    # fall back to the kind policy (wms.shelf.life.policy) then the global param.
+    wms_shelf_life_days = fields.Integer(
+        string="Total shelf life (override)",
+        help="Per-product total shelf life in days. 0 = use this product's kind "
+        "policy. Informational.",
+    )
+    wms_min_receive_life_days = fields.Integer(
+        string="Min shelf life @ receipt (override)",
+        help="Per-product minimum remaining shelf life (days) to RECEIVE without a "
+        "manager override. 0 = use the kind policy, then the global setting. "
+        "Distinct from 'Min re-request interval'.",
+    )
+    wms_min_issue_life_days = fields.Integer(
+        string="Min shelf life @ issue (override)",
+        help="Per-product minimum remaining shelf life (days) to ISSUE without a "
+        "manager override. 0 = use the kind policy, then the global setting.",
+    )
+
+    def _wms_resolve_shelf_life(self):
+        """Resolve (total, min_receive, min_issue) shelf-life days for this
+        product (V20-022 / spec §2.8). Precedence, per field: a non-zero
+        per-product override wins; else the per-kind policy row; else the global
+        fallback parameter. Returns a dict with keys total / min_receive /
+        min_issue (all ints, >= 0)."""
+        self.ensure_one()
+        param = self.env["ir.config_parameter"].sudo()
+        try:
+            g_recv = int(param.get_param("wms_perishable.min_receive_shelf_life_days", "60") or 0)
+        except (TypeError, ValueError):
+            g_recv = 60
+        try:
+            g_issue = int(param.get_param("wms_perishable.min_issue_shelf_life_days", "0") or 0)
+        except (TypeError, ValueError):
+            g_issue = 0
+        policy = self.env["wms.shelf.life.policy"]._policy_for_kind(self.wms_product_kind)
+        p_total = policy.total_days if policy else 0
+        p_recv = policy.min_receive_days if policy else 0
+        p_issue = policy.min_issue_days if policy else 0
+        return {
+            "total": self.wms_shelf_life_days or p_total or 0,
+            "min_receive": self.wms_min_receive_life_days or p_recv or g_recv,
+            "min_issue": self.wms_min_issue_life_days or p_issue or g_issue,
+        }
+
     @api.model_create_multi
     def create(self, vals_list):
         # V20-003: a perishable product is lot-tracked with expiry from creation
