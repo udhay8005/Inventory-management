@@ -236,7 +236,7 @@ jobs:
               --db_host=localhost --db_port=5432 \
               --db_user=odoo --db_password=odoo_ci_password \
               --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
-              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable \
+              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable,wms_analytics,wms_pharmacy \
               --without-demo=all \
               --test-enable \
               --test-tags wms,wms_audit,wms_delete,wms_health,wms_ui_cert \
@@ -331,8 +331,9 @@ jobs:
       # HEAD. Bump this every release to the previous tag so the upgrade job
       # exercises the migration hop the live box will actually run. v20 baseline
       # is v19.0.46.0.0 (the last frozen v19 release). NOTE: ADDONS below stays
-      # the v19-7 — wms_perishable does not exist at PREV_TAG, so it is verified
-      # by a fresh install in the module-tests job, not by the upgrade job.
+      # the v19-7 — wms_perishable (Wave 1) and the Wave 2/3 addons
+      # wms_analytics + wms_pharmacy do not exist at PREV_TAG, so they are
+      # verified by a fresh install in the module-tests job, not by the upgrade job.
       PREV_TAG: v19.0.46.0.0
       # Same module list + order as the `-i` install in odoo_tests.
       ADDONS: wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training
