@@ -1,0 +1,8 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_pharma_barcode_user,wms.pharma.packaging.barcode user,model_wms_pharma_packaging_barcode,wms_location.group_wms_user,1,0,0,0
+access_wms_pharma_barcode_mgr,wms.pharma.packaging.barcode manager,model_wms_pharma_packaging_barcode,wms_location.group_wms_manager,1,1,1,1
+access_wms_open_strip_user,wms.open.strip user,model_wms_open_strip,wms_location.group_wms_user,1,0,0,0
+access_wms_open_strip_mgr,wms.open.strip manager,model_wms_open_strip,wms_location.group_wms_manager,1,1,1,1
+access_wms_dispense_log_user,wms.dispense.log user,model_wms_dispense_log,wms_location.group_wms_user,1,0,0,0
+access_wms_dispense_log_mgr,wms.dispense.log manager,model_wms_dispense_log,wms_location.group_wms_manager,1,1,1,1
+access_wms_dispense_wizard_user,wms.dispense.wizard user,model_wms_dispense_wizard,wms_location.group_wms_can_scan_issue,1,1,1,1
