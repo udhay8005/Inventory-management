@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_lot_migration_form" model="ir.ui.view">
+            <field name="name">wms.lot.migration.form</field>
+            <field name="model">wms.lot.migration</field>
+            <field name="arch" type="xml">
+                <form string="Perishable Lot Migration">
+                    <div class="alert alert-warning" role="alert">
+                        <strong>Back up first.</strong> This migrates legacy (non
+                        lot-tracked) perishable products onto lot tracking.
+                        Rollback is by RESTORING the pre-migration backup — once
+                        lot tracking is set with stock on hand it cannot be
+                        cleanly undone. Run a backup, then Dry run, then Migrate.
+                    </div>
+                    <group>
+                        <field name="report" readonly="1" nolabel="1"
+                               placeholder="Click 'Dry run' to preview what would change."/>
+                    </group>
+                    <footer>
+                        <button name="action_dry_run" type="object" string="Dry run"
+                                class="btn-secondary"/>
+                        <button name="action_migrate" type="object" string="Migrate"
+                                class="btn-danger"
+                                confirm="Have you taken a verified backup? Migration cannot be cleanly rolled back — only restored. Proceed?"/>
+                        <button special="cancel" string="Close"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_migration" model="ir.actions.act_window">
+            <field name="name">Perishable Lot Migration</field>
+            <field name="res_model">wms.lot.migration</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+        <menuitem id="menu_wms_lot_migration"
+                  name="Perishable Lot Migration"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_lot_migration"
+                  groups="wms_location.group_wms_manager"
+                  sequence="90"/>
+    </data>
+</odoo>

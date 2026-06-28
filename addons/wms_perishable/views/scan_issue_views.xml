@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            V20-010 — per-lot visibility on the Scan Issue plan: the batch each
+            FEFO line draws from, and the balance left in that batch after the
+            take. Inherits the frozen v19 issue form. (The plan list already
+            shows expiry_date with near-expiry colour decorations.)
+        -->
+        <record id="view_wms_scan_issue_form_perishable" model="ir.ui.view">
+            <field name="name">wms.scan.issue.form.perishable</field>
+            <field name="model">wms.scan.issue</field>
+            <field name="inherit_id" ref="wms_barcode.view_wms_scan_issue_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='plan_line_ids']/list/field[@name='location_id']" position="after">
+                    <field name="lot_id" string="Batch" optional="show"/>
+                </xpath>
+                <xpath expr="//field[@name='plan_line_ids']/list/field[@name='take']" position="after">
+                    <field name="resulting_balance" string="Left after" optional="show"/>
+                </xpath>
+                <!-- V20-011b — Manager override to issue expired stock. The
+                     button shows only to managers, only when the plan fell
+                     short because expired stock was excluded. -->
+                <xpath expr="//field[@name='plan_line_ids']" position="before">
+                    <field name="wms_has_expired_shortfall" invisible="1"/>
+                    <field name="wms_has_short_dated_issue" invisible="1"/>
+                </xpath>
+                <xpath expr="//footer/button[@name='action_validate']" position="after">
+                    <button name="action_override_expired_issue" type="object"
+                            string="Override — issue expired (Manager)"
+                            class="btn-warning"
+                            groups="wms_location.group_wms_manager"
+                            invisible="not wms_has_expired_shortfall"
+                            confirm="Issue EXPIRED stock? This bypasses the expiry safety block. Only proceed if you, as Manager, take responsibility for using expired stock."/>
+                    <!-- V20-022 — Manager approval to issue short-dated (near-expiry,
+                         not yet expired) stock below the kind's min-issue shelf life. -->
+                    <button name="action_override_short_dated_issue" type="object"
+                            string="Approve — issue short-dated (Manager)"
+                            class="btn-warning"
+                            groups="wms_location.group_wms_manager"
+                            invisible="not wms_has_short_dated_issue"
+                            confirm="Issue SHORT-DATED (near-expiry) stock? It has less than the minimum remaining shelf life for issuing. Proceed only if you, as Manager, accept it."/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

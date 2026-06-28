@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============================================================
+             wms.pharma.packaging.barcode — list view
+             ============================================================ -->
+        <record id="view_wms_pharma_packaging_barcode_list" model="ir.ui.view">
+            <field name="name">wms.pharma.packaging.barcode.list</field>
+            <field name="model">wms.pharma.packaging.barcode</field>
+            <field name="arch" type="xml">
+                <list string="Pharmacy packaging barcodes">
+                    <field name="product_id"/>
+                    <field name="tier"/>
+                    <field name="barcode"/>
+                    <field name="base_units"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- ============================================================
+             wms.pharma.packaging.barcode — form view
+             ============================================================ -->
+        <record id="view_wms_pharma_packaging_barcode_form" model="ir.ui.view">
+            <field name="name">wms.pharma.packaging.barcode.form</field>
+            <field name="model">wms.pharma.packaging.barcode</field>
+            <field name="arch" type="xml">
+                <form string="Pharmacy packaging barcode">
+                    <sheet>
+                        <group>
+                            <field name="product_id"/>
+                            <field name="tier"/>
+                            <field name="barcode"/>
+                            <field name="base_units"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- ============================================================
+             wms.pharma.packaging.barcode — search view
+             ============================================================ -->
+        <record id="view_wms_pharma_packaging_barcode_search" model="ir.ui.view">
+            <field name="name">wms.pharma.packaging.barcode.search</field>
+            <field name="model">wms.pharma.packaging.barcode</field>
+            <field name="arch" type="xml">
+                <search string="Search packaging barcodes">
+                    <field name="product_id"/>
+                    <field name="barcode"/>
+                    <filter string="Box" name="tier_box"
+                            domain="[('tier','=','box')]"/>
+                    <filter string="Strip" name="tier_strip"
+                            domain="[('tier','=','strip')]"/>
+                    <filter string="Tablet" name="tier_tablet"
+                            domain="[('tier','=','tablet')]"/>
+                    <separator/>
+                    <filter string="By product" name="group_product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter string="By tier" name="group_tier"
+                            context="{'group_by': 'tier'}"/>
+                </search>
+            </field>
+        </record>
+
+        <!-- ============================================================
+             Action
+             ============================================================ -->
+        <record id="action_wms_pharma_packaging_barcode" model="ir.actions.act_window">
+            <field name="name">Packaging Barcodes</field>
+            <field name="res_model">wms.pharma.packaging.barcode</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id"
+                   ref="view_wms_pharma_packaging_barcode_search"/>
+        </record>
+
+    </data>
+</odoo>

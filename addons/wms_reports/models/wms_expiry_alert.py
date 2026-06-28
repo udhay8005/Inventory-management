@@ -162,7 +162,7 @@ class WmsExpiryAlert(models.Model):
         # Markup() so Odoo 19 renders the HTML instead of escaping the tags to
         # visible text (every other message_post in the codebase does this).
         # Product names are escape()d above so a stray '&' / '<' can't break it.
-        body = Markup(
+        body = Markup(  # nosec B704 — user data escape()d; template is literal
             f"<p><b>{len(urgent)} product(s) expiring soon or already expired.</b></p>"
             + "".join(rows)
             + "<p><i>Full list: WMS &rsaquo; Reports &rsaquo; Expiry alerts.</i></p>"

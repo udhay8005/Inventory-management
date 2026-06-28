@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============================================================
+             wms.dispense.wizard — form view (dialog)
+             ============================================================ -->
+        <record id="view_wms_dispense_wizard_form" model="ir.ui.view">
+            <field name="name">wms.dispense.wizard.form</field>
+            <field name="model">wms.dispense.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Dispense Medicine">
+                    <sheet>
+                        <div class="alert alert-info">
+                            Select the medicine, quantity (in tablets), and the
+                            storage location. The system will automatically draw
+                            from the earliest-expiry available lot (FEFO) and
+                            will use any open strip before breaking a new one.
+                        </div>
+                        <group string="Dispense details">
+                            <group>
+                                <field name="product_id"
+                                       options="{'no_create': True}"/>
+                                <field name="quantity"/>
+                                <field name="animal_id"/>
+                            </group>
+                            <group>
+                                <field name="location_id"
+                                       options="{'no_create': True}"/>
+                            </group>
+                        </group>
+                        <group string="Note">
+                            <field name="note" nolabel="1"
+                                   placeholder="Treatment reason, dosage instructions, etc."/>
+                        </group>
+                    </sheet>
+                    <footer>
+                        <button string="Dispense" type="object"
+                                name="action_dispense"
+                                class="btn-primary"/>
+                        <button string="Cancel" class="btn-secondary"
+                                special="cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!-- ============================================================
+             Action — opens wizard as a dialog (target='new')
+             ============================================================ -->
+        <record id="action_wms_dispense_wizard" model="ir.actions.act_window">
+            <field name="name">Dispense Medicine</field>
+            <field name="res_model">wms.dispense.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+        </record>
+
+    </data>
+</odoo>

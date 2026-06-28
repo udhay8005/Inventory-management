@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Inject the Pharmacy Packaging group into the existing WMS Classification
+            page (name="wms_classification") on the product template form view.
+            wms_location already inherits product.product_template_only_form_view;
+            wms_pharmacy adds a second inherited view on the same base.
+        -->
+        <record id="view_product_template_form_pharmacy_inherit" model="ir.ui.view">
+            <field name="name">product.template.form.pharmacy.inherit</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="product.product_template_only_form_view"/>
+            <field name="arch" type="xml">
+
+                <!--
+                    Append the pharmacy packaging block at the bottom of the
+                    WMS Classification page. The separator gives a clear visual
+                    break before the new group.
+                -->
+                <xpath expr="//page[@name='wms_classification']" position="inside">
+                    <separator string="Pharmacy Packaging (Box → Strip → Tablet)"/>
+                    <group string="Pharmacy Packaging" name="wms_pharmacy_packaging">
+                        <field name="wms_is_packaged" widget="boolean_toggle"/>
+                        <field name="wms_tablets_per_strip"
+                               invisible="not wms_is_packaged"/>
+                        <field name="wms_strips_per_box"
+                               invisible="not wms_is_packaged"/>
+                        <field name="wms_tablets_per_box"
+                               invisible="not wms_is_packaged"/>
+                    </group>
+                    <div class="alert alert-info" invisible="not wms_is_packaged">
+                        <b>Packaged medicine</b> — the dispense wizard draws tablets
+                        from this product using FEFO lot selection and open-strip
+                        optimisation. Stock is tracked in the product's base UoM
+                        (Units = tablets). Receive a sealed box as
+                        <i>tablets_per_box</i> units.
+                    </div>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

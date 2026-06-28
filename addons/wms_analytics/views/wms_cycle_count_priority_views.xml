@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #14 — Cycle Count Intelligence: risk-ranked count order. -->
+        <record id="view_wms_cycle_count_priority_list" model="ir.ui.view">
+            <field name="name">wms.cycle.count.priority.list</field>
+            <field name="model">wms.cycle.count.priority</field>
+            <field name="arch" type="xml">
+                <list string="Cycle count priority" create="false"
+                      default_order="priority_score desc, days_since_count desc">
+                    <field name="priority_band"
+                           decoration-danger="priority_band == 'high'"
+                           decoration-warning="priority_band == 'medium'"
+                           decoration-info="priority_band == 'low'"
+                           widget="badge"/>
+                    <field name="priority_score"/>
+                    <field name="location_id"/>
+                    <field name="rack_id" optional="show"/>
+                    <field name="days_since_count"/>
+                    <field name="mismatch_count"/>
+                    <field name="velocity_class" optional="show"/>
+                    <field name="on_hand" optional="show"/>
+                    <field name="distinct_products" optional="hide"/>
+                    <field name="last_counted" optional="hide"/>
+                    <field name="age_points" optional="hide"/>
+                    <field name="mismatch_points" optional="hide"/>
+                    <field name="velocity_points" optional="hide"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_cycle_count_priority_pivot" model="ir.ui.view">
+            <field name="name">wms.cycle.count.priority.pivot</field>
+            <field name="model">wms.cycle.count.priority</field>
+            <field name="arch" type="xml">
+                <pivot string="Cycle count priority">
+                    <field name="priority_band" type="row"/>
+                    <field name="priority_score" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_cycle_count_priority_graph" model="ir.ui.view">
+            <field name="name">wms.cycle.count.priority.graph</field>
+            <field name="model">wms.cycle.count.priority</field>
+            <field name="arch" type="xml">
+                <graph string="Cycle count priority" type="bar">
+                    <field name="priority_band"/>
+                    <field name="priority_score" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_cycle_count_priority_search" model="ir.ui.view">
+            <field name="name">wms.cycle.count.priority.search</field>
+            <field name="model">wms.cycle.count.priority</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="location_id"/>
+                    <field name="rack_id"/>
+                    <filter name="high" string="High priority"
+                            domain="[('priority_band','=','high')]"/>
+                    <filter name="medium" string="Medium priority"
+                            domain="[('priority_band','=','medium')]"/>
+                    <separator/>
+                    <filter name="has_mismatch" string="Has past variance"
+                            domain="[('mismatch_count','>',0)]"/>
+                    <separator/>
+                    <filter name="group_band" string="Priority band"
+                            context="{'group_by': 'priority_band'}"/>
+                    <filter name="group_velocity" string="Velocity"
+                            context="{'group_by': 'velocity_class'}"/>
+                    <filter name="group_rack" string="Rack"
+                            context="{'group_by': 'rack_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_cycle_count_priority" model="ir.actions.act_window">
+            <field name="name">Cycle Count Priority</field>
+            <field name="res_model">wms.cycle.count.priority</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_cycle_count_priority_search"/>
+            <field name="context">{'search_default_high': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No slots ranked for cycle counting</p>
+                <p>This view ranks every storage slot by how urgently it should be
+                   re-counted, combining how long since it was last counted, how often
+                   it has shown audit variances, and how fast its stock moves.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_cycle_count_priority"
+                  name="Cycle Count Priority"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_cycle_count_priority"
+                  sequence="80"/>
+    </data>
+</odoo>

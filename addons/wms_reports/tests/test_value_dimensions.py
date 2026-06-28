@@ -35,7 +35,22 @@ class TestValueDimensions(TransactionCase):
             }
         )
         # Stock sits ON the floor so the damage's source-slot check passes.
-        cls.env["stock.quant"]._update_available_quantity(cls.product, cls.floor, 5.0)
+        # Feed is perishable -> lot-tracked under v20; seed it with a lot. The
+        # *template* wms_expiry_date above (2020) is what the expiry report keys
+        # on; the lot gets a future date so the removal engine can still reserve
+        # it for the damage move. (Disposal of already-expired lots is a separate
+        # FEFO/expired-handling concern, tracked for a later v20 ticket.)
+        cls.lot = cls.env["stock.lot"].create(
+            {
+                "name": "VALDIM-LOT",
+                "product_id": cls.product.id,
+                "company_id": cls.env.company.id,
+                "expiration_date": "2027-12-31 00:00:00",
+            }
+        )
+        cls.env["stock.quant"]._update_available_quantity(
+            cls.product, cls.floor, 5.0, lot_id=cls.lot
+        )
         cls.env.flush_all()
 
     def test_expiry_value_at_risk(self):

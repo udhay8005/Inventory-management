@@ -285,6 +285,19 @@ if (-not $SkipWinget) {
 
     # Refresh PATH for this session so subsequent commands see the new binaries.
     $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
+
+    # winget sometimes installs wkhtmltopdf without updating the Machine PATH
+    # (happens when the package was already present in the registry but its bin
+    # directory wasn't on PATH). Ensure wkhtmltopdf is reachable for Odoo PDF
+    # printing and for the CI-equivalent test_wkhtmltopdf_available_for_conversion.
+    $wkBin = 'C:\Program Files\wkhtmltopdf\bin'
+    if ((Test-Path "$wkBin\wkhtmltopdf.exe") -and ($env:Path -notlike "*wkhtmltopdf*")) {
+        [System.Environment]::SetEnvironmentVariable('Path',
+            [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ";$wkBin",
+            'Machine')
+        $env:Path += ";$wkBin"
+        Write-OK "Added wkhtmltopdf to system PATH: $wkBin"
+    }
 }
 
 # === 2. PostgreSQL - service + role + DB ===================================

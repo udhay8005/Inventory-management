@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            V20-002 — per-kind SKU sequences for the new perishable kinds.
+            Mirrors wms_location/data/wms_sku_sequences.xml exactly (width 5,
+            standard implementation, noupdate so an upgrade never resets the
+            running counter). The KIND_SEQ_CODE table (extended in
+            models/product_template.py) points the v19 product.template.create()
+            override at these codes.
+        -->
+        <record id="seq_sku_vaccine" model="ir.sequence">
+            <field name="name">WMS SKU - Vaccine</field>
+            <field name="code">wms.sku.vaccine</field>
+            <field name="prefix">VAC-</field>
+            <field name="padding">5</field>
+            <field name="implementation">standard</field>
+        </record>
+
+        <record id="seq_sku_supplement" model="ir.sequence">
+            <field name="name">WMS SKU - Supplement</field>
+            <field name="code">wms.sku.supplement</field>
+            <field name="prefix">SUPP-</field>
+            <field name="padding">5</field>
+            <field name="implementation">standard</field>
+        </record>
+
+        <record id="seq_sku_chemical" model="ir.sequence">
+            <field name="name">WMS SKU - Chemical</field>
+            <field name="code">wms.sku.chemical</field>
+            <field name="prefix">CHEM-</field>
+            <field name="padding">5</field>
+            <field name="implementation">standard</field>
+        </record>
+
+        <record id="seq_sku_fertilizer" model="ir.sequence">
+            <field name="name">WMS SKU - Fertilizer</field>
+            <field name="code">wms.sku.fertilizer</field>
+            <field name="prefix">FERT-</field>
+            <field name="padding">5</field>
+            <field name="implementation">standard</field>
+        </record>
+
+        <record id="seq_sku_food" model="ir.sequence">
+            <field name="name">WMS SKU - Food</field>
+            <field name="code">wms.sku.food</field>
+            <field name="prefix">FOOD-</field>
+            <field name="padding">5</field>
+            <field name="implementation">standard</field>
+        </record>
+    </data>
+</odoo>

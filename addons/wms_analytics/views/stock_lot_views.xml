@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #10 — audit/completeness score on the lot form. -->
+        <record id="view_stock_lot_form_audit" model="ir.ui.view">
+            <field name="name">stock.lot.form.wms.audit</field>
+            <field name="model">stock.lot</field>
+            <field name="inherit_id" ref="stock.view_production_lot_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet" position="inside">
+                    <group string="Traceability audit" name="wms_audit">
+                        <group>
+                            <field name="wms_audit_score"/>
+                            <field name="wms_audit_pct" widget="percentage"/>
+                            <field name="wms_audit_band" widget="badge"
+                                   decoration-success="wms_audit_band == 'high'"
+                                   decoration-warning="wms_audit_band == 'medium'"
+                                   decoration-danger="wms_audit_band == 'low'"/>
+                        </group>
+                        <group>
+                            <field name="wms_audit_batch_ok"/>
+                            <field name="wms_audit_supplier_ok"/>
+                            <field name="wms_audit_barcode_ok"/>
+                            <field name="wms_audit_expiry_ok"/>
+                            <field name="wms_audit_timeline_ok"/>
+                            <field name="wms_audit_movement_ok"/>
+                            <field name="wms_audit_storage_ok"/>
+                        </group>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- Lot Audit report: lots ranked by completeness. -->
+        <record id="view_stock_lot_list_audit" model="ir.ui.view">
+            <field name="name">stock.lot.list.wms.audit</field>
+            <field name="model">stock.lot</field>
+            <field name="arch" type="xml">
+                <list string="Lot audit" create="false" default_order="wms_audit_score">
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="wms_audit_score"/>
+                    <field name="wms_audit_band" widget="badge"
+                           decoration-success="wms_audit_band == 'high'"
+                           decoration-warning="wms_audit_band == 'medium'"
+                           decoration-danger="wms_audit_band == 'low'"/>
+                    <field name="wms_audit_batch_ok"/>
+                    <field name="wms_audit_supplier_ok"/>
+                    <field name="wms_audit_expiry_ok"/>
+                    <field name="wms_audit_timeline_ok"/>
+                    <field name="wms_audit_storage_ok"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_audit" model="ir.actions.act_window">
+            <field name="name">Lot Audit</field>
+            <field name="res_model">stock.lot</field>
+            <field name="view_mode">list,form</field>
+            <field name="view_id" ref="view_stock_lot_list_audit"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No lots yet</p>
+                <p>Lots ranked by traceability completeness — find under-documented
+                   batches (missing supplier, expiry, or storage) at the top.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_lot_audit"
+                  name="Lot Audit"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_lot_audit"
+                  sequence="20"/>
+    </data>
+</odoo>

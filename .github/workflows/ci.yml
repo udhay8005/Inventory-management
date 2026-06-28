@@ -1,10 +1,15 @@
 name: CI
 
 # Triggers
-#   - Push to main or test branches.
-#   - Any PR targeting main or test.
+#   - Push to main, test, or v20 branches.
+#   - Any PR targeting main, test, or v20.
 #   - Manual via `workflow_dispatch`.
 # Workflow: push code to `test` → CI runs → if green, PR to `main` → merge.
+# v20 is the next-major development line; the module-tests job installs ALL
+# addons including the v20 Wave 1/2/3 ones (wms_perishable, wms_analytics,
+# wms_pharmacy). PREV_TAG=v19.0.46.0.0 is the upgrade baseline; the v20 addons
+# are absent there and so are fresh-install-verified, not upgrade-tested.
+# A PR from a v20 feature branch into v20 or main runs this full CI.
 # Concurrency: cancel an in-flight run if a newer commit lands on the same ref.
 #
 # Native (no Docker) build — mirrors the local Windows setup: PostgreSQL +
@@ -14,9 +19,9 @@ name: CI
 
 on:
   push:
-    branches: [main, test]
+    branches: [main, test, v20]
   pull_request:
-    branches: [main, test]
+    branches: [main, test, v20]
   workflow_dispatch:
 
 concurrency:
@@ -234,7 +239,7 @@ jobs:
               --db_host=localhost --db_port=5432 \
               --db_user=odoo --db_password=odoo_ci_password \
               --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
-              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training \
+              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable,wms_analytics,wms_pharmacy \
               --without-demo=all \
               --test-enable \
               --test-tags wms,wms_audit,wms_delete,wms_health,wms_ui_cert \
@@ -327,9 +332,12 @@ jobs:
     env:
       # The last green release tag whose addons we install BEFORE upgrading to
       # HEAD. Bump this every release to the previous tag so the upgrade job
-      # exercises the migration hop the live box will actually run. Last green
-      # release is v19.0.45.0.0 (the next release candidate is v19.0.46.0.0).
-      PREV_TAG: v19.0.45.0.0
+      # exercises the migration hop the live box will actually run. v20 baseline
+      # is v19.0.46.0.0 (the last frozen v19 release). NOTE: ADDONS below stays
+      # the v19-7 — wms_perishable (Wave 1) and the Wave 2/3 addons
+      # wms_analytics + wms_pharmacy do not exist at PREV_TAG, so they are
+      # verified by a fresh install in the module-tests job, not by the upgrade job.
+      PREV_TAG: v19.0.46.0.0
       # Same module list + order as the `-i` install in odoo_tests.
       ADDONS: wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training
 

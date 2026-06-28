@@ -5,7 +5,7 @@ negative stock, missing barcodes, orphan slots, and dead stock. Every check is a
 read-only SELECT - nothing here writes stock or can corrupt data.
 """
 
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from odoo import api, fields, models
 
 # (label, status-if-nonzero, sql, detail-format)
@@ -141,12 +141,21 @@ class WmsSelfDiagnostics(models.TransientModel):
             overall = "fail"
         elif any(c["status"] == "warn" for c in checks):
             overall = "warn"
-        rows = "".join(
-            "<tr>"
-            "<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb'><b style='color:%s'>%s</b></td>"
-            "<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb'>%s</td>"
-            "<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151'>%s</td>"
-            "</tr>" % (_COLOUR[c["status"]], _ICON[c["status"]], c["check"], c["detail"])
+        # check labels are static literals; detail can include str(exception)
+        # so escape() both before interpolating into the Markup context.
+        rows = Markup("").join(
+            Markup(
+                "<tr>"
+                "<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb'><b style='color:{colour}'>{icon}</b></td>"
+                "<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb'>{check}</td>"
+                "<td style='padding:6px 10px;border-bottom:1px solid #e5e7eb;color:#374151'>{detail}</td>"
+                "</tr>"
+            ).format(
+                colour=_COLOUR[c["status"]],
+                icon=_ICON[c["status"]],
+                check=escape(c["check"]),
+                detail=escape(c["detail"]),
+            )
             for c in sorted(checks, key=lambda x: _ORDER.get(x["status"], 3))
         )
         self.write(
@@ -159,7 +168,7 @@ class WmsSelfDiagnostics(models.TransientModel):
                     "<th style='text-align:left;padding:6px 10px'>Check</th>"
                     "<th style='text-align:left;padding:6px 10px'>Detail</th></tr>"
                 )
-                + Markup(rows)
+                + rows
                 + Markup("</table>"),
             }
         )

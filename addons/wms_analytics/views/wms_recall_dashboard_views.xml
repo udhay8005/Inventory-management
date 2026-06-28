@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 — Recall Dashboard: list / graph / pivot + search over the
+             recall notices, with the issued / on-hand / destroyed / returned
+             roll-ups as measures. -->
+        <record id="view_wms_recall_dashboard_list" model="ir.ui.view">
+            <field name="name">wms.recall.dashboard.list</field>
+            <field name="model">wms.lot.recall</field>
+            <field name="arch" type="xml">
+                <list string="Recall dashboard" create="false" edit="false"
+                      default_order="create_date desc">
+                    <field name="name"/>
+                    <field name="state"
+                           decoration-warning="state == 'active'"
+                           decoration-muted="state == 'released'"
+                           widget="badge"/>
+                    <field name="supplier_id"/>
+                    <field name="recalled_on"/>
+                    <field name="issued_quantity" sum="Issued out"/>
+                    <field name="remaining_quantity" sum="Still on hand"/>
+                    <field name="destroyed_quantity" sum="Destroyed"/>
+                    <field name="returned_quantity" sum="Returned in"/>
+                    <field name="is_open" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_recall_dashboard_graph" model="ir.ui.view">
+            <field name="name">wms.recall.dashboard.graph</field>
+            <field name="model">wms.lot.recall</field>
+            <field name="arch" type="xml">
+                <graph string="Recall dashboard" type="bar">
+                    <field name="state" type="row"/>
+                    <field name="remaining_quantity" type="measure"/>
+                    <field name="issued_quantity" type="measure"/>
+                    <field name="destroyed_quantity" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_recall_dashboard_pivot" model="ir.ui.view">
+            <field name="name">wms.recall.dashboard.pivot</field>
+            <field name="model">wms.lot.recall</field>
+            <field name="arch" type="xml">
+                <pivot string="Recall dashboard">
+                    <field name="supplier_id" type="row"/>
+                    <field name="state" type="col"/>
+                    <field name="remaining_quantity" type="measure"/>
+                    <field name="issued_quantity" type="measure"/>
+                    <field name="destroyed_quantity" type="measure"/>
+                    <field name="returned_quantity" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_recall_dashboard_search" model="ir.ui.view">
+            <field name="name">wms.recall.dashboard.search</field>
+            <field name="model">wms.lot.recall</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="name"/>
+                    <field name="supplier_id"/>
+                    <filter name="open" string="Open (active)"
+                            domain="[('state','=','active')]"/>
+                    <filter name="released" string="Released"
+                            domain="[('state','=','released')]"/>
+                    <separator/>
+                    <filter name="group_supplier" string="Supplier"
+                            context="{'group_by': 'supplier_id'}"/>
+                    <filter name="group_state" string="State"
+                            context="{'group_by': 'state'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_recall_dashboard" model="ir.actions.act_window">
+            <field name="name">Recall Dashboard</field>
+            <field name="res_model">wms.lot.recall</field>
+            <field name="view_mode">list,graph,pivot</field>
+            <field name="search_view_id" ref="view_wms_recall_dashboard_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No recalls yet</p>
+                <p>This dashboard rolls up each recall's issued, on-hand,
+                   destroyed and returned quantities across its recalled lots.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_recall_dashboard"
+                  name="Recall Dashboard"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_recall_dashboard"
+                  sequence="40"/>
+    </data>
+</odoo>

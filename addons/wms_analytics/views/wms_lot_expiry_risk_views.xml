@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #2 — Expiry Risk Engine: list / pivot / graph + search. -->
+        <record id="view_wms_lot_expiry_risk_list" model="ir.ui.view">
+            <field name="name">wms.lot.expiry.risk.list</field>
+            <field name="model">wms.lot.expiry.risk</field>
+            <field name="arch" type="xml">
+                <list string="Expiry risk" create="false" default_order="risk_rank desc, days_to_expiry">
+                    <field name="risk_band"
+                           decoration-danger="risk_band == 'critical'"
+                           decoration-warning="risk_band == 'high'"
+                           decoration-info="risk_band == 'medium'"
+                           widget="badge"/>
+                    <field name="lot_id"/>
+                    <field name="product_id"/>
+                    <field name="days_to_expiry"/>
+                    <field name="on_hand"/>
+                    <field name="daily_avg"/>
+                    <field name="days_of_cover"/>
+                    <field name="value_at_risk" sum="Value at risk"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_expiry_risk_pivot" model="ir.ui.view">
+            <field name="name">wms.lot.expiry.risk.pivot</field>
+            <field name="model">wms.lot.expiry.risk</field>
+            <field name="arch" type="xml">
+                <pivot string="Expiry risk">
+                    <field name="risk_band" type="row"/>
+                    <field name="value_at_risk" type="measure"/>
+                    <field name="on_hand" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_expiry_risk_graph" model="ir.ui.view">
+            <field name="name">wms.lot.expiry.risk.graph</field>
+            <field name="model">wms.lot.expiry.risk</field>
+            <field name="arch" type="xml">
+                <graph string="Expiry risk" type="bar">
+                    <field name="risk_band"/>
+                    <field name="value_at_risk" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_expiry_risk_search" model="ir.ui.view">
+            <field name="name">wms.lot.expiry.risk.search</field>
+            <field name="model">wms.lot.expiry.risk</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <filter name="critical" string="Critical" domain="[('risk_band','=','critical')]"/>
+                    <filter name="high" string="High" domain="[('risk_band','=','high')]"/>
+                    <filter name="at_risk" string="High + Critical"
+                            domain="['|',('risk_band','=','high'),('risk_band','=','critical')]"/>
+                    <separator/>
+                    <filter name="no_consumption" string="No measured consumption"
+                            domain="[('daily_avg','=',0)]"/>
+                    <separator/>
+                    <filter name="group_band" string="Risk band"
+                            context="{'group_by': 'risk_band'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_expiry_risk" model="ir.actions.act_window">
+            <field name="name">Expiry Risk</field>
+            <field name="res_model">wms.lot.expiry.risk</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_lot_expiry_risk_search"/>
+            <field name="context">{'search_default_at_risk': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No lots at expiry risk</p>
+                <p>This engine predicts which lots will expire before they are consumed,
+                   combining remaining shelf life with the product's consumption velocity.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_lot_expiry_risk"
+                  name="Expiry Risk"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_lot_expiry_risk"
+                  sequence="10"/>
+    </data>
+</odoo>

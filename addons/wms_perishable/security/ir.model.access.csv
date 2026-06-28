@@ -1,0 +1,10 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_lot_recall_manager,wms.lot.recall manager,model_wms_lot_recall,wms_location.group_wms_manager,1,1,1,1
+access_wms_lot_recall_user,wms.lot.recall user,model_wms_lot_recall,wms_location.group_wms_user,1,0,0,0
+access_wms_lot_quarantine_manager,wms.lot.quarantine manager,model_wms_lot_quarantine,wms_location.group_wms_manager,1,1,1,1
+access_wms_lot_quarantine_user,wms.lot.quarantine user,model_wms_lot_quarantine,wms_location.group_wms_user,1,0,0,0
+access_wms_lot_expiry_alert_user,wms.lot.expiry.alert user,model_wms_lot_expiry_alert,wms_location.group_wms_user,1,0,0,0
+access_wms_lot_migration_manager,wms.lot.migration manager,model_wms_lot_migration,wms_location.group_wms_manager,1,1,1,1
+access_wms_shelf_life_policy_manager,wms.shelf.life.policy manager,model_wms_shelf_life_policy,wms_location.group_wms_manager,1,1,1,1
+access_wms_shelf_life_policy_user,wms.shelf.life.policy user,model_wms_shelf_life_policy,wms_location.group_wms_user,1,0,0,0
+access_wms_shelf_life_settings_manager,wms.shelf.life.settings manager,model_wms_shelf_life_settings,wms_location.group_wms_manager,1,1,1,1

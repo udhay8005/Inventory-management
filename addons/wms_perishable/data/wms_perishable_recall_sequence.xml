@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- V20-013 — recall notice numbers (RECALL-NNNNN). -->
+        <record id="seq_wms_lot_recall" model="ir.sequence">
+            <field name="name">WMS Lot Recall</field>
+            <field name="code">wms.lot.recall</field>
+            <field name="prefix">RECALL-</field>
+            <field name="padding">5</field>
+            <field name="implementation">standard</field>
+        </record>
+    </data>
+</odoo>

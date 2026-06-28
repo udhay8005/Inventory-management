@@ -1,6 +1,7 @@
 # Inventory_mngt — Odoo CE 19 WMS
 
-[![CI](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml/badge.svg)](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml)
+[![CI](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml)
+[![CI (v20)](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml/badge.svg?branch=v20)](https://github.com/udhay8005/Inventory-management/actions/workflows/ci.yml)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
 [![Latest release](https://img.shields.io/github/v/release/udhay8005/Inventory-management?sort=semver)](https://github.com/udhay8005/Inventory-management/releases/latest)
 
@@ -32,6 +33,7 @@ Runs **natively on Windows** — no Docker required.
 - 🤖 **Offline AI demand forecasting** — statsmodels-based, runs locally, no external API
 - 🛡️ **Off-site encrypted backup copy** — `BACKUP_OFFSITE_DIR` (USB, network share, OneDrive sync folder — all just paths), SHA-256 verified after copy
 - ☁️ **Google Drive cloud backup** (optional) — every encrypted backup set uploaded to an `Inventory_Backups` Drive folder (`drive.file` minimal scope, `sha256Checksum`-verified, tiered retention), plus an in-app **Backup Now** button
+- 🧬 **Universal Perishable Engine** (v20 — `wms_perishable`) — per-lot FEFO (earliest-expiry-first), expired-stock block + manager override + disposal carve-out, lot-aware receipt (batch / expiry / supplier capture), lot recall, quarantine, per-lot expiry report (180/90/60/30/15/7/expired bands), lot barcode labels + scan-back, near-expiry receiving guard, one-click lot timeline, and a stable extension hook API (v20 Hook API 1.0). Additive over v19 — no existing behaviour changes; install optionally after the v19 base modules
 
 ## Quickstart (Windows)
 
@@ -63,6 +65,7 @@ immediately under your user profile). In **Apps** install in this order:
 5. `wms_ai_forecast` — offline statsmodels forecasting + reorder
 6. `wms_reports` — SQL-view dashboards
 7. `wms_training` — Help Center, guided tours, visual academy, SOPs
+8. `wms_perishable` *(v20 — optional)* — Universal Perishable Engine: per-lot FEFO, expiry tracking, recall, quarantine, lot labels, near-expiry guard, extension hooks. Install this only on the `v20` branch (pilot stage); see [`docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md`](docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md)
 
 ## Initial user setup
 
@@ -160,7 +163,14 @@ Inventory_mngt/
     ├── wms_repair_damage/      damage / repair / return flows + recommendation engine
     ├── wms_ai_forecast/        offline statsmodels forecasting + reorder
     ├── wms_reports/            SQL-view dashboards (Where-is-it, FIFO age, occupancy, ...)
-    └── wms_training/           Help Center, guided tours, visual academy, SOPs
+    ├── wms_training/           Help Center, guided tours, visual academy, SOPs
+    ├── wms_perishable/         [v20 Wave 1] Universal Perishable Engine — per-lot FEFO, expiry, recall,
+    │                           quarantine, lot labels, near-expiry guard, per-kind shelf-life, hook API
+    ├── wms_analytics/          [v20 Wave 2] Warehouse Intelligence — KPI dashboard, expiry-risk engine,
+    │                           supplier/disposal analytics, stock-health, ledgers, recall dashboard,
+    │                           lot audit, heat map, cold chain, bulk ops, cycle-count, traceability
+    └── wms_pharmacy/           [v20 Wave 3] Pharmacy packaging engine — Box→Strip→Tablet, nested
+                                barcodes, open-strip tracking, dose dispensing, genealogy, med history
 ```
 
 ## Read the docs
@@ -204,6 +214,13 @@ Architecture, design notes, and operational guides:
 - [`docs/RETURNABLE-ITEMS.md`](docs/RETURNABLE-ITEMS.md) — returnable items, expected-return SLA, overdue alert + Returns-due report
 - [`docs/ISSUE-APPROVALS.md`](docs/ISSUE-APPROVALS.md) — min-life re-request guard + high-value threshold → manager-only Approvals queue
 
+**v20 Perishable Engine — design package & pilot guide:**
+
+- [`docs/v20-perishable-engine/`](docs/v20-perishable-engine/) — full design package (architecture, touch-point map, data model, test plan, functional spec, backlog)
+- [`docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md`](docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md) — pilot release notes, operator checklist, rollback guide
+- [`addons/wms_perishable/CHANGELOG.md`](addons/wms_perishable/CHANGELOG.md) — per-ticket changelog for all Wave-1 tickets (V20-001…021)
+- [`addons/wms_perishable/README.md`](addons/wms_perishable/README.md) — module feature list, Hook API 1.0 reference, configuration
+
 ## Mobile access (phones / tablets / off-site)
 
 The simplest local path:
@@ -233,8 +250,8 @@ configurable so other label sizes work too. See [docs/LABEL-PRINTING.md](docs/LA
 ```powershell
 .venv\Scripts\activate
 python .odoo\odoo-bin -c config\odoo.native.conf -d wms_test --test-enable --stop-after-init `
-    -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training `
-    --without-demo=all --test-tags wms
+    -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable `
+    --without-demo=all --test-tags wms,wms_audit,wms_delete,wms_health,wms_ui_cert
 ```
 
 ## Backup / restore
@@ -276,12 +293,20 @@ Branch protection on `main` requires a pull request. Workflow:
 
 1. Feature work lands on `test` → CI runs on every push
 2. When `test` is green, open a PR `test → main`
-3. After merge, the `Release` workflow auto-tags the highest version found
-   across all `addons/*/__manifest__.py` and publishes a GitHub Release with
-   a changelog generated from `last_tag..HEAD --no-merges`
+3. After merge, push an annotated tag to trigger the release:
 
-To cut a new release: bump the version on whichever module changed (the
-highest version across all manifests becomes the project version).
+```powershell
+git tag -a v19.0.47.0.0 -m "Release v19.0.47.0.0"
+git push origin v19.0.47.0.0
+```
+
+The `Release` GitHub Actions workflow fires on tags matching
+`v[0-9]+.[0-9]+.[0-9]+.[0-9]+.[0-9]+` and publishes a GitHub Release with
+an auto-generated changelog from `last_tag..HEAD --no-merges`.
+
+> **v20 pilot builds** use the tag format `v20.0.0-beta1` (not the 5-part
+> numeric pattern), so they do NOT trigger the release workflow — they remain
+> branch-only pilot artifacts until `v20 → main` after the pilot.
 
 ## License
 

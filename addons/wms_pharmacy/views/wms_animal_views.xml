@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Extend the wms.animal form view (defined in wms_location) with:
+            1. A "Medication" smart button showing the dispense count.
+            2. A "Medication History" notebook page listing dispense_log_ids.
+        -->
+        <record id="view_wms_animal_form_pharmacy_inherit" model="ir.ui.view">
+            <field name="name">wms.animal.form.pharmacy.inherit</field>
+            <field name="model">wms.animal</field>
+            <field name="inherit_id"
+                   ref="wms_location.view_wms_animal_form"/>
+            <field name="arch" type="xml">
+
+                <!-- Smart button: insert BEFORE the web_ribbon widget -->
+                <xpath expr="//widget[@name='web_ribbon']" position="before">
+                    <div name="button_box" class="oe_button_box">
+                        <button type="object"
+                                name="action_view_dispense_logs"
+                                class="oe_stat_button"
+                                icon="fa-medkit"
+                                invisible="wms_medication_count == 0">
+                            <field name="wms_medication_count"
+                                   widget="statinfo"
+                                   string="Medication"/>
+                        </button>
+                    </div>
+                </xpath>
+
+                <!-- Notebook page: append AFTER the last group in the sheet -->
+                <xpath expr="//sheet//group[last()]" position="after">
+                    <notebook>
+                        <page string="Medication History"
+                              name="wms_medication_history">
+                            <field name="dispense_log_ids"
+                                   readonly="1"
+                                   mode="list">
+                                <list create="false" edit="false">
+                                    <field name="dispense_date"/>
+                                    <field name="product_id"/>
+                                    <field name="lot_id"/>
+                                    <field name="quantity"/>
+                                    <field name="strips_opened"/>
+                                    <field name="dispensed_by"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </xpath>
+
+            </field>
+        </record>
+
+    </data>
+</odoo>

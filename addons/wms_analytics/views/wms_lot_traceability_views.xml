@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #15 — Advanced Traceability: list + search + action + menu. -->
+        <record id="view_wms_lot_traceability_list" model="ir.ui.view">
+            <field name="name">wms.lot.traceability.list</field>
+            <field name="model">wms.lot.traceability</field>
+            <field name="arch" type="xml">
+                <list string="Lot traceability" create="false"
+                      default_order="received_on desc, lot_id desc">
+                    <field name="lot_id"/>
+                    <field name="product_id"/>
+                    <field name="partner_id"/>
+                    <field name="supplier_batch" optional="show"/>
+                    <field name="supplier_invoice" optional="hide"/>
+                    <field name="received_on"/>
+                    <field name="expiration_date" optional="hide"/>
+                    <field name="on_hand"/>
+                    <field name="current_location_id" optional="show"/>
+                    <field name="first_issue_date" optional="show"/>
+                    <field name="animal_id" optional="hide"/>
+                    <field name="returned" optional="hide"/>
+                    <field name="repair_count" optional="show"/>
+                    <field name="lot_state"
+                           decoration-danger="lot_state == 'destroyed'"
+                           decoration-warning="lot_state == 'recalled'"
+                           decoration-info="lot_state == 'quarantine'"
+                           widget="badge"/>
+                    <field name="destroyed" column_invisible="1"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_traceability_search" model="ir.ui.view">
+            <field name="name">wms.lot.traceability.search</field>
+            <field name="model">wms.lot.traceability</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="lot_id"/>
+                    <field name="product_id"/>
+                    <field name="partner_id"/>
+                    <field name="supplier_batch"/>
+                    <field name="animal_id"/>
+                    <filter name="on_hand" string="On hand"
+                            domain="[('on_hand','&gt;',0)]"/>
+                    <filter name="issued" string="Issued"
+                            domain="[('first_issue_date','!=',False)]"/>
+                    <filter name="returned" string="Returned"
+                            domain="[('returned','=',True)]"/>
+                    <filter name="repaired" string="Repaired"
+                            domain="[('repair_count','&gt;',0)]"/>
+                    <separator/>
+                    <filter name="available" string="Available"
+                            domain="[('lot_state','=','available')]"/>
+                    <filter name="quarantine" string="Quarantine"
+                            domain="[('lot_state','=','quarantine')]"/>
+                    <filter name="recalled" string="Recalled"
+                            domain="[('lot_state','=','recalled')]"/>
+                    <filter name="destroyed" string="Destroyed"
+                            domain="[('lot_state','=','destroyed')]"/>
+                    <separator/>
+                    <filter name="group_supplier" string="Supplier"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_state" string="Lot state"
+                            context="{'group_by': 'lot_state'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_traceability" model="ir.actions.act_window">
+            <field name="name">Lot Traceability</field>
+            <field name="res_model">wms.lot.traceability</field>
+            <field name="view_mode">list</field>
+            <field name="search_view_id" ref="view_wms_lot_traceability_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No lots yet</p>
+                <p>Follow each batch end-to-end: which supplier it came from, where it
+                   sits now, who consumed it, whether it was returned or repaired, and
+                   how it ended (recalled / destroyed).</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_lot_traceability"
+                  name="Lot Traceability"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_lot_traceability"
+                  sequence="55"/>
+    </data>
+</odoo>

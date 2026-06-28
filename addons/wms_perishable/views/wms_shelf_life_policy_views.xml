@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- V20-022 — per-kind shelf-life policy table (spec §2.8). -->
+        <record id="view_wms_shelf_life_policy_list" model="ir.ui.view">
+            <field name="name">wms.shelf.life.policy.list</field>
+            <field name="model">wms.shelf.life.policy</field>
+            <field name="arch" type="xml">
+                <list string="Shelf-life policy" editable="bottom">
+                    <field name="product_kind"/>
+                    <field name="total_days"/>
+                    <field name="min_receive_days"/>
+                    <field name="min_issue_days"/>
+                    <field name="active" widget="boolean_toggle"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_shelf_life_policy_form" model="ir.ui.view">
+            <field name="name">wms.shelf.life.policy.form</field>
+            <field name="model">wms.shelf.life.policy</field>
+            <field name="arch" type="xml">
+                <form string="Shelf-life policy">
+                    <sheet>
+                        <group>
+                            <field name="product_kind"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Shelf life (days)">
+                            <field name="total_days"/>
+                            <field name="min_receive_days"/>
+                            <field name="min_issue_days"/>
+                        </group>
+                        <p colspan="2">
+                            A per-product override (on the product form) beats this
+                            kind policy; the global Shelf-life Settings apply only
+                            when neither is set. 0 = fall back to the global setting.
+                        </p>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_shelf_life_policy" model="ir.actions.act_window">
+            <field name="name">Shelf-life Policy</field>
+            <field name="res_model">wms.shelf.life.policy</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Define per-kind shelf-life rules</p>
+                <p>Set the minimum remaining shelf life to receive and to issue each
+                   perishable kind. A product can override these on its own form.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_shelf_life_policy"
+                  name="Shelf-life Policy"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_shelf_life_policy"
+                  groups="wms_location.group_wms_manager"
+                  sequence="50"/>
+    </data>
+</odoo>
