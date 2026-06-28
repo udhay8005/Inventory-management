@@ -10,7 +10,7 @@
 # Created: 2026-06-09
 # Dependencies: product.product, stock.lot, wms.animal, res.users, stock.picking
 
-from odoo import fields, models
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 # Genealogy content that must never change once recorded (the pharmaceutical
@@ -145,8 +145,12 @@ class WmsDispenseLog(models.Model):
             )
         return super().write(vals)
 
-    def unlink(self):
-        """Append-only audit trail: genealogy records cannot be deleted."""
+    @api.ondelete(at_uninstall=False)
+    def _prevent_dispense_log_unlink(self):
+        """Append-only audit trail: genealogy records cannot be deleted. Uses the
+        Odoo-sanctioned @api.ondelete guard (not a raising unlink override, which
+        pylint-odoo's no-raise-unlink forbids); at_uninstall=False still lets the
+        module be uninstalled cleanly."""
         raise UserError(
             "Dispense genealogy records cannot be deleted — they are the "
             "pharmaceutical audit trail."
