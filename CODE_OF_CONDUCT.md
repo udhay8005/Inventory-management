@@ -43,9 +43,9 @@ representing the project in any public space.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behaviour may be
-reported by contacting the project maintainer at
-**office.dakshinvrindavan@gmail.com**. All complaints will be reviewed and
-investigated promptly and fairly.
+reported to the trust's contact inbox at **office.dakshinvrindavan@gmail.com**,
+which is monitored by the project maintainer (**udhay8005**). All complaints
+will be reviewed and investigated promptly and fairly.
 
 Project maintainers have the right and responsibility to remove, edit, or
 reject comments, commits, code, wiki edits, issues, and other contributions
