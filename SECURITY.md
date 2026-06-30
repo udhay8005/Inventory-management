@@ -8,7 +8,8 @@ no SaaS, no multi-tenant deployment, no public bug-bounty programme.
 ## Reporting a vulnerability
 
 If you discover a security issue that could affect this codebase, please email
-**office.dakshinvrindavan@gmail.com** with:
+the trust's security contact at **office.dakshinvrindavan@gmail.com** — monitored
+by the project maintainer (**udhay8005**) — with:
 
 - a brief description of the issue
 - the smallest reproduction you can construct
