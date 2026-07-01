@@ -454,6 +454,23 @@ class WmsAuditLine(models.Model):
         help="Optional comment: 'wrong slot', 'damaged units left "
         "in place', 'expired - moved to trash', etc.",
     )
+    scan_confirm = fields.Char(
+        string="Scan to confirm",
+        help="Optional: scan the product's barcode while counting this line. "
+        "The Scan column turns green when it matches this line's product — a "
+        "cheap guard against counting the wrong look-alike item.",
+    )
+    scan_status = fields.Selection(
+        [
+            ("blank", "Not scanned"),
+            ("match", "Confirmed"),
+            ("mismatch", "Wrong item!"),
+        ],
+        string="Scan",
+        compute="_compute_scan_status",
+        help="Confirmed = the scanned barcode matches this line's product; "
+        "Wrong item = it doesn't (or is unknown). Advisory — never blocks.",
+    )
     state = fields.Selection(
         related="audit_id.state",
         store=False,
@@ -463,6 +480,27 @@ class WmsAuditLine(models.Model):
     def _compute_variance(self):
         for line in self:
             line.variance = line.counted_qty - line.expected_qty
+
+    @api.depends("scan_confirm", "product_id")
+    def _compute_scan_status(self):
+        """Resolve the scanned code against THIS line's product. Matches the
+        product barcode / SKU directly, and (when wms_barcode is installed —
+        no hard dependency) a carton/alias code via its resolver. Never raises:
+        an error resolving a stray scan must not break the count."""
+        for line in self:
+            code = (line.scan_confirm or "").strip()
+            if not code:
+                line.scan_status = "blank"
+                continue
+            prod = line.product_id
+            hit = code in (prod.barcode or "", prod.default_code or "")
+            if not hit and "wms.barcode.alias" in line.env:
+                try:
+                    info = line.env["wms.barcode.alias"].resolve(code)
+                    hit = bool(info.get("product")) and info["product"].id == prod.id
+                except Exception:  # noqa: BLE001
+                    hit = False
+            line.scan_status = "match" if hit else "mismatch"
 
     def write(self, vals):
         """Freeze line counts once the parent audit is finalised.
