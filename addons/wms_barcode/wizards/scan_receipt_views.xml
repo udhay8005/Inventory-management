@@ -28,6 +28,9 @@
                             <div class="col-12 col-md-4">
                                 <field name="is_return" widget="boolean_toggle"/>
                             </div>
+                            <div class="col-12 col-md-4" invisible="not is_return">
+                                <field name="return_condition"/>
+                            </div>
                         </div>
                         <div class="row mt-2">
                             <div class="col-12">

@@ -46,6 +46,18 @@ class WmsScanReceipt(models.TransientModel):
         "borrowed and brought back. Products whose WMS Kind is NOT "
         "returnable (Fluids, Consumables) will be refused at validate.",
     )
+    return_condition = fields.Selection(
+        [
+            ("good", "Good"),
+            ("damaged", "Damaged"),
+            ("needs_repair", "Needs repair"),
+        ],
+        string="Condition on return",
+        default="good",
+        help="What state the item came back in. 'Damaged' / 'Needs repair' "
+        "flags it to a Manager to raise a Damage or Repair record. Recorded "
+        "on the original issue so its history shows how it came back.",
+    )
 
     # ---- Quality check ---------------------------------------------------
     # This trust runs internal stock — products aren't sold, no invoices
@@ -399,22 +411,66 @@ class WmsScanReceipt(models.TransientModel):
                 limit=1,
             )
             if match:
-                match.wms_returned = True
+                condition = self.return_condition or "good"
+                match.write(
+                    {
+                        "wms_returned": True,
+                        "wms_return_condition": condition,
+                        "wms_actual_return_date": fields.Date.today(),
+                    }
+                )
                 cleared |= match
+                cond_label = dict(self._fields["return_condition"].selection).get(
+                    condition, condition
+                )
                 match.message_post(
                     body=Markup(
-                        "<p><b>Returned.</b> %s came back via Scan Return "
+                        "<p><b>Returned (%s).</b> %s came back via Scan Return "
                         "%s — marked returned, dropped off the Returns-due "
                         "report.</p>"
                     )
                     % (
+                        cond_label,
                         product.display_name,
                         self.picking_id.name or self.last_scan or "",
                     ),
                     subject="Return matched",
                     message_type="notification",
                 )
+                if condition in ("damaged", "needs_repair"):
+                    self._flag_return_for_repair(product, match, cond_label)
         return cleared
+
+    def _flag_return_for_repair(self, product, match, cond_label):
+        """A returnable came back damaged / needing repair — route it to the
+        Managers so they raise a Damage or Repair record. Best-effort: never
+        blocks the return. wms_barcode does not depend on wms_reports, so the
+        notify helper is imported lazily and a missing addon degrades to a
+        chatter note on the matched issue picking."""
+        self.ensure_one()
+        body = Markup(
+            "<p><b>Returned item needs attention (%(cond)s).</b></p>"
+            "<p><b>%(product)s</b> came back via Scan Return in <b>%(cond)s</b> "
+            "condition (original issue: %(issue)s).</p>"
+            "<p>Please raise a <i>Damage</i> or <i>Repair</i> record from "
+            "WMS &#8594; Operations so it enters the repair pipeline.</p>"
+        ) % {
+            "cond": cond_label,
+            "product": product.display_name,
+            "issue": match.name or "",
+        }
+        try:
+            from odoo.addons.wms_reports.models.wms_notify import notify_wms_managers
+
+            notify_wms_managers(
+                self.env,
+                body,
+                "WMS — returned item needs repair: %s" % product.display_name,
+            )
+        except ImportError:
+            match.message_post(
+                body=body, subject="Return needs repair", message_type="notification"
+            )
 
     def _open_picking(self):
         """Open the receipt this scan created (also the no-op target a
