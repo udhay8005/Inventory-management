@@ -10,13 +10,17 @@ __pycache__/
 !.vscode/extensions.json
 backups/
 *.dump
+
+#agent
 .claude/
+CLAUDE.md
 
 # Native-install artifacts (created by scripts/install-native.ps1)
 .odoo/
 .venv/
 .runtime/
 config/odoo.native.conf
+docs/
 
 # Google Drive OAuth token blob (created by scripts/setup-gdrive-auth.ps1)
 config/gdrive-token.json.dpapi
