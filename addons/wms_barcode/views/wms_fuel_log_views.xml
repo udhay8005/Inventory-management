@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_wms_fuel_log_list" model="ir.ui.view">
+        <field name="name">wms.fuel.log.list</field>
+        <field name="model">wms.fuel.log</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'cancelled'"
+                  decoration-success="state == 'confirmed'">
+                <field name="name"/>
+                <field name="fill_datetime"/>
+                <field name="product_id"/>
+                <field name="quantity"/>
+                <field name="asset"/>
+                <field name="asset_name"/>
+                <field name="meter_type"/>
+                <field name="meter_reading" optional="show"/>
+                <field name="filled_by"/>
+                <field name="wms_storekeeper_id" optional="show"/>
+                <field name="source_slot_id" optional="hide"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_wms_fuel_log_form" model="ir.ui.view">
+        <field name="name">wms.fuel.log.form</field>
+        <field name="model">wms.fuel.log</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_confirm" string="Confirm" type="object"
+                            class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_cancel" string="Cancel" type="object"
+                            invisible="state != 'draft'"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="What was filled">
+                            <field name="product_id" readonly="state != 'draft'"/>
+                            <field name="quantity" readonly="state != 'draft'"/>
+                            <field name="source_slot_id" readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Into which equipment">
+                            <field name="asset" readonly="state != 'draft'"/>
+                            <field name="asset_name" readonly="state != 'draft'"/>
+                            <field name="meter_type" readonly="state != 'draft'"/>
+                            <field name="meter_reading" readonly="state != 'draft'"
+                                   invisible="meter_type == 'none'"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Audit">
+                            <field name="filled_by" readonly="state != 'draft'"/>
+                            <field name="wms_storekeeper_id" readonly="state != 'draft'"/>
+                            <field name="fill_datetime" readonly="state != 'draft'"/>
+                        </group>
+                        <group string="Result">
+                            <field name="fuel_value" invisible="state != 'confirmed'"/>
+                            <field name="picking_id" invisible="not picking_id"/>
+                            <field name="warehouse_id" invisible="1"/>
+                        </group>
+                    </group>
+                    <field name="note" placeholder="Notes (optional)..."/>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_wms_fuel_log" model="ir.actions.act_window">
+        <field name="name">Fuel Log</field>
+        <field name="res_model">wms.fuel.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No fuel logged yet.</p>
+            <p>
+                Record generator / vehicle / pump refuelling here. Each entry
+                takes the fuel out of its tank slot (so stock drops in real time)
+                and notes who filled it, when, into which equipment, and the meter
+                reading.
+            </p>
+        </field>
+    </record>
+</odoo>
