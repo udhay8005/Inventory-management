@@ -468,7 +468,7 @@ class WmsScanIssue(models.TransientModel):
             threshold = float(
                 self.env["ir.config_parameter"]
                 .sudo()
-                .get_param("wms_barcode.high_value_threshold", "5000")
+                .get_param("wms_barcode.high_value_threshold", "20000")
                 or 0
             )
         except (TypeError, ValueError):
