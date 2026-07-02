@@ -76,6 +76,12 @@
                                         <field name="product_id" readonly="1"/>
                                         <field name="expected_qty" readonly="1"/>
                                         <field name="counted_qty"/>
+                                        <field name="scan_confirm" optional="show"
+                                               placeholder="scan to confirm"/>
+                                        <field name="scan_status" optional="show"
+                                               decoration-success="scan_status == 'match'"
+                                               decoration-danger="scan_status == 'mismatch'"
+                                               decoration-muted="scan_status == 'blank'"/>
                                         <field name="variance" readonly="1"/>
                                         <field name="note"/>
                                         <field name="state" invisible="1"/>

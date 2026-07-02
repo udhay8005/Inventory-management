@@ -63,6 +63,36 @@ class TestLotReceipt(TransactionCase):
         wiz.action_validate()
         return wiz
 
+    def test_barcode_tier_advice_on_multi_expiry_delivery(self):
+        """Receiving one product across two batches with different expiry posts
+        a barcode-tier advice note on the receipt (label per batch)."""
+        wiz = self.env["wms.scan.receipt"].create(
+            {"warehouse_id": self.wh.id, "storekeeper_id": self.keeper.id, "qc_passed": True}
+        )
+        for batch, expiry in (("LR-A", "2027-01-31"), ("LR-B", "2028-06-30")):
+            self.env["wms.scan.receipt.line"].create(
+                {
+                    "wizard_id": wiz.id,
+                    "product_id": self.med.id,
+                    "quantity": 5.0,
+                    "location_dest_id": self.floor.id,
+                    "wms_batch": batch,
+                    "wms_expiry": expiry,
+                }
+            )
+        wiz.action_validate()
+        advice = wiz.picking_id.message_ids.filtered(
+            lambda m: (m.subject or "") == "Barcode tier advice"
+        )
+        self.assertTrue(advice, "a multi-expiry delivery should post barcode-tier advice")
+
+    def test_no_barcode_advice_for_single_expiry(self):
+        wiz = self._receipt(5.0, batch="LR-SINGLE", expiry="2027-05-31")
+        advice = wiz.picking_id.message_ids.filtered(
+            lambda m: (m.subject or "") == "Barcode tier advice"
+        )
+        self.assertFalse(advice, "a single-batch delivery must NOT post the advice note")
+
     def test_perishable_is_lot_tracked_on_create(self):
         self.assertEqual(self.med.tracking, "lot")
         self.assertTrue(self.med.product_tmpl_id.use_expiration_date)

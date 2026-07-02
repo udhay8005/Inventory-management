@@ -184,19 +184,44 @@ class TestReturnableItems(TransactionCase):
     # ------------------------------------------------------------------
     # Scan Return marking (wms_barcode)
     # ------------------------------------------------------------------
-    def _return(self, barcode, qty=1.0):
+    def _return(self, barcode, qty=1.0, condition="good"):
         wiz = self.env["wms.scan.receipt"].create(
             {
                 "warehouse_id": self.wh.id,
                 "is_return": True,
                 "qc_passed": True,
                 "storekeeper_id": self.keeper.id,
+                "return_condition": condition,
             }
         )
         wiz.last_scan = barcode
         wiz.action_process_scan()
         wiz.action_validate()
         return wiz.picking_id
+
+    def test_scan_return_records_condition_and_date(self):
+        """Scan Return records HOW the item came back (condition) and WHEN
+        (actual return date) on the original issue, not just a boolean."""
+        issue = self._issue("RETTOOL001")
+        self._return("RETTOOL001", condition="good")
+        issue.invalidate_recordset(
+            ["wms_returned", "wms_return_condition", "wms_actual_return_date"]
+        )
+        self.assertTrue(issue.wms_returned)
+        self.assertEqual(issue.wms_return_condition, "good")
+        self.assertEqual(issue.wms_actual_return_date, date.today())
+
+    def test_damaged_return_records_condition(self):
+        """A damaged / needs-repair return records the condition on the issue
+        (and routes to managers — best-effort, must not raise)."""
+        issue = self._issue("RETTOOL001")
+        self._return("RETTOOL001", condition="damaged")
+        issue.invalidate_recordset(["wms_return_condition"])
+        self.assertEqual(
+            issue.wms_return_condition,
+            "damaged",
+            "a damaged return must record the condition on the issue picking",
+        )
 
     def test_scan_return_marks_matched_picking(self):
         issue = self._issue("RETTOOL001")

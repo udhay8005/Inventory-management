@@ -132,6 +132,32 @@ class StockPicking(models.Model):
         "picking shows on the Returns-due report and triggers the overdue "
         "alert.",
     )
+    # F3+ — how the returnable came back + when. Set by Scan Return alongside
+    # wms_returned. 'damaged' / 'needs_repair' route the item to a Manager to
+    # file a Damage / Repair record (best-effort notify — see
+    # scan_receipt._mark_outstanding_returns).
+    wms_return_condition = fields.Selection(
+        [
+            ("good", "Good"),
+            ("damaged", "Damaged"),
+            ("needs_repair", "Needs repair"),
+            ("lost", "Lost"),
+            ("fully_used", "Fully used"),
+        ],
+        string="Return condition",
+        index=True,
+        tracking=True,
+        help="How the returnable item came back, captured by Scan Return. "
+        "Damaged / Needs-repair returns are flagged to a Manager to raise a "
+        "Damage or Repair record.",
+    )
+    wms_actual_return_date = fields.Date(
+        string="Actual return",
+        index=True,
+        tracking=True,
+        help="Date the issued returnable actually came back (set by Scan "
+        "Return). Compare with Expected return to see whether it was on time.",
+    )
     wms_is_scan_issue = fields.Boolean(
         string="Scan Issue picking",
         default=False,

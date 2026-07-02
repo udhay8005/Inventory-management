@@ -21,11 +21,14 @@
 
         <!--
             INR value above which an issue needs a Manager's approval (F5).
-            float()-parsed with try/except in the gate — a non-numeric value
-            disables the high-value check rather than crashing.
+            Spec: issues over Rs 20,000 require approval before they leave the
+            store. float()-parsed with try/except in the gate — a non-numeric
+            value disables the high-value check rather than crashing. noupdate
+            keeps an Admin's tuned value on upgrade; migration 19.0.1.49.0 bumps
+            only an untouched old '5000' default up to '20000'.
         -->
         <function model="ir.config_parameter" name="set_param"
-                  eval="['wms_barcode.high_value_threshold', '5000']"/>
+                  eval="['wms_barcode.high_value_threshold', '20000']"/>
 
         <!--
             Sequence for the held-issue approval name (APR-00001, ...). Kept

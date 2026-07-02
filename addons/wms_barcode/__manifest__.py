@@ -1,6 +1,6 @@
 {
     "name": "WMS — Barcode scan & print",
-    "version": "19.0.1.48.0",
+    "version": "19.0.1.51.0",
     "summary": "Receive/Issue scan wizards, carton aliases, label printing.",
     "depends": ["wms_location", "wms_fifo", "stock", "barcodes", "mail"],
     "author": "WMS",
@@ -13,6 +13,8 @@
         "security/ir.model.access.csv",
         # Approval-gate params + the held-issue sequence (F4 + F5).
         "data/wms_approval_params.xml",
+        # Fuel-log sequence.
+        "data/wms_fuel_data.xml",
         # Direct-print: seed the thermal printer profile (noupdate).
         "data/wms_label_printer_data.xml",
         "views/wms_barcode_alias_views.xml",
@@ -28,6 +30,7 @@
         "wizards/wms_product_create_views.xml",
         "reports/thermal_label_report.xml",
         "reports/thermal_label_template.xml",
+        "views/wms_fuel_log_views.xml",
         "views/menus.xml",
     ],
     "assets": {

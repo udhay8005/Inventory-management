@@ -1,7 +1,9 @@
 from . import (
     test_acl_capability,
     test_alert_hardening,
+    test_attention_alert,
     test_audit_reconcile,
+    test_audit_scan_verify,
     test_backup_audit,
     test_cert_label_pdf,
     test_cert_menu_smoke,
