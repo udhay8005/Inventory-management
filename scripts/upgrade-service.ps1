@@ -23,7 +23,10 @@
 .PARAMETER ServiceName  Default 'Odoo-WMS'.
 .PARAMETER DbName       Default 'wms'.
 .PARAMETER Port         Default 8069.
-.PARAMETER Modules      Comma-separated modules to upgrade. Default: the WMS set.
+.PARAMETER Modules      Comma-separated modules to upgrade/install. Default: the WMS set.
+.PARAMETER Install      Install (-i) the modules instead of upgrading (-u). Use for a
+                        NOT-yet-installed module - it creates the module's tables,
+                        menus and ACLs. Safe to re-run (a no-op on installed modules).
 .PARAMETER SkipBackup   Skip the pre-upgrade backup (NOT recommended).
 .PARAMETER HealthToken  Value of ir.config_parameter wms_reports.health_token, if
                         one is configured. Passed to /wms/health so the poll can
@@ -35,6 +38,9 @@
     .\scripts\upgrade-service.ps1
 .EXAMPLE
     .\scripts\upgrade-service.ps1 -Modules wms_barcode,wms_reports
+.EXAMPLE
+    # Install a not-yet-installed module (e.g. a Wave rollout):
+    .\scripts\upgrade-service.ps1 -Modules wms_perishable,wms_analytics -Install
 #>
 [CmdletBinding()]
 param(
@@ -42,6 +48,7 @@ param(
     [string]$DbName = 'wms',
     [int]$Port = 8069,
     [string]$Modules = 'wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training',
+    [switch]$Install,
     [switch]$SkipBackup,
     [string]$HealthToken = ''
 )
@@ -59,6 +66,7 @@ if (-not $isAdmin) {
         '-ServiceName', $ServiceName, '-DbName', $DbName, '-Port', "$Port", '-Modules', $Modules
     )
     if ($SkipBackup) { $relaunch += '-SkipBackup' }
+    if ($Install) { $relaunch += '-Install' }
     if ($HealthToken) { $relaunch += @('-HealthToken', $HealthToken) }
     Start-Process powershell.exe -Verb RunAs -ArgumentList $relaunch
     return
@@ -100,12 +108,20 @@ if ($svc) {
     Write-Host "Service '$ServiceName' not installed; upgrading the DB directly (start Odoo manually afterwards)." -ForegroundColor Yellow
 }
 
-# --- 3. run the upgrade ---------------------------------------------------
-Write-Host "Upgrading modules [$Modules] on '$DbName'..." -ForegroundColor Cyan
-& $VenvPy $OdooBin -c $ConfPath -d $DbName -u $Modules --stop-after-init
+# --- 3. run the upgrade / install -----------------------------------------
+# -Install (-i) initialises a NOT-yet-installed module (creates its tables,
+# menus, ACLs); the default (-u) upgrades already-installed modules. Odoo
+# treats -i on an already-installed module as a no-op, so -Install is safe to
+# re-run. Either way the service is stopped first, so this never races a live
+# process against the DB (the failure mode of a manual `odoo-bin -i` while the
+# service is up).
+$odooFlag = if ($Install) { '-i' } else { '-u' }
+$actionWord = if ($Install) { 'Installing' } else { 'Upgrading' }
+Write-Host "$actionWord modules [$Modules] on '$DbName'..." -ForegroundColor Cyan
+& $VenvPy $OdooBin -c $ConfPath -d $DbName $odooFlag $Modules --stop-after-init
 $upgradeExit = $LASTEXITCODE
 if ($upgradeExit -ne 0) {
-    Write-Host "Upgrade FAILED (exit $upgradeExit). Service is stopped." -ForegroundColor Red
+    Write-Host "$actionWord FAILED (exit $upgradeExit). Service is stopped." -ForegroundColor Red
     if (-not $SkipBackup) {
         Write-Host "Restore the pre-upgrade backup via scripts\restore-drill.ps1 / your DR runbook if needed." -ForegroundColor Yellow
     }
