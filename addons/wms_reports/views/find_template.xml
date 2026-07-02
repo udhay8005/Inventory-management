@@ -89,8 +89,12 @@
                                     <div style="margin-top:8px">
                                         <t t-if="p['locations']">
                                             <t t-foreach="p['locations']" t-as="loc">
-                                                <div class="loc"><span t-esc="loc[0]"/>
-                                                    <b t-esc="loc[1]"/></div>
+                                                <div class="loc"><span t-esc="loc['location']"/>
+                                                    <b t-esc="loc['qty']"/>
+                                                    <t t-if="loc['batch']"> &#183; batch <span t-esc="loc['batch']"/></t>
+                                                    <t t-if="loc['expiry']"> &#183; exp <span t-esc="loc['expiry']"/></t>
+                                                    <t t-if="loc['status']"> &#183; <span t-esc="loc['status']"/></t>
+                                                </div>
                                             </t>
                                         </t>
                                         <t t-else="">

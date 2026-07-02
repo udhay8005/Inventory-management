@@ -335,6 +335,23 @@ class WmsRackGridController(http.Controller):
         lot_stocks = env["stock.warehouse"].sudo().search([]).mapped("lot_stock_id")
         Quant = env["stock.quant"].sudo()
         low_ids = set(sc("wms.forecast", [("reorder_qty", ">", 0)]).mapped("product_id").ids)
+
+        def loc_row(g):
+            """Where + how much + which batch / expiry / status, in one row.
+            Expiry (product_expiry) and lot status (wms_perishable) are
+            getattr-guarded so the find page still renders on a minimal install
+            that lacks those addons."""
+            lot = g.lot_id
+            expiry = getattr(lot, "expiration_date", False) if lot else False
+            status = getattr(lot, "wms_lot_state", "") if lot else ""
+            return {
+                "location": g.location_id.display_name,
+                "qty": _fmt_qty(g.quantity),
+                "batch": lot.name if lot else "",
+                "expiry": expiry.date().isoformat() if expiry else "",
+                "status": status.replace("_", " ").title() if status else "",
+            }
+
         rows = []
         for p in products:
             quants = Quant.search(
@@ -352,10 +369,7 @@ class WmsRackGridController(http.Controller):
                     "total": _fmt_qty(sum(quants.mapped("quantity"))),
                     "uom": p.uom_id.name or "",
                     "low": p.id in low_ids,
-                    "locations": [
-                        (loc.display_name, _fmt_qty(qty))
-                        for loc, qty in ((g.location_id, g.quantity) for g in quants)
-                    ],
+                    "locations": [loc_row(g) for g in quants],
                 }
             )
         ctx["mode"] = "product" if rows else "noresult"
