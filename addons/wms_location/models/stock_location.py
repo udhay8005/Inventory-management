@@ -432,6 +432,39 @@ class StockLocation(models.Model):
                     % {"name": loc.complete_name or loc.display_name}
                 )
 
+    def unlink(self):
+        """Delete a whole rack / compartment / zone in one action by cascading
+        the delete down to its EMPTY sub-locations, deepest first.
+
+        The brief's "Delete Rack" was otherwise a chore — delete every slot,
+        then every compartment, then the rack. Here, deleting a container first
+        removes its descendants (deepest level first, so a restrict FK on
+        location_id never dangles), then itself. The per-location guard
+        (_wms_block_delete_when_used) still runs on EVERY one of them, so the
+        whole delete is refused — and rolled back as one transaction — the moment
+        any slot holds stock or has move history (those must be archived, not
+        deleted). Leaf locations (slot / floor) and non-WMS locations keep the
+        plain behaviour.
+        """
+        containers = self.filtered(
+            lambda loc: loc.wms_location_type in ("zone", "rack", "compartment")
+        )
+        if not containers:
+            return super().unlink()
+        # child_of includes the containers themselves, so this is the full
+        # subtree of everything being removed.
+        subtree = self | self.search([("id", "child_of", containers.ids)])
+        # Deepest first: parent_path ('1/5/12/') grows with depth, so a child is
+        # always unlinked before its parent — no dangling location_id, and by the
+        # time a parent is reached its children are already gone (so the guard's
+        # "has sub-locations" check passes naturally). Delete one level/record at
+        # a time so the ondelete stock/history guard runs on each.
+        ordered = subtree.sorted(key=lambda loc: len(loc.parent_path or ""), reverse=True)
+        result = True
+        for loc in ordered:
+            result = super(StockLocation, loc).unlink()
+        return result
+
 
 def _shelf_label(top, bottom):
     """Format a shelf coordinate range as SH01 or SH01-03."""
