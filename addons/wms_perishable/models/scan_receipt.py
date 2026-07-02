@@ -12,6 +12,8 @@ This _inherit-extends the frozen v19 wizard: we only PRE-SET line.lot_id before
 the v19 action_validate runs, so its existing lot-carrying loop does the rest.
 """
 
+from markupsafe import Markup, escape
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -57,7 +59,48 @@ class WmsScanReceipt(models.TransientModel):
         # V20-019 — fire the 'received' lifecycle hook for each received batch.
         for line in self.line_ids.filtered("lot_id"):
             line.lot_id._wms_lifecycle_hook("received", line)
+        self._wms_barcode_tier_advice()
         return res
+
+    def _wms_barcode_tier_advice(self):
+        """Lightweight barcode-tier advisor (the owner's barcode decision tree,
+        as an assist rather than an auto-engine): when a product is received
+        across MORE THAN ONE batch with DIFFERENT expiry dates in this delivery,
+        post a chatter note on the receipt reminding the keeper to label PER
+        BATCH — so each batch scans on its own and FEFO rotates the earliest
+        expiry first. Advisory only; never blocks the receipt."""
+        self.ensure_one()
+        picking = self.picking_id
+        if not picking:
+            return
+        by_product = {}
+        for line in self.line_ids.filtered("lot_id"):
+            exp = line.lot_id.expiration_date
+            by_product.setdefault(line.product_id, set()).add(exp.date() if exp else None)
+        multi = [
+            (p, len([e for e in exps if e]))
+            for p, exps in by_product.items()
+            if len([e for e in exps if e]) > 1
+        ]
+        if not multi:
+            return
+        rows = "".join(
+            "<li><b>%s</b> — %d different expiry dates</li>" % (escape(p.display_name), n)
+            for p, n in multi
+        )
+        picking.message_post(
+            body=Markup(
+                "<p><b>Barcode tip.</b> This delivery has product(s) received in "
+                "several batches with <b>different expiry dates</b>:</p><ul>%s</ul>"
+                "<p>Print a label <b>per batch</b> (the product label, or "
+                "Pharmacy &#8594; Packaging Barcodes for strips) so each batch "
+                "scans separately and FEFO issues the earliest-expiry stock "
+                "first.</p>"
+            )
+            % Markup(rows),
+            subject="Barcode tier advice",
+            message_type="notification",
+        )
 
     def _wms_min_receive_days(self):
         """Global fallback minimum shelf life (days) to receive a perishable
