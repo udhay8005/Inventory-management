@@ -12,11 +12,7 @@ from odoo.tests import TransactionCase, tagged
 @tagged("post_install", "-at_install")
 class TestApprovalThresholdDefault(TransactionCase):
     def test_shipped_default_is_20000(self):
-        value = (
-            self.env["ir.config_parameter"]
-            .sudo()
-            .get_param("wms_barcode.high_value_threshold")
-        )
+        value = self.env["ir.config_parameter"].sudo().get_param("wms_barcode.high_value_threshold")
         self.assertEqual(
             value,
             "20000",

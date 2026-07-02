@@ -89,9 +89,7 @@ class WmsStockAlert(models.AbstractModel):
 
         # 2. Dead stock — products the forecast flagged as not moving.
         if "wms.forecast" in self.env:
-            dead = (
-                self.env["wms.forecast"].sudo().search_count([("velocity_class", "=", "dead")])
-            )
+            dead = self.env["wms.forecast"].sudo().search_count([("velocity_class", "=", "dead")])
             if dead:
                 lines.append(
                     "<li><b>%d dead-stock product(s)</b> — no recent movement.</li>" % dead

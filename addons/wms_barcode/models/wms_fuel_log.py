@@ -1,5 +1,4 @@
 from markupsafe import Markup
-
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError
 
@@ -42,8 +41,7 @@ class WmsFuelLog(models.Model):
         required=True,
         default=0.0,
         tracking=True,
-        help="How much fuel went into the equipment, in the product's unit "
-        "(usually litres).",
+        help="How much fuel went into the equipment, in the product's unit " "(usually litres).",
     )
     _quantity_positive = models.Constraint(
         "CHECK(quantity > 0)",
@@ -156,9 +154,7 @@ class WmsFuelLog(models.Model):
     def create(self, vals_list):
         for vals in vals_list:
             if vals.get("name", "New") == "New":
-                vals["name"] = (
-                    self.env["ir.sequence"].next_by_code("wms.fuel.log") or "FUEL/0001"
-                )
+                vals["name"] = self.env["ir.sequence"].next_by_code("wms.fuel.log") or "FUEL/0001"
         return super().create(vals_list)
 
     @api.constrains("product_id", "quantity", "source_slot_id", "state")
@@ -197,12 +193,8 @@ class WmsFuelLog(models.Model):
         """Consumed fuel goes to the trust's 'used' location (same default as
         Scan Issue), falling back to the customer location if the WMS seed
         hasn't loaded."""
-        dest = self.env.ref(
-            "wms_location.stock_location_trust_use", raise_if_not_found=False
-        )
-        return dest or self.env.ref(
-            "stock.stock_location_customers", raise_if_not_found=False
-        )
+        dest = self.env.ref("wms_location.stock_location_trust_use", raise_if_not_found=False)
+        return dest or self.env.ref("stock.stock_location_customers", raise_if_not_found=False)
 
     def action_confirm(self):
         for rec in self:
@@ -216,15 +208,11 @@ class WmsFuelLog(models.Model):
             if rec.meter_type != "none" and not rec.meter_reading:
                 missing.append("Meter reading")
             if missing:
-                raise UserError(
-                    "Fill in %s before confirming this fuel log." % ", ".join(missing)
-                )
+                raise UserError("Fill in %s before confirming this fuel log." % ", ".join(missing))
 
             destination = rec._issue_destination()
             if not destination:
-                raise UserError(
-                    "No consumption / usage location is configured to record fuel use."
-                )
+                raise UserError("No consumption / usage location is configured to record fuel use.")
             picking_type = rec.warehouse_id.int_type_id
             if not picking_type:
                 raise UserError(
@@ -245,7 +233,8 @@ class WmsFuelLog(models.Model):
             )
             move = self.env["stock.move"].create(
                 {
-                    "description_picking": "Fuel: %s -> %s" % (
+                    "description_picking": "Fuel: %s -> %s"
+                    % (
                         rec.product_id.display_name,
                         asset_label,
                     ),
@@ -275,8 +264,7 @@ class WmsFuelLog(models.Model):
                 {
                     "state": "confirmed",
                     "picking_id": picking.id,
-                    "fuel_value": (rec.quantity or 0.0)
-                    * (rec.product_id.standard_price or 0.0),
+                    "fuel_value": (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0),
                 }
             )
 

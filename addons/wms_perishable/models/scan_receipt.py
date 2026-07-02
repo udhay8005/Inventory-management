@@ -13,7 +13,6 @@ the v19 action_validate runs, so its existing lot-carrying loop does the rest.
 """
 
 from markupsafe import Markup, escape
-
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 

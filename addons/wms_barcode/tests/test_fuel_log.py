@@ -10,11 +10,10 @@ Covers the operational contract:
   * a confirmed log is frozen against a non-manager keeper.
 """
 
-from psycopg2 import IntegrityError
-
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import TransactionCase, tagged
 from odoo.tools import mute_logger
+from psycopg2 import IntegrityError
 
 
 @tagged("post_install", "-at_install", "wms", "wms_fuel")
@@ -72,7 +71,9 @@ class TestFuelLog(TransactionCase):
         self.assertTrue(log.picking_id, "confirm creates a stock picking")
         self.assertEqual(log.picking_id.state, "done")
         self.assertAlmostEqual(
-            self._on_hand(), start - 20.0, places=2,
+            self._on_hand(),
+            start - 20.0,
+            places=2,
             msg="diesel stock must drop by the filled quantity",
         )
         self.assertAlmostEqual(log.fuel_value, 20.0 * 90.0, places=2)
