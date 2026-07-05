@@ -112,7 +112,17 @@ class WmsForecastHistory(models.Model):
     _description = "Forecast training snapshot"
     _order = "trained_at desc"
 
-    product_id = fields.Many2one("product.product", required=True, index=True)
+    product_id = fields.Many2one(
+        "product.product",
+        required=True,
+        index=True,
+        # Training snapshots are regenerable analytics, NOT an audit trail, so
+        # they must not block deleting an otherwise-unused product. Without this
+        # the FK defaults to RESTRICT and an admin cannot remove a test/spare
+        # product that merely accrued a few forecast rows. Real operational
+        # history (stock.move / quants) still blocks deletion as it should.
+        ondelete="cascade",
+    )
     trained_at = fields.Datetime(default=fields.Datetime.now, index=True)
     model_name = fields.Char()
     predicted_qty = fields.Float()
