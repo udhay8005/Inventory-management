@@ -18,6 +18,7 @@ from . import (
     test_receipt_lot,
     test_receipt_photo,
     test_returnable_items,
+    test_scan_return_guard,
     test_undo,
     test_uom_by_kind,
 )

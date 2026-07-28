@@ -25,6 +25,7 @@ from . import (
     test_rack_grid,
     test_returns_due,
     test_self_diagnostics,
+    test_shelf_card,
     test_value_dimensions,
     test_value_reports,
 )
