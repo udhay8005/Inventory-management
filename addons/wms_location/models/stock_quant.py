@@ -153,3 +153,38 @@ class StockQuant(models.Model):
                 )
             )
         return self.sorted(key=lambda q: (q.in_date or q.create_date, q.id))
+
+    # ---- Negative-slot guard (UAT R3) -----------------------------------
+    # A manual Internal Transfer happily validated 10 units out of a slot
+    # holding 4, leaving the slot at -6 "on hand" — silent phantom-negative
+    # stock (seen live: a slot at -2 after a walkthrough transfer). Scan
+    # flows reserve properly and can't do this; the raw transfer screen can.
+    # Physical shelves can't hold negative stock, so refuse the write.
+    #
+    # Scoped tightly to WMS storage leaves (slot / floor, internal): staging
+    # locations (trust-use, Damage, Repair, Inventory adjustment, Vendors)
+    # keep Odoo's native permissive behaviour, and data-repair scripts can
+    # bypass with context wms_allow_negative=True.
+    @api.constrains("quantity")
+    def _check_wms_slot_not_negative(self):
+        if self.env.context.get("wms_allow_negative"):
+            return
+        for quant in self:
+            loc = quant.location_id
+            if (
+                quant.quantity < -1e-5
+                and loc.usage == "internal"
+                and loc.wms_location_type in ("slot", "floor")
+            ):
+                raise ValidationError(
+                    "This would leave %(loc)s at %(qty)g × %(product)s — a "
+                    "physical shelf can't hold negative stock. The slot only "
+                    "has what it has: lower the quantity, pick from the slot "
+                    "that actually holds the stock, or correct the count "
+                    "first with an Inventory audit."
+                    % {
+                        "loc": loc.display_name,
+                        "qty": quant.quantity,
+                        "product": quant.product_id.display_name,
+                    }
+                )

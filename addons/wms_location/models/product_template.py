@@ -690,6 +690,14 @@ class ProductTemplate(models.Model):
                 seen_skus.add(code)
             if kind and "sale_ok" not in vals:
                 vals["sale_ok"] = False
+            # UAT finding: Odoo 19 defaults new goods to NOT tracking
+            # inventory, so a WMS product created without ticking "Track
+            # Inventory" silently couldn't hold stock or be scanned. Every
+            # WMS-kind good is warehouse stock by definition — default the
+            # flag ON (explicit caller value always wins; services/combos
+            # untouched).
+            if kind and "is_storable" not in vals and vals.get("type", "consu") == "consu":
+                vals["is_storable"] = True
             # Seed the unit of measure from the kind ONLY when the
             # caller left it blank (mirrors how default_code above is
             # only auto-filled when empty). A non-Units category cannot
@@ -1154,10 +1162,22 @@ class ProductTemplate(models.Model):
             }
             business = tmpl._wms_compose_business_sku(vals)
             if not business:
-                raise UserError(
-                    _("'%s' needs at least a Kind, Family and Brand to build a " "structured SKU.")
-                    % tmpl.display_name
-                )
+                # UAT finding: demanding Family+Brand stranded products whose
+                # Kind was set AFTER the first save (the auto-SKU only runs at
+                # create) with NO SKU and NO barcode at all. Fall back to the
+                # same per-kind KIND-NNNNN sequence the create path uses — a
+                # plain bolt doesn't need a Family/Brand to earn a scannable
+                # code. Only a missing Kind still blocks (nothing to prefix).
+                if not tmpl.wms_product_kind:
+                    raise UserError(
+                        _("'%s' needs at least a WMS Kind to build an SKU.") % tmpl.display_name
+                    )
+                seq_code = KIND_SEQ_CODE.get(tmpl.wms_product_kind)
+                business = seq_code and self.env["ir.sequence"].next_by_code(seq_code)
+                if not business:
+                    raise UserError(
+                        _("No SKU sequence is configured for kind '%s'.") % tmpl.wms_product_kind
+                    )
             tmpl._wms_block_sku_collision(business, ignore_tmpl_ids=tmpl.ids)
             tmpl.default_code = business
             # Re-sync the Code128 barcode (= SKU). If another product already
@@ -1179,6 +1199,14 @@ class ProductTemplate(models.Model):
                     )
                 variant.barcode = business
         return True
+
+    @api.onchange("wms_product_kind")
+    def _onchange_wms_kind_track_inventory(self):
+        """Picking a WMS Kind in the form visibly ticks Track Inventory —
+        the same default the create path applies — so the operator sees the
+        product will hold stock before ever pressing Save."""
+        if self.wms_product_kind and self.type == "consu":
+            self.is_storable = True
 
     # ---- "Where is it?" smart-button summary -----------------------------
     wms_total_on_hand = fields.Float(

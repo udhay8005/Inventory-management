@@ -397,6 +397,17 @@ class WmsScanReceipt(models.TransientModel):
             for ml in existing[len(lot_lines) :]:
                 ml.unlink()
         picking.button_validate()
+        # UAT R3 — button_validate RETURNS A WIZARD instead of completing when
+        # a batch needs confirming (product_expiry's expired-lot dialog). The
+        # receipt would then report success while no stock landed on the shelf.
+        # Refuse instead: a receipt that didn't move stock is not a receipt.
+        if picking.state != "done":
+            raise UserError(
+                "This receipt could not be completed — one of the batches "
+                "needs confirming (its recorded expiry date has passed). "
+                "Nothing was received. Correct the batch's expiry date, or "
+                "route the stock through the disposal flow, then scan again."
+            )
 
         # Audit-trail message — matches the Scan Issue chatter pattern.
         # Markup() so Odoo 19 renders the HTML instead of escaping it.
