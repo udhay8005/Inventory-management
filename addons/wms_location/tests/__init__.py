@@ -11,4 +11,5 @@ from . import (
     test_removal_engine,
     test_sku_integrity,
     test_structured_sku,
+    test_uat_r3_fixes,
 )

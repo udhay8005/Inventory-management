@@ -250,6 +250,34 @@ class WmsFuelLog(models.Model):
             picking.action_assign()
             # Concurrency safety: only record what we could actually reserve.
             if picking.move_ids.filtered(lambda m: m.state != "assigned"):
+                # UAT R3: an EXPIRED fuel batch is unreservable (product_expiry
+                # zeroes its availability), and the generic "tank level
+                # changed" message sent the operator hunting a phantom race.
+                # Fuel doesn't spoil — name the real cause and the way out.
+                now = fields.Datetime.now()
+                expired = (
+                    self.env["stock.quant"]
+                    .search(
+                        [
+                            ("product_id", "=", rec.product_id.id),
+                            ("location_id", "=", rec.source_slot_id.id),
+                            ("quantity", ">", 0),
+                        ]
+                    )
+                    .filtered(lambda q: q.removal_date and q.removal_date <= now)
+                )
+                if expired:
+                    raise UserError(
+                        "The fuel in %s can't be drawn because its batch "
+                        "(%s) is past the expiry date recorded on it. Fuel "
+                        "doesn't spoil — a Manager should correct that "
+                        "batch's expiry date (Inventory > Lots), or clear "
+                        "the stock via the disposal flow."
+                        % (
+                            rec.source_slot_id.display_name,
+                            ", ".join(expired.mapped("lot_id.name")),
+                        )
+                    )
                 raise UserError(
                     "The fuel couldn't be reserved in full from %s — the tank "
                     "level changed while you were logging. Nothing was recorded; "
@@ -259,6 +287,20 @@ class WmsFuelLog(models.Model):
                 if not ml.quantity:
                     ml.quantity = ml.quantity_product_uom or move.product_uom_qty
             picking.button_validate()
+            # UAT R3 — button_validate can RETURN A WIZARD instead of
+            # completing (product_expiry raises its expired-batch confirmation
+            # for any lot whose removal date has passed). The result was a fuel
+            # log that said "Confirmed" and snapshotted a value while NO stock
+            # ever moved — a silent hole in the tank's book balance. Refuse
+            # instead: nothing is recorded unless the transfer is really done.
+            if picking.state != "done":
+                raise UserError(
+                    "The fuel draw from %s could not be completed — the batch "
+                    "needs confirming (its recorded expiry date has passed). "
+                    "Nothing was recorded. Ask a Manager to correct that "
+                    "batch's expiry date, or dispose of the stock, then log "
+                    "the fuel again." % rec.source_slot_id.display_name
+                )
 
             rec.write(
                 {

@@ -9,6 +9,7 @@ from . import (
     test_ean13_alias,
     test_fpat_fx4,
     test_fuel_log,
+    test_fuel_no_expiry,
     test_issue_approval,
     test_issue_dimensions,
     test_label_geometry,
