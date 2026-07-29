@@ -1,5 +1,6 @@
 from . import (
     test_acl_capability,
+    test_asset_register,
     test_damage_guard,
     test_damage_photo,
     test_fpat_fx1,
