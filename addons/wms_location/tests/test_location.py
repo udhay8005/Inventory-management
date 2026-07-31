@@ -326,12 +326,21 @@ class TestWmsLocation(TransactionCase):
         ``child_of lot_stock_id`` lookup misses the stock. The planner
         must fall back to internal locations of the same company so
         Scan Issue doesn't wrongly report STOCK OUT.
+
+        Since UAT R4 this shape can no longer be BUILT — the
+        ``_check_inside_warehouse_tree`` constraint refuses it, and the
+        19.0.3.29.0 migration re-homes any that already exist. The planner
+        fallback stays, and stays tested, because a database restored from an
+        older backup can still arrive in this state; the test therefore uses
+        the documented ``wms_skip_tree_check`` bypass to reproduce it
+        deliberately.
         """
         # Build a parent location that's a sibling of WH/Stock, not a
         # descendant — mimics the Trust's "Dakshin Vrindavan" branded
         # top-level location. company_id stays the same so the company
         # guard in the fallback still matches.
-        outside_parent = self.env["stock.location"].create(
+        bypass = self.env["stock.location"].with_context(wms_skip_tree_check=True)
+        outside_parent = bypass.create(
             {
                 "name": "Dakshin Vrindavan (test)",
                 "usage": "internal",
@@ -339,14 +348,18 @@ class TestWmsLocation(TransactionCase):
                 "company_id": self.env.company.id,
             }
         )
-        gen = self.env["wms.rack.generator"].create(
-            {
-                "rack_code": "R-OUT",
-                "parent_location_id": outside_parent.id,
-                "shelf_count": 1,
-                "column_count": 1,
-                "default_slot_count": 1,
-            }
+        gen = (
+            self.env["wms.rack.generator"]
+            .with_context(wms_skip_tree_check=True)
+            .create(
+                {
+                    "rack_code": "R-OUT",
+                    "parent_location_id": outside_parent.id,
+                    "shelf_count": 1,
+                    "column_count": 1,
+                    "default_slot_count": 1,
+                }
+            )
         )
         gen.action_generate()
         slot = self.env["stock.location"].search(
@@ -610,11 +623,15 @@ class TestFloorZoneBarcodeCollision(TransactionCase):
 
     def _generate_one_zone(self, parent_name):
         wh = self.env["stock.warehouse"].search([], limit=1)
+        # The wrapper area hangs off WH/Stock, not off the WH *view* location:
+        # since UAT R4, storage must live inside the warehouse stock tree or the
+        # weekly audit cannot see it (_check_inside_warehouse_tree). This also
+        # matches where the floor-zone generator parents zones by default.
         parent = self.env["stock.location"].create(
             {
                 "name": parent_name,
                 "usage": "view",
-                "location_id": wh.view_location_id.id,
+                "location_id": wh.lot_stock_id.id,
                 "company_id": wh.company_id.id,
             }
         )
