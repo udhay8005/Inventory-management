@@ -12,4 +12,5 @@ from . import (
     test_sku_integrity,
     test_structured_sku,
     test_uat_r3_fixes,
+    test_warehouse_tree_integrity,
 )

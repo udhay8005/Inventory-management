@@ -61,6 +61,27 @@ _PROBES = [
         "SELECT count(*) FROM wms_forecast WHERE velocity_class='dead'",
         "%s product(s) flagged dead",
     ),
+    (
+        "Storage outside the warehouse tree (audit blind spot)",
+        "fail",
+        # UAT R4: the trust's entire structure had been built under a
+        # parentless top-level location instead of WH/Stock. Scan Issue found
+        # the stock (the FEFO planner has a fallback for that shape), so
+        # nothing looked wrong — but the weekly audit builds its count list
+        # from "child_of warehouse.lot_stock_id" and therefore generated no
+        # line for any of those slots, and the stock-value report under-
+        # reported. A counting system must never silently omit stock, so this
+        # is a FAIL, not a warning. parent_path makes the subtree test a plain
+        # prefix match, so this stays a cheap index scan.
+        "SELECT count(*) FROM stock_location s "
+        "WHERE s.wms_location_type IN "
+        "('zone','rack','shelf','compartment','slot','floor') "
+        "AND NOT EXISTS ("
+        "  SELECT 1 FROM stock_warehouse w "
+        "  JOIN stock_location ws ON ws.id = w.lot_stock_id "
+        "  WHERE s.parent_path LIKE ws.parent_path || '%%' )",
+        "%s storage location(s) the audit and stock-value report cannot see",
+    ),
 ]
 
 _COLOUR = {"pass": "#15803d", "warn": "#b45309", "fail": "#b91c1c"}

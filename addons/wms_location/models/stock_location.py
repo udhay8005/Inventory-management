@@ -260,6 +260,59 @@ class StockLocation(models.Model):
                         % (parent.wms_location_type if parent else "<none>")
                     )
 
+    @api.constrains("wms_location_type", "location_id")
+    def _check_inside_warehouse_tree(self):
+        """Storage must live INSIDE the warehouse stock tree.
+
+        Found in UAT R4: the trust's whole structure (234 locations) had been
+        built under a branded top-level location instead of under WH/Stock.
+        Stock kept there was real and issuable, but the weekly audit builds its
+        count list from ``child_of warehouse.lot_stock_id`` — so it produced no
+        line for any of those slots and a floor of stock went physically
+        unverified, with nothing on screen to say so. The stock-value report
+        under-reported for the same reason.
+
+        A counting system must never silently omit stock, so a zone/rack/shelf/
+        compartment/slot/floor that would land outside every warehouse tree is
+        refused at the source. Set ``wms_skip_tree_check`` in the context to
+        bypass (used by the repair migration while it is mid-move).
+        """
+        if self.env.context.get("wms_skip_tree_check"):
+            return
+        structural = self.filtered(
+            lambda loc: loc.wms_location_type
+            in ("zone", "rack", "shelf", "compartment", "slot", "floor")
+        )
+        if not structural:
+            return
+        # active_test=False deliberately: an ARCHIVED warehouse still owns its
+        # storage tree, and archiving one must not suddenly make every rack
+        # under it unwritable.
+        warehouses = self.env["stock.warehouse"].sudo().with_context(active_test=False).search([])
+        stock_locs = warehouses.lot_stock_id
+        if not stock_locs:
+            return  # nothing to anchor to (e.g. very early in an install)
+        inside = set(
+            self.sudo()
+            .with_context(active_test=False)
+            .search([("id", "child_of", stock_locs.ids)])
+            .ids
+        )
+        for loc in structural:
+            if loc.id not in inside:
+                raise ValidationError(
+                    "%(name)s would sit OUTSIDE the warehouse storage tree "
+                    "(%(stock)s). Stock kept there is invisible to the weekly "
+                    "audit and to the stock-value report, so it would never be "
+                    "counted. Put this %(kind)s under %(stock)s — or under a "
+                    "zone that already lives there."
+                    % {
+                        "name": loc.display_name or "This location",
+                        "kind": loc.wms_location_type,
+                        "stock": ", ".join(stock_locs.mapped("complete_name")),
+                    }
+                )
+
     @api.constrains("barcode")
     def _check_barcode_globally_unique(self):
         """Critical #4: a location barcode must be globally unique.
