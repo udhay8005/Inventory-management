@@ -45,6 +45,13 @@ class StockLocation(models.Model):
         help="Marks this location as part of the rack → compartment → slot hierarchy.",
     )
     wms_rack_code = fields.Char(string="Rack code", help="e.g. R01, PHARM01")
+    wms_is_trust_use = fields.Boolean(
+        string="Consumed-goods sink",
+        index=True,
+        help="The 'Trust internal use' location that issued goods are moved "
+        "INTO. Stock here has already been handed out and consumed — it is a "
+        "ledger of what left the shelf, not stock that can be issued again.",
+    )
 
     # ---- Rack-level layout ------------------------------------------------
     wms_shelf_count = fields.Integer(
@@ -285,13 +292,20 @@ class StockLocation(models.Model):
         )
         if not structural:
             return
-        # active_test=False deliberately: an ARCHIVED warehouse still owns its
-        # storage tree, and archiving one must not suddenly make every rack
-        # under it unwritable.
-        warehouses = self.env["stock.warehouse"].sudo().with_context(active_test=False).search([])
+        # ACTIVE warehouses only — deliberately the same set the weekly audit
+        # uses (stock.warehouse.search([]).lot_stock_id). An earlier draft here
+        # accepted archived warehouses too, reasoning that archiving one should
+        # not lock its racks. That quietly broke the guard's whole promise:
+        # storage under an ARCHIVED warehouse's tree is exactly as invisible to
+        # the audit as storage outside it, so the very blind spot this
+        # constraint exists to prevent would have sailed through. The guard has
+        # to mean what the audit means.
+        warehouses = self.env["stock.warehouse"].sudo().search([])
         stock_locs = warehouses.lot_stock_id
         if not stock_locs:
             return  # nothing to anchor to (e.g. very early in an install)
+        # active_test=False on the LOCATION side only: an archived rack that
+        # sits inside the tree is still inside it.
         inside = set(
             self.sudo()
             .with_context(active_test=False)
@@ -385,12 +399,21 @@ class StockLocation(models.Model):
         # location.usage, so the fallback widened across damage + repair
         # locations and could silently issue contaminated medicine. We
         # exclude wms_is_damage / wms_is_repair on the joined location.
+        # UAT R4: the sink must be excluded too. "Trust internal use" is where
+        # ISSUED goods are moved to — already handed out and consumed. It is
+        # usage='internal' like a shelf, so nothing distinguished it here, and
+        # with an empty shelf the fallback planned issues STRAIGHT OUT OF THE
+        # SINK: the keeper scanned, got a plan, validated, and the system
+        # re-issued goods that were already gone, while the sink balance never
+        # drained. Reproduced on a copy of the live database — 0 on the shelf,
+        # 7 in the sink, and the planner offered 5 from the sink.
         base_domain = [
             ("product_id", "in", product_ids),
             ("quantity", ">", 0),
             ("location_id.usage", "=", "internal"),
             ("location_id.wms_is_damage", "=", False),
             ("location_id.wms_is_repair", "=", False),
+            ("location_id.wms_is_trust_use", "=", False),
         ]
         strict = list(base_domain)
         if parent_location_id:

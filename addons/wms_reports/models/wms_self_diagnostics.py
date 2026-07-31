@@ -73,13 +73,19 @@ _PROBES = [
         # reported. A counting system must never silently omit stock, so this
         # is a FAIL, not a warning. parent_path makes the subtree test a plain
         # prefix match, so this stays a cheap index scan.
+        # Scoped to ACTIVE warehouses, matching both the audit and the
+        # _check_inside_warehouse_tree constraint, so all three agree on what
+        # "in the warehouse" means. Archived STORAGE still counts: the repair
+        # migration re-homes archived strays too, so this can be cleared, and
+        # an archived rack that is un-archived tomorrow must not silently
+        # reintroduce the blind spot.
         "SELECT count(*) FROM stock_location s "
         "WHERE s.wms_location_type IN "
         "('zone','rack','shelf','compartment','slot','floor') "
         "AND NOT EXISTS ("
         "  SELECT 1 FROM stock_warehouse w "
         "  JOIN stock_location ws ON ws.id = w.lot_stock_id "
-        "  WHERE s.parent_path LIKE ws.parent_path || '%%' )",
+        "  WHERE w.active AND s.parent_path LIKE ws.parent_path || '%%' )",
         "%s storage location(s) the audit and stock-value report cannot see",
     ),
 ]

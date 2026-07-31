@@ -97,7 +97,8 @@ class TestWarehouseTreeIntegrity(TransactionCase):
         self.assertIn(floor, inside, "children ride along with their parent")
         self.assertEqual(zone.location_id, self.stock, "the zone hangs off WH/Stock")
         self.assertEqual(floor.location_id, zone, "the internal shape is preserved")
-        self.assertFalse(stray_root.exists(), "the emptied branded shell is cleaned up")
+        self.assertTrue(stray_root.exists(), "the vacated shell is kept, not deleted")
+        self.assertFalse(stray_root.active, "but archived so it stops cluttering the tree")
 
     def test_04b_rehome_keeps_the_shape_when_an_untyped_area_sits_in_the_middle(self):
         """zone -> (untyped area) -> rack must move as ONE tree.
@@ -142,6 +143,74 @@ class TestWarehouseTreeIntegrity(TransactionCase):
             "the rack must still hang off its own area, not be flattened onto WH/Stock",
         )
         self.assertEqual(untyped_area.location_id, zone, "the area is still inside its zone")
+
+    def test_04c_repair_survives_a_tree_it_cannot_move(self):
+        """One unmovable tree must not abort the whole upgrade.
+
+        An orphan SLOT outside the tree cannot be re-parented onto WH/Stock —
+        _check_hierarchy requires a slot's parent to be a compartment. Without
+        a savepoint per tree that ValidationError would roll back the entire
+        migration and leave the live database un-upgraded, so the fix for one
+        problem would become an outage.
+        """
+        bypass = self.Loc.with_context(wms_skip_tree_check=True)
+        stray_root = bypass.create({"name": "TREE Bad Root", "usage": "internal"})
+        orphan_slot = bypass.create(
+            {
+                "name": "TREE Orphan Slot",
+                "usage": "internal",
+                "location_id": self.stock.id,
+                "wms_location_type": "floor",
+            }
+        )
+        # Reshaped in SQL on purpose. A slot whose parent is not a compartment
+        # cannot be built through the ORM — _check_hierarchy refuses it, which
+        # is why this shape only ever arrives as LEGACY data, from rows written
+        # before that guard existed (the self-diagnostics "orphan slots" probe
+        # exists precisely because such rows are found in the wild). Writing it
+        # directly is the only faithful way to reproduce what the migration
+        # will actually meet on an old database.
+        self.env.cr.execute(
+            "UPDATE stock_location SET wms_location_type='slot', location_id=%s, "
+            "parent_path=%s WHERE id=%s",
+            (stray_root.id, "%s%s/" % (stray_root.parent_path, orphan_slot.id), orphan_slot.id),
+        )
+        self.env.invalidate_all()
+        good_zone = bypass.create(
+            {
+                "name": "TREE Good Zone",
+                "usage": "internal",
+                "location_id": bypass.create({"name": "TREE Other Root", "usage": "internal"}).id,
+                "wms_location_type": "zone",
+            }
+        )
+
+        _rehome_wms_structure(self.env(context=dict(self.env.context, wms_skip_tree_check=True)))
+
+        inside = self.Loc.search([("id", "child_of", self.stock.id)])
+        self.assertIn(good_zone, inside, "the movable tree still gets repaired")
+        self.assertNotIn(orphan_slot, inside, "the unmovable one is left alone, not forced")
+        self.assertTrue(orphan_slot.exists(), "and it is certainly not destroyed")
+
+    def test_04d_emptied_shell_is_archived_not_deleted(self):
+        """Deleting the vacated shell would cascade: putaway rules pointing at
+        it vanish silently and archived children get dragged along. Archiving
+        is reversible and loses nothing."""
+        bypass = self.Loc.with_context(wms_skip_tree_check=True)
+        shell = bypass.create({"name": "TREE Shell", "usage": "internal"})
+        bypass.create(
+            {
+                "name": "TREE Shell Zone",
+                "usage": "internal",
+                "location_id": shell.id,
+                "wms_location_type": "zone",
+            }
+        )
+
+        _rehome_wms_structure(self.env(context=dict(self.env.context, wms_skip_tree_check=True)))
+
+        self.assertTrue(shell.exists(), "the shell must survive as a record")
+        self.assertFalse(shell.active, "but it should no longer clutter the tree")
 
     def test_05_audit_counts_stock_in_a_newly_built_rack(self):
         """The user-visible consequence, pinned: stock in a new rack MUST

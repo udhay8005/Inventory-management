@@ -51,9 +51,24 @@ def _apply_trust_defaults(env):
         env["res.config.settings"].create({"group_uom": True}).execute()
 
 
+def _mark_trust_use_sink(env):
+    """Flag "Trust internal use" as the consumed-goods sink. Idempotent.
+
+    Why this needs a hook: the sink is defined in a ``noupdate="1"`` data
+    block, so adding the field to the XML only reaches FRESH installs. Every
+    existing database — including the live gaushala one — has to be stamped
+    here, and until it is, the issue planner cannot tell the sink from a shelf.
+    """
+    sink = env.ref("wms_location.stock_location_trust_use", raise_if_not_found=False)
+    if sink and not sink.wms_is_trust_use:
+        sink.wms_is_trust_use = True
+        _logger.info("wms_location: marked %s as the consumed-goods sink.", sink.complete_name)
+
+
 def post_init_hook(env):
     """Run once when wms_location is first installed."""
     _apply_trust_defaults(env)
+    _mark_trust_use_sink(env)
 
 
 def _rehome_wms_structure(env):
@@ -79,17 +94,25 @@ def _rehome_wms_structure(env):
 
     Multi-warehouse safety: with more than one warehouse there is no way to
     guess which one owns a stray tree, so the repair reports and does nothing.
+    ARCHIVED warehouses count here: their storage is still theirs, and silently
+    re-parenting it under the surviving warehouse would move a whole tree to
+    the wrong owner.
     """
-    warehouses = env["stock.warehouse"].search([])
+    Loc = env["stock.location"].with_context(active_test=False)
+    warehouses = env["stock.warehouse"].with_context(active_test=False).search([])
     if len(warehouses) != 1:
         _logger.info(
-            "wms_location: %d warehouses found — skipping the storage-tree "
+            "wms_location: %d warehouse(s) found — skipping the storage-tree "
             "re-home (cannot infer the owning warehouse).",
             len(warehouses),
         )
         return env["stock.location"]
     stock = warehouses.lot_stock_id
-    Loc = env["stock.location"]
+    if not stock:
+        return env["stock.location"]
+    # active_test=False throughout: an ARCHIVED stray is still a stray. Leaving
+    # it behind would leave the self-diagnostics probe permanently red, and the
+    # day someone un-archives it the audit blind spot is back.
     inside = Loc.search([("id", "child_of", stock.id)]).ids
     strays = Loc.search(
         [
@@ -117,24 +140,52 @@ def _rehome_wms_structure(env):
         return any(int(a) in stray_ids for a in ancestors if a)
 
     tops = strays.filtered(lambda loc: not _has_stray_ancestor(loc))
-    orphaned_parents = tops.location_id
-    tops.write({"location_id": stock.id})
-    _logger.info(
-        "wms_location: re-homed %d storage location(s) (%d tree(s)) under %s.",
-        len(strays),
-        len(tops),
-        stock.complete_name,
-    )
-    # Tidy up the branded shell they hung from, but only when it is now
-    # genuinely empty: no children, no stock, no WMS role of its own.
+    moved = Loc.browse()
+    orphaned_parents = Loc.browse()
+    for top in tops:
+        parent = top.location_id
+        # One savepoint per tree. A single unmovable tree must NOT abort the
+        # upgrade: re-parenting an orphan SLOT straight onto WH/Stock, say,
+        # trips _check_hierarchy ("a slot's parent must be a Compartment"),
+        # and an exception here would roll back the whole migration and leave
+        # the live database un-upgraded. Skip that tree, log it loudly, and
+        # let the self-diagnostics probe keep flagging it.
+        try:
+            with env.cr.savepoint():
+                top.location_id = stock.id
+                env.flush_all()
+        except Exception as exc:  # noqa: BLE001 - one bad tree must not stop the rest
+            _logger.warning(
+                "wms_location: could not re-home %s (%s) — left where it is: %s",
+                top.display_name,
+                top.wms_location_type,
+                exc,
+            )
+            continue
+        moved |= top
+        if parent:
+            orphaned_parents |= parent
+    if not moved:
+        return moved
+    _logger.info("wms_location: re-homed %d tree(s) under %s.", len(moved), stock.complete_name)
+
+    # Tidy up the branded shell they hung from — ARCHIVE, never delete. A
+    # delete cascades: stock.putaway.rule rows pointing at it disappear
+    # silently, and archived children (invisible to .child_ids) would be
+    # dragged along with it. Archiving is reversible and loses nothing.
     Quant = env["stock.quant"]
     for parent in orphaned_parents:
-        if (
-            parent
-            and not parent.child_ids
-            and not parent.wms_location_type
-            and not Quant.search_count([("location_id", "=", parent.id)])
-        ):
-            _logger.info("wms_location: removing the now-empty shell %s.", parent.complete_name)
-            parent.unlink()
-    return strays
+        still_used = (
+            parent.with_context(active_test=False).child_ids
+            or parent.wms_location_type
+            or Quant.with_context(active_test=False).search_count([("location_id", "=", parent.id)])
+            or env["stock.putaway.rule"]
+            .with_context(active_test=False)
+            .search_count(
+                ["|", ("location_in_id", "=", parent.id), ("location_out_id", "=", parent.id)]
+            )
+        )
+        if not still_used and parent.active:
+            _logger.info("wms_location: archiving the now-empty shell %s.", parent.complete_name)
+            parent.active = False
+    return moved

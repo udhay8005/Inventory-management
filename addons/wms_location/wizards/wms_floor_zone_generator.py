@@ -34,7 +34,10 @@ class WmsFloorZoneGenerator(models.TransientModel):
         help="Where to place these floor zones. Usually the main warehouse "
         "stock location, or a building / floor zone underneath it.",
         default=lambda self: self._default_parent_location(),
-        domain=[("usage", "=", "view")],
+        # WH/Stock is usage='internal', not 'view' — a 'view'-only domain hid
+        # the wizard's own default and, since UAT R4, left no selectable parent
+        # that the tree constraint would accept. Storage anchors are internal.
+        domain=[("usage", "in", ("view", "internal"))],
     )
     zone_prefix = fields.Char(
         required=True,

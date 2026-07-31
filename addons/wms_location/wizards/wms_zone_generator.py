@@ -33,7 +33,10 @@ class WmsZoneGenerator(models.TransientModel):
         required=True,
         help="Where the new zone will live. Usually the main warehouse stock location.",
         default=lambda s: s._default_parent(),
-        domain=[("usage", "=", "view")],
+        # WH/Stock is usage='internal', not 'view' — a 'view'-only domain hid
+        # the wizard's own default and, since UAT R4, left no selectable parent
+        # that the tree constraint would accept. Storage anchors are internal.
+        domain=[("usage", "in", ("view", "internal"))],
     )
     zone_name = fields.Char(
         required=True,
