@@ -1,3 +1,12 @@
-numpy>=2.4.6,<3.0
-pandas>=2.0,<3.0
-statsmodels>=0.14.6
+# The optional out-of-process forecast worker needs NOTHING beyond the standard
+# library: worker.py imports only os, time and xmlrpc.client. It is an
+# orchestrator — it asks Odoo to retrain over XML-RPC, and the heavy maths runs
+# on whichever side has the libraries (see the module docstring).
+#
+# This file used to pin numpy, pandas and statsmodels. Nothing imported them,
+# nothing installed them (CI only lints ai_worker, it never runs it), so the
+# pins produced a steady trickle of Dependabot PRs whose green tick meant
+# nothing at all — the checks never exercised a line of this code.
+#
+# If you ever move the forecasting maths into the worker itself, copy the three
+# pins from the root requirements.txt so both sides stay on the same versions.

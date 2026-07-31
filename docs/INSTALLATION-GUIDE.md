@@ -120,9 +120,21 @@ Get-Service postgresql-x64-*        # Status = Running
 `✅ CHECKPOINT` — all four are present and PostgreSQL is **Running**.
 `📸 CAPTURE` — the installer's final "Done" summary.
 
-> **Dependency policy:** `requirements.txt` pins `numpy<2` and `pandas<3` on
-> purpose (Odoo 19 + statsmodels compatibility). Do not bump those without
-> testing — see the project's Dependabot policy.
+> **Dependency policy:** bump numpy / pandas / statsmodels only with evidence,
+> never on the strength of a green Dependabot tick — CI's tick says the suite
+> passed, not that the forecasting maths still works.
+>
+> The old `numpy<2` / `pandas<3` caps were lifted on 2026-07-31 after testing
+> rather than guessing: numpy 2.4.6 + pandas 3.0.5 + statsmodels 0.14.6 install
+> together, every code path in `wms_ai_forecast/models/forecasting.py`
+> (Holt-Winters, SES fallback, holdout RMSE, empty series) was exercised
+> against them, and the full Odoo suite passed on CI. The caps' stated reason —
+> "Odoo 19 compatibility" — turned out not to apply: Odoo 19 core does not
+> require numpy or pandas at all, and `forecasting.py` is their only consumer in
+> this codebase.
+>
+> `reportlab` stays capped `<5.0`. That one is real: 5.0 drops the `_renderPM`
+> fallback and breaks thermal label printing, which the trust depends on daily.
 
 ---
 
