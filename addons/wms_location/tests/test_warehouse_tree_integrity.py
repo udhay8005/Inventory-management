@@ -212,6 +212,82 @@ class TestWarehouseTreeIntegrity(TransactionCase):
         self.assertTrue(shell.exists(), "the shell must survive as a record")
         self.assertFalse(shell.active, "but it should no longer clutter the tree")
 
+    def test_04e_archived_leftover_warehouses_do_not_block_the_repair(self):
+        """The live shape, found in a dry run: one ACTIVE warehouse plus empty
+        archived leftovers from setup.
+
+        Counting warehouses without regard to active made the whole repair skip
+        itself — on the very database it was written for it would have been a
+        silent no-op, reporting success while fixing nothing. The destination
+        only has to be unambiguous among LIVE warehouses.
+        """
+        leftover = self.env["stock.warehouse"].create({"name": "TREE Leftover WH", "code": "TLW"})
+        leftover.active = False
+        bypass = self.Loc.with_context(wms_skip_tree_check=True)
+        zone = bypass.create(
+            {
+                "name": "TREE Leftover Zone",
+                "usage": "internal",
+                "location_id": bypass.create(
+                    {"name": "TREE Leftover Root", "usage": "internal"}
+                ).id,
+                "wms_location_type": "zone",
+            }
+        )
+
+        moved = _rehome_wms_structure(
+            self.env(context=dict(self.env.context, wms_skip_tree_check=True))
+        )
+
+        self.assertIn(zone, moved, "an archived leftover warehouse must not veto the repair")
+        self.assertEqual(zone.location_id, self.stock, "it lands under the LIVE warehouse")
+
+    def test_04f_storage_owned_by_an_archived_warehouse_is_left_alone(self):
+        """The other half: what sits inside an archived warehouse belongs to
+        it, and must not be quietly handed to the surviving warehouse."""
+        other = self.env["stock.warehouse"].create({"name": "TREE Other WH", "code": "TOW"})
+        zone = self.Loc.create(
+            {
+                "name": "TREE Other Zone",
+                "usage": "internal",
+                "location_id": other.lot_stock_id.id,
+                "wms_location_type": "zone",
+            }
+        )
+        other.active = False
+
+        _rehome_wms_structure(self.env(context=dict(self.env.context, wms_skip_tree_check=True)))
+
+        self.assertEqual(
+            zone.location_id,
+            other.lot_stock_id,
+            "storage inside another warehouse's tree must stay with that warehouse",
+        )
+
+    def test_04g_moving_an_untyped_parent_cannot_drag_racks_out(self):
+        """The side door: the guard must look at DESCENDANTS too.
+
+        A plain area carries no WMS type, so it is not "structural" — checking
+        only the written record would wave the move through while every rack
+        beneath it silently left the audit's view, which is the original defect
+        arriving by another route.
+        """
+        area = self.Loc.create(
+            {"name": "TREE Side Area", "usage": "internal", "location_id": self.stock.id}
+        )
+        self.Loc.create(
+            {
+                "name": "TREE-SIDE-RACK",
+                "usage": "internal",
+                "location_id": area.id,
+                "wms_location_type": "rack",
+            }
+        )
+        outside = self.Loc.create({"name": "TREE Side Outside", "usage": "internal"})
+
+        with self.assertRaises(ValidationError):
+            area.location_id = outside.id
+
     def test_05_audit_counts_stock_in_a_newly_built_rack(self):
         """The user-visible consequence, pinned: stock in a new rack MUST
         appear as a count line. This is what silently failed in UAT."""

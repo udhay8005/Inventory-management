@@ -92,32 +92,44 @@ def _rehome_wms_structure(env):
     moves, no quant is touched, nothing is renamed, and each location keeps
     its identity, barcode and history.
 
-    Multi-warehouse safety: with more than one warehouse there is no way to
-    guess which one owns a stray tree, so the repair reports and does nothing.
-    ARCHIVED warehouses count here: their storage is still theirs, and silently
-    re-parenting it under the surviving warehouse would move a whole tree to
-    the wrong owner.
+    Multi-warehouse safety has two separate halves, and conflating them turned
+    this repair into a silent no-op during a dry run on a copy of the live
+    database — which holds one active warehouse plus two empty ARCHIVED ones
+    left over from setup:
+
+      * WHAT MAY MOVE: only storage that is outside EVERY warehouse's tree,
+        archived warehouses included. Storage sitting inside an archived
+        warehouse belongs to that warehouse; re-parenting it under the
+        surviving one would hand a whole tree to the wrong owner. It is left
+        alone (and keeps being reported by the self-diagnostics probe, because
+        the audit genuinely cannot see it — that one needs a human to decide
+        whether to un-archive the warehouse or move the racks).
+      * WHERE IT GOES: the single ACTIVE warehouse. With two or more live
+        warehouses there is no way to guess a destination, so the repair
+        reports and does nothing. Archived warehouses are not candidates —
+        they are exactly the leftovers that made a plain count useless.
     """
     Loc = env["stock.location"].with_context(active_test=False)
-    warehouses = env["stock.warehouse"].with_context(active_test=False).search([])
-    if len(warehouses) != 1:
+    all_warehouses = env["stock.warehouse"].with_context(active_test=False).search([])
+    active_warehouses = env["stock.warehouse"].search([])
+    if len(active_warehouses) != 1:
         _logger.info(
-            "wms_location: %d warehouse(s) found — skipping the storage-tree "
-            "re-home (cannot infer the owning warehouse).",
-            len(warehouses),
+            "wms_location: %d ACTIVE warehouse(s) found — skipping the "
+            "storage-tree re-home (cannot infer where stray storage belongs).",
+            len(active_warehouses),
         )
         return env["stock.location"]
-    stock = warehouses.lot_stock_id
+    stock = active_warehouses.lot_stock_id
     if not stock:
         return env["stock.location"]
     # active_test=False throughout: an ARCHIVED stray is still a stray. Leaving
     # it behind would leave the self-diagnostics probe permanently red, and the
     # day someone un-archives it the audit blind spot is back.
-    inside = Loc.search([("id", "child_of", stock.id)]).ids
+    inside_any_warehouse = Loc.search([("id", "child_of", all_warehouses.lot_stock_id.ids)]).ids
     strays = Loc.search(
         [
             ("wms_location_type", "in", _WMS_STRUCTURAL_TYPES),
-            ("id", "not in", inside),
+            ("id", "not in", inside_any_warehouse),
         ]
     )
     if not strays:

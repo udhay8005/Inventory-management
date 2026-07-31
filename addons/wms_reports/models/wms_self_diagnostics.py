@@ -88,6 +88,30 @@ _PROBES = [
         "  WHERE w.active AND s.parent_path LIKE ws.parent_path || '%%' )",
         "%s storage location(s) the audit and stock-value report cannot see",
     ),
+    (
+        "Stock the weekly audit cannot see",
+        "fail",
+        # The probe above is keyed on wms_location_type, which leaves a hole:
+        # a plain internal location with NO WMS type, created outside the
+        # warehouse tree, holds real stock that the audit will never count —
+        # and the typed probe reports PASS. This one measures the harm itself
+        # rather than the shape: any quantity sitting outside every ACTIVE
+        # warehouse's storage tree. The WMS service locations are excluded
+        # because they are not shelf stock by design — the consumed-goods sink
+        # is a ledger of what left, Damage and Repair-Out hold stock that is
+        # deliberately not on the shelf.
+        "SELECT count(*) FROM stock_quant q "
+        "JOIN stock_location l ON l.id = q.location_id "
+        "WHERE q.quantity > 0 AND l.usage = 'internal' "
+        "AND COALESCE(l.wms_is_damage, FALSE) = FALSE "
+        "AND COALESCE(l.wms_is_repair, FALSE) = FALSE "
+        "AND COALESCE(l.wms_is_trust_use, FALSE) = FALSE "
+        "AND NOT EXISTS ("
+        "  SELECT 1 FROM stock_warehouse w "
+        "  JOIN stock_location ws ON ws.id = w.lot_stock_id "
+        "  WHERE w.active AND l.parent_path LIKE ws.parent_path || '%%' )",
+        "%s stock line(s) sitting where no audit will ever count them",
+    ),
 ]
 
 _COLOUR = {"pass": "#15803d", "warn": "#b45309", "fail": "#b91c1c"}
