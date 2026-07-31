@@ -41,6 +41,14 @@ One-shot installer — installs PostgreSQL 15/16/17 (auto-detected; winget insta
 via `winget`, clones Odoo 19 source, sets up a Python venv, and initialises
 the database. Takes ~10 minutes the first time.
 
+**Python 3.11 or 3.12 — not 3.13.** Odoo 19 pulls in `rl-renderPM`, which has no
+3.13 wheel and whose source build fails on a removed `wheel` API. The installer
+stops with that message rather than dying halfway through a C compile.
+
+**Odoo itself is pinned** to the revision in [`ODOO_REV`](ODOO_REV) — the one
+this WMS is tested and deployed against. The `19.0` branch head moves, so
+cloning it unpinned builds the addons against an Odoo nobody verified.
+
 ```powershell
 # From an Administrator PowerShell:
 git clone https://github.com/udhay8005/Inventory-management.git
@@ -65,7 +73,13 @@ immediately under your user profile). In **Apps** install in this order:
 5. `wms_ai_forecast` — offline statsmodels forecasting + reorder
 6. `wms_reports` — SQL-view dashboards
 7. `wms_training` — Help Center, guided tours, visual academy, SOPs
-8. `wms_perishable` *(v20 — optional)* — Universal Perishable Engine: per-lot FEFO, expiry tracking, recall, quarantine, lot labels, near-expiry guard, extension hooks. Install this only on the `v20` branch (pilot stage); see [`docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md`](docs/v20-perishable-engine/10-pilot-release-v20.0.0-beta1.md)
+8. `wms_perishable` — Universal Perishable Engine: per-lot FEFO, expiry tracking, recall, quarantine, lot labels, near-expiry guard, extension hooks. See [`docs/v20-perishable-engine/`](docs/v20-perishable-engine/)
+9. `wms_analytics` — Warehouse Intelligence: KPI dashboard, Stock Health Score, expiry-risk engine, supplier and disposal analytics, heat map, cold chain
+10. `wms_pharmacy` — Pharmacy packaging engine: Box → Strip → Tablet, open-strip-first dispensing, nested packaging barcodes
+
+All ten are on `main` and installed on the trust's production system. Modules
+8–10 were once a `v20` pilot; that branch has since been merged, so install
+them from `main` like the rest.
 
 ## Initial user setup
 
@@ -250,9 +264,18 @@ configurable so other label sizes work too. See [docs/LABEL-PRINTING.md](docs/LA
 ```powershell
 .venv\Scripts\activate
 python .odoo\odoo-bin -c config\odoo.native.conf -d wms_test --test-enable --stop-after-init `
-    -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable `
+    -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable,wms_analytics,wms_pharmacy `
     --without-demo=all --test-tags wms,wms_audit,wms_delete,wms_health,wms_ui_cert
 ```
+
+`make test` runs exactly this, and CI runs it too — same ten modules, same five
+tag groups. If you change one, change all three, or a green run stops meaning
+what it says.
+
+**Browser tests need `websocket-client`** (it is in `requirements.txt`). Without
+it Odoo *silently skips* the browser tours and still prints "0 failed" — so the
+suite looks green while testing nothing in the UI. CI fails the build if any
+test is skipped, which is what catches this.
 
 ## Backup / restore
 
