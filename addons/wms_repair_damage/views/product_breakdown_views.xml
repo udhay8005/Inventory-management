@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Stock breakdown at the top of the WMS Classification tab: where
+            the on-hand total actually IS (shelf / in use / damaged / under
+            repair), so a shrinking count is never a mystery. UAT R3.
+        -->
+        <record id="view_product_template_form_wms_breakdown" model="ir.ui.view">
+            <field name="name">product.template.form.wms.breakdown</field>
+            <field name="model">product.template</field>
+            <field name="inherit_id" ref="wms_location.view_product_template_form_wms_inherit"/>
+            <field name="arch" type="xml">
+                <xpath expr="//page[@name='wms_classification']/*[1]" position="before">
+                    <group string="Where the stock is" name="wms_stock_breakdown">
+                        <group>
+                            <field name="wms_qty_on_shelf"/>
+                            <field name="wms_qty_in_use"/>
+                        </group>
+                        <group>
+                            <field name="wms_qty_damaged"/>
+                            <field name="wms_qty_under_repair"/>
+                        </group>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

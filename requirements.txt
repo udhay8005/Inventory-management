@@ -13,3 +13,9 @@ reportlab>=4.0,<5.0
 # and our thermal label endpoint returns HTTP 500. Has a precompiled
 # wheel for cp311 (we're not on 3.13 where it fails to build).
 rl-renderPM>=4.0
+# Odoo's HttpCase talks to headless Chrome over the DevTools websocket, so the
+# real-browser UI tours (wms_training/static/tests/tours) need this. WITHOUT it
+# Odoo SKIPS those tests while still printing "0 failed" — a green-looking run
+# that exercised no UI at all. Our CI's zero-skipped-tests gate turns that
+# silent hole into a hard failure; this dependency is what keeps it green.
+websocket-client>=1.7

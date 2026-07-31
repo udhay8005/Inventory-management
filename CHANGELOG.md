@@ -7,10 +7,41 @@ semantic version tags (`v19.0.<release>`). Each entry maps to a published
 
 ---
 
-## [Unreleased] — branch `v20-wave2-3` — Wave 2 (Intelligence) + Wave 3 (Pharmacy)
+## [Unreleased] — UAT R4 (2026-07-31): two silent-omission defects found on live
 
-**Not released. Not merged to `main`.** Built ahead of the warehouse pilot on the
-`v20-wave2-3` branch by owner decision (2026-06-27), held for the approval gate.
+Found by walking every feature against a copy of the production database, then
+by an adversarial review of the fix itself.
+
+- **Storage outside the warehouse tree** — all 271 storage locations hung off a
+  parentless top-level location instead of `WH/Stock`. Scanning and issuing
+  worked, so nothing looked wrong, but the weekly audit builds its count list
+  from `child_of lot_stock_id` and therefore produced **no count line at all**
+  for the medicine room, the godown or any rack; the stock-value report
+  under-reported for the same reason. Repaired by migration `19.0.3.29.0`
+  (parent link only — no stock moved), prevented by a new constraint, and
+  detected by two self-diagnostics probes. (#98, #99)
+- **The issue planner could re-issue consumed goods** — "Trust internal use" is
+  `usage='internal'` like a shelf, so with an empty shelf the planner's
+  fallback offered stock that had already been handed out. Reproduced on live
+  data (0 on shelf, 7 in the sink, planner offered 5). The sink now carries
+  `wms_is_trust_use` and both planners exclude it. (#99)
+- **The weekly count could not find the two errors that matter most** —
+  negative slots never appeared on any sheet, and slots the books call empty
+  were never walked, so unrecorded stock was undiscoverable by counting. Added
+  negative-slot listing, a "Full walk" scope, an "Area to count" filter, and
+  keeper-added lines for off-sheet finds. (#100)
+
+Also from the review: Stock Health no longer counts the consumed-goods sink as
+stock on hand, and a shelf card printed for a rack no longer reads "EMPTY".
+
+Suite at time of writing: **697 tests, 0 failed, 0 skipped, 4/4 browser tours.**
+
+---
+
+## [v20.1.1] — Wave 2 (Intelligence) + Wave 3 (Pharmacy)
+
+Built ahead of the warehouse pilot on the `v20-wave2-3` branch by owner
+decision (2026-06-27). **Since merged to `main` and installed in production.**
 Two new additive addons; no Wave 1 file edited beyond additive `_inherit`.
 
 Engineering evidence at time of writing: full local suite **616 tests, 0 failed /

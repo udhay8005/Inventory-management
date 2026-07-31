@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!--
+            Shelf Card — printable per-location card replacing the trust's
+            hand-written whiteboard cards (photos: "PAINO-VET Qty 98+5 Return,
+            Exp 19-12-2025 to 16-11-2028"). One page per location: big product
+            names + quantities, per-batch rows earliest-expiry-first with a
+            USE FIRST flag, slot + product barcodes so the shelf is scannable.
+            Warehouse conditions: large fonts, high contrast, no colour needed.
+        -->
+        <record id="action_report_wms_shelf_card" model="ir.actions.report">
+            <field name="name">Shelf Card</field>
+            <field name="model">stock.location</field>
+            <field name="report_type">qweb-pdf</field>
+            <field name="report_name">wms_reports.report_shelf_card</field>
+            <field name="report_file">wms_reports.report_shelf_card</field>
+            <field name="binding_model_id" ref="stock.model_stock_location"/>
+            <field name="binding_type">report</field>
+            <field name="print_report_name">'Shelf Card - %s' % (object.display_name)</field>
+        </record>
+
+        <template id="report_shelf_card">
+            <t t-call="web.html_container">
+                <t t-foreach="docs" t-as="loc">
+                    <div class="page" style="page-break-after: always; font-family: sans-serif; padding: 8mm;">
+                        <!-- Location header: name big, barcode scannable -->
+                        <div style="border: 3px solid #000; padding: 4mm 6mm; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 26px; font-weight: bold;">
+                                    <t t-esc="loc.display_name"/>
+                                </div>
+                                <div style="font-size: 12px; color: #444;">
+                                    Shelf card · printed <t t-esc="context_timestamp(datetime.datetime.utcnow()).strftime('%d-%m-%Y %H:%M')"/>
+                                </div>
+                            </div>
+                            <div t-if="loc.barcode" style="text-align: center;">
+                                <img t-att-src="'/report/barcode/?barcode_type=Code128&amp;value=%s&amp;width=320&amp;height=55' % loc.barcode"
+                                     style="max-width: 60mm;" alt="Location barcode"/>
+                                <div style="font-size: 11px; letter-spacing: 1px;"><t t-esc="loc.barcode"/></div>
+                            </div>
+                        </div>
+
+                        <t t-set="cards" t-value="loc.wms_shelf_card_data()"/>
+
+                        <div t-if="not cards"
+                             style="margin-top: 8mm; font-size: 22px; text-align: center; color: #666; border: 2px dashed #999; padding: 12mm;">
+                            EMPTY — nothing stored here right now.
+                        </div>
+
+                        <t t-foreach="cards" t-as="card">
+                            <div style="border: 2px solid #000; margin-top: 6mm; padding: 4mm 6mm;">
+                                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                                    <div style="font-size: 22px; font-weight: bold;">
+                                        <t t-esc="card['product'].display_name"/>
+                                    </div>
+                                    <div style="font-size: 26px; font-weight: bold; white-space: nowrap;">
+                                        <t t-esc="'%g' % card['qty']"/>
+                                        <span style="font-size: 14px; font-weight: normal;"><t t-esc="card['uom']"/></span>
+                                    </div>
+                                </div>
+                                <div t-if="card['product'].barcode" style="font-size: 11px; color: #444; letter-spacing: 1px;">
+                                    <t t-esc="card['product'].barcode"/>
+                                </div>
+
+                                <table t-if="card['lots']" style="width: 100%; margin-top: 3mm; border-collapse: collapse; font-size: 15px;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid #000; text-align: left;">
+                                            <th style="padding: 1.5mm 2mm;">Batch</th>
+                                            <th style="padding: 1.5mm 2mm; text-align: right;">Qty</th>
+                                            <th style="padding: 1.5mm 2mm;">Expiry</th>
+                                            <th style="padding: 1.5mm 2mm;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr t-foreach="card['lots']" t-as="lot" style="border-bottom: 1px solid #999;">
+                                            <td style="padding: 1.5mm 2mm; font-weight: bold;"><t t-esc="lot['name']"/></td>
+                                            <td style="padding: 1.5mm 2mm; text-align: right;"><t t-esc="'%g' % lot['qty']"/></td>
+                                            <td style="padding: 1.5mm 2mm;">
+                                                <t t-if="lot['expiry']" t-esc="lot['expiry'].strftime('%d-%m-%Y')"/>
+                                                <t t-else="">—</t>
+                                            </td>
+                                            <td style="padding: 1.5mm 2mm; font-weight: bold;">
+                                                <t t-if="lot['use_first']">◄ USE FIRST</t>
+                                            </td>
+                                        </tr>
+                                        <tr t-if="card['loose']">
+                                            <td style="padding: 1.5mm 2mm; color: #444;">(no batch)</td>
+                                            <td style="padding: 1.5mm 2mm; text-align: right;"><t t-esc="'%g' % card['loose']"/></td>
+                                            <td></td><td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </t>
+                    </div>
+                </t>
+            </t>
+        </template>
+
+    </data>
+</odoo>

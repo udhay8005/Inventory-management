@@ -39,6 +39,11 @@
             <field name="name">Trust internal use</field>
             <field name="usage">internal</field>
             <field name="company_id" ref="base.main_company"/>
+            <!-- Marks this as the consumed-goods sink so the issue planner
+                 never plans an issue out of it. This block is noupdate="1",
+                 so existing databases get the flag from the 19.0.3.29.0
+                 migration instead. -->
+            <field name="wms_is_trust_use" eval="True"/>
         </record>
 
         <!--

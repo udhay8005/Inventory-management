@@ -169,6 +169,17 @@ class StockPicking(models.Model):
         "instead of matching the free-text origin string ('Barcode FIFO%'), "
         "which any edit or collision could silently break.",
     )
+    wms_is_scan_return = fields.Boolean(
+        string="Scan Return receipt",
+        default=False,
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Internal: set True by the Scan Return wizard on the receipt it "
+        "creates. Together with wms_is_scan_issue this forms the per-product "
+        "issued-minus-returned ledger that caps how much stock a return may "
+        "bring back (you can never return more than went out).",
+    )
     wms_audit_legacy = fields.Boolean(
         default=False,
         copy=False,

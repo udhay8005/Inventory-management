@@ -265,10 +265,11 @@ if (-not $SkipWinget) {
     }
 
     # PostgreSQL: accept any 15/16/17 (script auto-detects the service later).
-    # Python: prefer 3.12 (Odoo's tested version), accept 3.13 if installed.
+    # Python: 3.12 preferred, 3.11 accepted. 3.13 is NOT accepted - see the
+    # venv step below for why (rl-renderPM has no cp313 wheel).
     $packages = @(
         @{ Id='PostgreSQL.PostgreSQL.17'; Probe={ Get-Command psql -ErrorAction SilentlyContinue } },
-        @{ Id='Python.Python.3.12';      Probe={ (Get-Command py -ErrorAction SilentlyContinue) -and ( (py -3.12 --version 2>$null) -or (py -3.13 --version 2>$null) ) } },
+        @{ Id='Python.Python.3.12';      Probe={ (Get-Command py -ErrorAction SilentlyContinue) -and ( (py -3.12 --version 2>$null) -or (py -3.11 --version 2>$null) ) } },
         @{ Id='wkhtmltopdf.wkhtmltox';   Probe={ Get-Command wkhtmltopdf -ErrorAction SilentlyContinue } },
         @{ Id='Git.Git';                 Probe={ Get-Command git -ErrorAction SilentlyContinue } }
     )
@@ -367,9 +368,32 @@ Write-Step "Cloning Odoo 19.0 source"
 if (Test-Path (Join-Path $OdooSrc 'odoo-bin')) {
     Write-Skip "Odoo source already at $OdooSrc"
 } else {
-    & git clone --depth 1 -b 19.0 https://github.com/odoo/odoo.git $OdooSrc
-    if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
-    Write-OK "Cloned Odoo 19.0 to $OdooSrc"
+    # Pinned, not "latest 19.0". The 19.0 branch head MOVES: cloning it gives
+    # every install a different Odoo, so the addons end up built against a
+    # revision nobody tested. ODOO_REV holds the SHA this WMS is verified
+    # against. --filter=blob:none keeps the clone fast while still allowing a
+    # checkout of an older commit (--depth 1 would not).
+    $RevFile = Join-Path $ProjectRoot 'ODOO_REV'
+    $OdooRev = $null
+    if (Test-Path $RevFile) {
+        $OdooRev = (Get-Content -LiteralPath $RevFile |
+                    Where-Object { $_ -notmatch '^\s*#' -and $_.Trim() } |
+                    Select-Object -First 1).Trim()
+    }
+    if ($OdooRev) {
+        & git clone --filter=blob:none -b 19.0 https://github.com/odoo/odoo.git $OdooSrc
+        if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
+        & git -C $OdooSrc checkout --quiet $OdooRev
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not check out the pinned Odoo revision $OdooRev (see ODOO_REV). Refusing to build against an untested Odoo."
+        }
+        Write-OK "Cloned Odoo 19.0 at pinned revision $($OdooRev.Substring(0,8))"
+    } else {
+        & git clone --depth 1 -b 19.0 https://github.com/odoo/odoo.git $OdooSrc
+        if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
+        Write-Host "    [!] ODOO_REV not found - using the moving 19.0 branch head." -ForegroundColor Yellow
+        Write-OK "Cloned Odoo 19.0 to $OdooSrc"
+    }
 }
 
 # === 4. Python venv + dependencies =========================================
@@ -389,7 +413,14 @@ if (-not (Test-Path (Join-Path $VenvDir 'Scripts\python.exe'))) {
     # work cleanly with the published wheels.
     if ($pyList -match '(?m)^\s*-V:?3\.12') { $pyVer = '3.12' }
     elseif ($pyList -match '(?m)^\s*-V:?3\.11') { $pyVer = '3.11' }
-    elseif ($pyList -match '(?m)^\s*-V:?3\.13') { $pyVer = '3.13' }
+    elseif ($pyList -match '(?m)^\s*-V:?3\.13') {
+        # Deliberately NOT a fallback. rl-renderPM (an Odoo 19 requirement)
+        # publishes no cp313 wheel, and its sdist calls wheel.bdist_wheel
+        # .get_abi_tag, removed in modern wheel - so the install dies deep in a
+        # C build with an unreadable error. Fail here instead, where the
+        # message can actually tell you what to do.
+        throw "Only Python 3.13 was found. Odoo 19 (rl-renderPM) needs Python 3.11 or 3.12 - the 3.13 build fails with an obscure wheel error. Install it with: winget install Python.Python.3.12   then re-run this script."
+    }
     else {
         Write-Host "py -0 output:" -ForegroundColor Yellow
         Write-Host $pyList

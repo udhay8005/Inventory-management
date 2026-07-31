@@ -2,6 +2,7 @@ from . import (
     test_acl_capability,
     test_alert_hardening,
     test_attention_alert,
+    test_audit_coverage,
     test_audit_reconcile,
     test_audit_scan_verify,
     test_backup_audit,
@@ -25,6 +26,7 @@ from . import (
     test_rack_grid,
     test_returns_due,
     test_self_diagnostics,
+    test_shelf_card,
     test_value_dimensions,
     test_value_reports,
 )

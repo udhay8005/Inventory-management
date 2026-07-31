@@ -1,6 +1,6 @@
 {
     "name": "WMS — Reports & Dashboards",
-    "version": "19.0.4.17.0",
+    "version": "19.0.4.20.0",
     "summary": "Live SQL-view dashboards + backup/DR observability (health endpoint, backup audit).",
     "depends": ["wms_location", "wms_ai_forecast", "wms_repair_damage", "stock"],
     "author": "WMS",
@@ -23,6 +23,7 @@
         "views/wms_audit_views.xml",
         "views/rack_grid_template.xml",
         "views/rack_form_inherit.xml",
+        "views/wms_shelf_card_report.xml",
         "views/warehouse_map_template.xml",
         # menus.xml LAST so every action ref already exists. The menu under
         # menu_wms_reports_root for cycle-count-due lives here too rather

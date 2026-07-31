@@ -11,6 +11,7 @@ from . import (
     wms_reorder_summary,
     wms_returns_due,
     wms_self_diagnostics,
+    wms_shelf_card,
     wms_stock_alert,
     wms_storekeeper_activity,
     wms_tool_fleet_summary,

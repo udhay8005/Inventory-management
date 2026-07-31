@@ -119,6 +119,56 @@ class WmsLotQuarantine(models.Model):
             rec._wms_stamp_decision("destroyed")
         return True
 
+    @api.model
+    def action_sweep_expired(self):
+        """One click: put every EXPIRED batch that still holds stock on QC hold.
+
+        The warehouse photos showed Povidone (exp 4/2025) and Zenbloat (exp
+        10/2024) still sitting on the shelf in mid-2026. Expired stock beside
+        good stock is the single most dangerous thing in a medicine room, and
+        hunting it batch-by-batch is exactly the chore nobody does. This finds
+        the lot, freezes it (quarantine excludes it from issuing) and hands the
+        Manager one record to decide on — release after a check, or destroy.
+        """
+        self._check_manager()
+        now = fields.Datetime.now()
+        Quant = self.env["stock.quant"]
+        # Batches still on an internal shelf, past their expiry, not already
+        # held / recalled / destroyed.
+        stocked = Quant.search([("quantity", ">", 0), ("location_id.usage", "=", "internal")])
+        expired = stocked.mapped("lot_id").filtered(
+            lambda lot: lot.expiration_date
+            and lot.expiration_date <= now
+            and lot.wms_lot_state == "available"
+        )
+        if not expired:
+            return {
+                "type": "ir.actions.client",
+                "tag": "display_notification",
+                "params": {
+                    "title": "Nothing expired",
+                    "message": "No expired batch is holding stock — the shelves are clean.",
+                    "type": "success",
+                    "sticky": False,
+                },
+            }
+        products = ", ".join(sorted(set(expired.mapped("product_id.display_name")))[:6])
+        record = self.create(
+            {
+                "reason": "Automatic expired-stock sweep on %s — %d batch(es) past "
+                "their expiry date were still on the shelf: %s"
+                % (fields.Date.context_today(self), len(expired), products),
+                "lot_ids": [(6, 0, expired.ids)],
+            }
+        )
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Expired stock swept into quarantine",
+            "res_model": "wms.lot.quarantine",
+            "res_id": record.id,
+            "view_mode": "form",
+        }
+
     def _wms_stamp_decision(self, state):
         self.write(
             {

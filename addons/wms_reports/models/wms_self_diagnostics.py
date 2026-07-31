@@ -61,6 +61,57 @@ _PROBES = [
         "SELECT count(*) FROM wms_forecast WHERE velocity_class='dead'",
         "%s product(s) flagged dead",
     ),
+    (
+        "Storage outside the warehouse tree (audit blind spot)",
+        "fail",
+        # UAT R4: the trust's entire structure had been built under a
+        # parentless top-level location instead of WH/Stock. Scan Issue found
+        # the stock (the FEFO planner has a fallback for that shape), so
+        # nothing looked wrong — but the weekly audit builds its count list
+        # from "child_of warehouse.lot_stock_id" and therefore generated no
+        # line for any of those slots, and the stock-value report under-
+        # reported. A counting system must never silently omit stock, so this
+        # is a FAIL, not a warning. parent_path makes the subtree test a plain
+        # prefix match, so this stays a cheap index scan.
+        # Scoped to ACTIVE warehouses, matching both the audit and the
+        # _check_inside_warehouse_tree constraint, so all three agree on what
+        # "in the warehouse" means. Archived STORAGE still counts: the repair
+        # migration re-homes archived strays too, so this can be cleared, and
+        # an archived rack that is un-archived tomorrow must not silently
+        # reintroduce the blind spot.
+        "SELECT count(*) FROM stock_location s "
+        "WHERE s.wms_location_type IN "
+        "('zone','rack','shelf','compartment','slot','floor') "
+        "AND NOT EXISTS ("
+        "  SELECT 1 FROM stock_warehouse w "
+        "  JOIN stock_location ws ON ws.id = w.lot_stock_id "
+        "  WHERE w.active AND s.parent_path LIKE ws.parent_path || '%%' )",
+        "%s storage location(s) the audit and stock-value report cannot see",
+    ),
+    (
+        "Stock the weekly audit cannot see",
+        "fail",
+        # The probe above is keyed on wms_location_type, which leaves a hole:
+        # a plain internal location with NO WMS type, created outside the
+        # warehouse tree, holds real stock that the audit will never count —
+        # and the typed probe reports PASS. This one measures the harm itself
+        # rather than the shape: any quantity sitting outside every ACTIVE
+        # warehouse's storage tree. The WMS service locations are excluded
+        # because they are not shelf stock by design — the consumed-goods sink
+        # is a ledger of what left, Damage and Repair-Out hold stock that is
+        # deliberately not on the shelf.
+        "SELECT count(*) FROM stock_quant q "
+        "JOIN stock_location l ON l.id = q.location_id "
+        "WHERE q.quantity > 0 AND l.usage = 'internal' "
+        "AND COALESCE(l.wms_is_damage, FALSE) = FALSE "
+        "AND COALESCE(l.wms_is_repair, FALSE) = FALSE "
+        "AND COALESCE(l.wms_is_trust_use, FALSE) = FALSE "
+        "AND NOT EXISTS ("
+        "  SELECT 1 FROM stock_warehouse w "
+        "  JOIN stock_location ws ON ws.id = w.lot_stock_id "
+        "  WHERE w.active AND l.parent_path LIKE ws.parent_path || '%%' )",
+        "%s stock line(s) sitting where no audit will ever count them",
+    ),
 ]
 
 _COLOUR = {"pass": "#15803d", "warn": "#b45309", "fail": "#b91c1c"}

@@ -126,7 +126,7 @@ class WmsScanReceipt(models.TransientModel):
         kind = info.get("kind")
 
         if kind in ("product", "alias", "lot"):
-            self.env["wms.scan.receipt.line"].create(
+            line = self.env["wms.scan.receipt.line"].create(
                 {
                     "wizard_id": self.id,
                     "product_id": info["product"].id,
@@ -134,9 +134,19 @@ class WmsScanReceipt(models.TransientModel):
                     "lot_id": info["lot"].id if kind == "lot" else False,
                 }
             )
-            self.feedback = "Added %s × %s" % (
+            note = ""
+            if self.is_return and self.return_condition not in ("damaged", "needs_repair"):
+                # Returns go back to the slot the item was issued FROM ("same
+                # old location shown first"). Prefill so the keeper sees the
+                # destination immediately and only changes it on purpose.
+                original = self._wms_return_route(line.product_id)[1]
+                if original:
+                    line.location_dest_id = original.id
+                    note = " — back to %s (original slot)" % original.display_name
+            self.feedback = "Added %s × %s%s" % (
                 info.get("units", 1.0),
                 info["product"].display_name,
+                note,
             )
         elif kind == "location":
             # Apply this slot to the most recent line that has no destination yet.
@@ -215,18 +225,36 @@ class WmsScanReceipt(models.TransientModel):
                 "physically counted and inspected the delivery."
             )
 
+        # ---- Return integrity gates (UAT R3) ----------------------------
+        # A return is a REVERSAL of an issue, never a source of new stock:
+        #   * it may not bring back more than is actually out on issue
+        #     (issued minus already-returned, the scan ledger), and
+        #   * a Damaged / Needs-repair return is QUARANTINED into the Damage
+        #     location so broken goods can never land on an issuable shelf.
+        damage_loc = self.env["stock.location"]
+        if self.is_return:
+            self._wms_check_return_cap()
+            if self.return_condition in ("damaged", "needs_repair"):
+                damage_loc = self._wms_damage_location()
+                if damage_loc:
+                    # Override any operator-chosen slot: broken stock goes to
+                    # quarantine, full stop. The Repair flow brings it back.
+                    self.line_ids.location_dest_id = damage_loc
+
         # Damage / Repair locations hold broken or in-repair stock and are
         # deliberately EXCLUDED from the FIFO issue picker, so good incoming
         # stock landed there would be stranded (on-hand but un-issuable). Refuse
-        # a scanned/typed destination that points at one. (getattr keeps this
-        # dependency-free: the flags live in wms_repair_damage, which depends on
-        # this addon — so we can't import them — and are simply absent, i.e.
-        # there are no such locations, when that addon isn't installed.)
-        # Auto-assign only ever returns slot/floor, so guarding here — before
-        # the auto-assign loop below — checks exactly the operator-supplied
-        # destinations.
+        # a scanned/typed destination that points at one — EXCEPT the Damage
+        # location a damaged return was just quarantined into. (getattr keeps
+        # this dependency-free: the flags live in wms_repair_damage, which
+        # depends on this addon — so we can't import them — and are simply
+        # absent, i.e. there are no such locations, when that addon isn't
+        # installed.) Auto-assign only ever returns slot/floor, so guarding
+        # here — before the auto-assign loop below — checks exactly the
+        # operator-supplied destinations.
         bad_dest = self.line_ids.filtered(
             lambda ln: ln.location_dest_id
+            and ln.location_dest_id != damage_loc
             and (
                 getattr(ln.location_dest_id, "wms_is_damage", False)
                 or getattr(ln.location_dest_id, "wms_is_repair", False)
@@ -241,10 +269,14 @@ class WmsScanReceipt(models.TransientModel):
                 % ", ".join(bad_dest.mapped("location_dest_id.display_name"))
             )
 
-        # Auto-assign slot if operator didn't.
+        # Auto-assign slot if operator didn't. A good-condition return prefers
+        # the slot its matched issue drew from ("same old location first").
         for line in self.line_ids:
             if not line.location_dest_id:
-                line.location_dest_id = self._auto_assign_slot(line.product_id, line.quantity)
+                original = self._wms_return_route(line.product_id)[1] if self.is_return else False
+                line.location_dest_id = original or self._auto_assign_slot(
+                    line.product_id, line.quantity
+                )
 
         # Use the warehouse-level m2o so we don't hit Odoo 19's archived
         # picking type problem for 1-step warehouses.
@@ -258,12 +290,24 @@ class WmsScanReceipt(models.TransientModel):
         if not picking_type.active:
             picking_type.sudo().active = True
 
+        # A RETURN reverses the issue: its stock comes back from the
+        # use-location the issue delivered to — NEVER from Vendors, which
+        # would fabricate brand-new supplier stock (and let the on-hand count
+        # inflate past what was ever issued). Normal receipts keep the
+        # incoming picking type's Vendors source.
+        trust_use = self.env.ref("wms_location.stock_location_trust_use", raise_if_not_found=False)
+        header_src = (
+            (trust_use or picking_type.default_location_src_id)
+            if self.is_return
+            else picking_type.default_location_src_id
+        )
         picking = self.env["stock.picking"].create(
             {
                 "picking_type_id": picking_type.id,
-                "location_id": picking_type.default_location_src_id.id,
+                "location_id": header_src.id,
                 "location_dest_id": self.warehouse_id.lot_stock_id.id,
                 "origin": "Barcode scan" + (" (return)" if self.is_return else ""),
+                "wms_is_scan_return": self.is_return,
                 # Audit-trail fields — same shape as Scan Issue so reports
                 # can read both incoming and outgoing flows the same way.
                 "wms_taken_by": (self.delivered_by or "").strip(),
@@ -275,6 +319,10 @@ class WmsScanReceipt(models.TransientModel):
             # description_picking (free text shown on the picking).
             # stock.move.line.reserved_uom_qty is gone too — moves are
             # assigned and we just set `quantity` on the lines.
+            if self.is_return:
+                move_src = self._wms_return_route(line.product_id)[0] or header_src
+            else:
+                move_src = picking_type.default_location_src_id
             self.env["stock.move"].create(
                 {
                     "description_picking": line.product_id.display_name,
@@ -282,12 +330,27 @@ class WmsScanReceipt(models.TransientModel):
                     "product_uom_qty": line.quantity,
                     "product_uom": line.product_id.uom_id.id,
                     "picking_id": picking.id,
-                    "location_id": picking_type.default_location_src_id.id,
+                    "location_id": move_src.id,
                     "location_dest_id": line.location_dest_id.id,
                 }
             )
         picking.action_confirm()
         picking.action_assign()
+        if self.is_return:
+            # Reversal must reserve the full quantity from the use-location.
+            # If it can't, the scan ledger and the physical book disagree
+            # (e.g. the issue was undone, or stock was adjusted away) — stop
+            # atomically rather than validate a partial or fabricated return.
+            short = picking.move_ids.filtered(lambda m: m.state != "assigned")
+            if short:
+                raise UserError(
+                    "This return can't be matched against the stock that was "
+                    "issued out for: %s.\n\nThe quantity coming back must "
+                    "still be at the use-location it was issued to. Check "
+                    "the quantity, or record the item through Scan Receipt "
+                    "(new stock) / the Damages workflow instead."
+                    % ", ".join(short.mapped("product_id.display_name"))
+                )
         MoveLine = self.env["stock.move.line"]
         for move in picking.move_ids:
             # Scans that carried a specific lot for THIS move. Match product +
@@ -334,6 +397,17 @@ class WmsScanReceipt(models.TransientModel):
             for ml in existing[len(lot_lines) :]:
                 ml.unlink()
         picking.button_validate()
+        # UAT R3 — button_validate RETURNS A WIZARD instead of completing when
+        # a batch needs confirming (product_expiry's expired-lot dialog). The
+        # receipt would then report success while no stock landed on the shelf.
+        # Refuse instead: a receipt that didn't move stock is not a receipt.
+        if picking.state != "done":
+            raise UserError(
+                "This receipt could not be completed — one of the batches "
+                "needs confirming (its recorded expiry date has passed). "
+                "Nothing was received. Correct the batch's expiry date, or "
+                "route the stock through the disposal flow, then scan again."
+            )
 
         # Audit-trail message — matches the Scan Issue chatter pattern.
         # Markup() so Odoo 19 renders the HTML instead of escaping it.
@@ -378,6 +452,104 @@ class WmsScanReceipt(models.TransientModel):
             self._mark_outstanding_returns()
 
         return self._open_picking()
+
+    # ---- Return integrity helpers (UAT R3) ------------------------------
+
+    def _wms_outstanding_issue(self, product):
+        """Oldest still-open Scan Issue picking that sent ``product`` out.
+
+        Same matching contract as ``_mark_outstanding_returns`` (earliest
+        expected return first) so the slot we prefill and the issue we later
+        flip to returned are the same one.
+        """
+        return self.env["stock.picking"].search(
+            [
+                ("wms_is_scan_issue", "=", True),
+                ("wms_returned", "=", False),
+                ("wms_expected_return_date", "!=", False),
+                ("wms_reversed_by_id", "=", False),
+                ("move_line_ids.product_id", "=", product.id),
+            ],
+            order="wms_expected_return_date asc, id asc",
+            limit=1,
+        )
+
+    def _wms_return_route(self, product):
+        """``(source_location, original_slot)`` that reverses the oldest open
+        issue of ``product``: stock comes back FROM the location the issue
+        delivered to, and lands (by default) in the slot it was drawn from.
+        Falls back to the trust-use location / empty when nothing matches.
+        """
+        Loc = self.env["stock.location"]
+        src = dest = Loc
+        issue = self._wms_outstanding_issue(product)
+        if issue:
+            move = issue.move_ids.filtered(lambda m: m.product_id == product)[:1]
+            if move:
+                src = move.location_dest_id
+                dest = move.location_id
+        if not src:
+            src = (
+                self.env.ref("wms_location.stock_location_trust_use", raise_if_not_found=False)
+                or Loc
+            )
+        return src, dest
+
+    def _wms_return_outstanding_qty(self, product):
+        """Units of ``product`` still OUT on scan issues: done scan-issue
+        quantity (undone issues excluded) minus done scan-return quantity.
+        A return may never exceed this — that would fabricate stock."""
+        Move = self.env["stock.move"]
+        issued = sum(
+            Move.search(
+                [
+                    ("state", "=", "done"),
+                    ("product_id", "=", product.id),
+                    ("picking_id.wms_is_scan_issue", "=", True),
+                    ("picking_id.wms_reversed_by_id", "=", False),
+                ]
+            ).mapped("quantity")
+        )
+        returned = sum(
+            Move.search(
+                [
+                    ("state", "=", "done"),
+                    ("product_id", "=", product.id),
+                    ("picking_id.wms_is_scan_return", "=", True),
+                ]
+            ).mapped("quantity")
+        )
+        return issued - returned
+
+    def _wms_check_return_cap(self):
+        """Refuse a return that would bring back more than is out on issue."""
+        self.ensure_one()
+        totals = {}
+        for ln in self.line_ids:
+            totals[ln.product_id] = totals.get(ln.product_id, 0.0) + ln.quantity
+        problems = []
+        for product, qty in totals.items():
+            outstanding = self._wms_return_outstanding_qty(product)
+            if qty > outstanding + 0.0001:
+                problems.append(
+                    "  • %s: returning %g but only %g still out on issue"
+                    % (product.display_name, qty, max(outstanding, 0.0))
+                )
+        if problems:
+            raise UserError(
+                "A return can only bring back what was issued out:\n%s\n\n"
+                "Fix the quantity, or — if this is genuinely NEW stock — "
+                "receive it through Scan Receipt (not Return entry). Broken "
+                "un-issued stock goes through the Damages workflow." % "\n".join(problems)
+            )
+
+    def _wms_damage_location(self):
+        """The quarantine location for damaged returns (wms_repair_damage's
+        Damage location). Empty recordset when that addon isn't installed."""
+        Loc = self.env["stock.location"]
+        if "wms_is_damage" not in Loc._fields:
+            return Loc
+        return Loc.search([("wms_is_damage", "=", True)], limit=1)
 
     def _mark_outstanding_returns(self):
         """Match each returned product against the oldest outstanding

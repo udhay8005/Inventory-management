@@ -7,8 +7,13 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button name="action_confirm" type="object" string="Confirm"
-                                class="btn-primary" invisible="state != 'draft'"/>
+                        <button name="action_confirm_and_repair" type="object"
+                                string="Confirm &amp; Send to Repair"
+                                class="btn-primary" invisible="state != 'draft'"
+                                help="One click: confirm the damage, move the item to the Damage location, and open its repair order (started immediately when you have repair rights)."/>
+                        <button name="action_confirm" type="object" string="Confirm Only"
+                                invisible="state != 'draft'"
+                                help="Just record the damage (e.g. a write-off with no repair). You can still create a repair order afterwards."/>
                         <button name="action_create_repair_order" type="object"
                                 string="Create Repair Order"
                                 class="btn-warning"
