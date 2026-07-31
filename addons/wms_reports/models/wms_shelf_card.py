@@ -29,8 +29,12 @@ class StockLocation(models.Model):
         self.ensure_one()
         has_expiry = "expiration_date" in self.env["stock.lot"]._fields
         far_future = fields.Datetime.from_string("9999-12-31 00:00:00")
+        # child_of, not "=": the Print action is offered on EVERY location, so
+        # a keeper printing a card for a rack or a compartment (the natural
+        # thing to do — one card per rack) got a confident "EMPTY" card for a
+        # full rack, because the stock hangs on the slots underneath it.
         quants = self.env["stock.quant"].search(
-            [("location_id", "=", self.id), ("quantity", ">", 0)]
+            [("location_id", "child_of", self.id), ("quantity", ">", 0)]
         )
         cards = []
         for product in quants.mapped("product_id").sorted("display_name"):

@@ -57,11 +57,18 @@ security:  ## bandit + pip-audit.
 	$(PYBIN) -m bandit -r addons/ -ll
 	$(PYBIN) -m pip_audit -r requirements.txt --strict
 
-test:  ## Full Odoo test suite. Slow.
+# Keep the module list and the tag list IDENTICAL to .github/workflows/ci.yml.
+# They drifted before: this target installed 6 of the 10 addons and passed only
+# `--test-tags wms`, so `make test` reported success while never running ~92
+# tests that CI does run — the worst kind of green.
+WMS_MODULES = wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable,wms_analytics,wms_pharmacy
+WMS_TEST_TAGS = wms,wms_audit,wms_delete,wms_health,wms_ui_cert
+
+test:  ## Full Odoo test suite (same modules + tags as CI). Slow.
 	$(PYBIN) $(ODOO)/odoo-bin --stop-after-init -d wms_test \
 	    -c $(CONF) \
-	    -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
-	    --without-demo=all --test-enable --test-tags wms --log-level=test
+	    -i $(WMS_MODULES) \
+	    --without-demo=all --test-enable --test-tags $(WMS_TEST_TAGS) --log-level=test
 
 test-fast:  ## Run tests for a single module: make test-fast MOD=wms_location
 	@test -n "$(MOD)" || { echo "Usage: make test-fast MOD=wms_location"; exit 1; }

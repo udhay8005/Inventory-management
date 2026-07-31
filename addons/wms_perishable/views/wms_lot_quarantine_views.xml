@@ -64,6 +64,25 @@
             </field>
         </record>
 
+        <!--
+            One-click sweep: freeze every expired batch that is still holding
+            stock. Surfaced as its own menu entry so a Manager can run the
+            shelf-safety check without hunting batch by batch.
+        -->
+        <record id="action_wms_sweep_expired" model="ir.actions.server">
+            <field name="name">Sweep expired stock into quarantine</field>
+            <field name="model_id" ref="model_wms_lot_quarantine"/>
+            <field name="state">code</field>
+            <field name="code">action = model.action_sweep_expired()</field>
+        </record>
+
+        <menuitem id="menu_wms_sweep_expired"
+                  name="Sweep expired stock"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_sweep_expired"
+                  groups="wms_location.group_wms_manager"
+                  sequence="62"/>
+
         <record id="action_wms_lot_quarantine" model="ir.actions.act_window">
             <field name="name">Lot Quarantine</field>
             <field name="res_model">wms.lot.quarantine</field>

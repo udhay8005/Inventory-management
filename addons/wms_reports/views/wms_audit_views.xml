@@ -53,6 +53,9 @@
                                 <field name="storekeeper_id"
                                        readonly="state in ('submitted','reviewed','rejected')"/>
                                 <field name="group_wms_user_id" invisible="1"/>
+                                <field name="scope" readonly="state != 'draft'"/>
+                                <field name="zone_id" readonly="state != 'draft'"
+                                       options="{'no_create': True}"/>
                             </group>
                             <group>
                                 <field name="started_at"/>
@@ -64,7 +67,15 @@
                         <group string="Summary">
                             <field name="line_count"/>
                             <field name="variance_count"/>
+                            <field name="found_count"/>
                         </group>
+                        <div class="alert alert-info" role="alert"
+                             invisible="state != 'in_progress'">
+                            Found something the sheet does not list? <b>Add a line</b>
+                            for it — pick the slot and the item and enter what you
+                            counted. Stock nobody recorded can only be discovered
+                            this way; accepting the audit books it in.
+                        </div>
                         <notebook>
                             <page string="Lines" name="lines">
                                 <field name="line_ids"
@@ -72,8 +83,15 @@
                                     <list editable="bottom"
                                           decoration-warning="variance != 0"
                                           decoration-danger="variance &lt; 0">
-                                        <field name="location_id" readonly="1"/>
-                                        <field name="product_id" readonly="1"/>
+                                        <!-- Generated lines stay locked so a
+                                             count can never be pointed at the
+                                             wrong shelf; lines the keeper adds
+                                             for unrecorded stock are editable. -->
+                                        <field name="is_found_line" column_invisible="1"/>
+                                        <field name="location_id"
+                                               readonly="not is_found_line"/>
+                                        <field name="product_id"
+                                               readonly="not is_found_line and expected_qty != 0"/>
                                         <field name="expected_qty" readonly="1"/>
                                         <field name="counted_qty"/>
                                         <field name="scan_confirm" optional="show"

@@ -1,0 +1,11 @@
+# The exact Odoo 19.0 CE revision this WMS is built and tested against.
+#
+# Why pin: `git clone -b 19.0` follows a MOVING branch head. At the time of
+# writing the branch was already 1,464 commits past this revision, so a fresh
+# clone would build the addons against a different Odoo than the one the
+# 697-test suite and the trust's production system actually run. That is the
+# difference between "it works on my machine" and a reproducible install.
+#
+# To move to a newer Odoo: change the SHA here, run the full suite, and only
+# then commit. scripts/install-native.ps1 and CI both read this file.
+6de867f1c92bacedc0574b63e9e6a2a57fe805dd
