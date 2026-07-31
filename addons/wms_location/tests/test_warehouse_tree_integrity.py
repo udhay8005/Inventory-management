@@ -264,6 +264,30 @@ class TestWarehouseTreeIntegrity(TransactionCase):
             "storage inside another warehouse's tree must stay with that warehouse",
         )
 
+    def test_04g_moving_an_untyped_parent_cannot_drag_racks_out(self):
+        """The side door: the guard must look at DESCENDANTS too.
+
+        A plain area carries no WMS type, so it is not "structural" — checking
+        only the written record would wave the move through while every rack
+        beneath it silently left the audit's view, which is the original defect
+        arriving by another route.
+        """
+        area = self.Loc.create(
+            {"name": "TREE Side Area", "usage": "internal", "location_id": self.stock.id}
+        )
+        self.Loc.create(
+            {
+                "name": "TREE-SIDE-RACK",
+                "usage": "internal",
+                "location_id": area.id,
+                "wms_location_type": "rack",
+            }
+        )
+        outside = self.Loc.create({"name": "TREE Side Outside", "usage": "internal"})
+
+        with self.assertRaises(ValidationError):
+            area.location_id = outside.id
+
     def test_05_audit_counts_stock_in_a_newly_built_rack(self):
         """The user-visible consequence, pinned: stock in a new rack MUST
         appear as a count line. This is what silently failed in UAT."""

@@ -1,6 +1,10 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+# The types that make up physical storage (excludes the untyped WMS service
+# locations: the consumed-goods sink, Damage and Repair-Out).
+_STRUCTURAL_TYPES = ("zone", "rack", "shelf", "compartment", "slot", "floor")
+
 LOCATION_TYPES = [
     ("warehouse_view", "Warehouse view"),
     ("zone", "Zone (building / floor / area)"),
@@ -286,12 +290,6 @@ class StockLocation(models.Model):
         """
         if self.env.context.get("wms_skip_tree_check"):
             return
-        structural = self.filtered(
-            lambda loc: loc.wms_location_type
-            in ("zone", "rack", "shelf", "compartment", "slot", "floor")
-        )
-        if not structural:
-            return
         # ACTIVE warehouses only — deliberately the same set the weekly audit
         # uses (stock.warehouse.search([]).lot_stock_id). An earlier draft here
         # accepted archived warehouses too, reasoning that archiving one should
@@ -304,6 +302,25 @@ class StockLocation(models.Model):
         stock_locs = warehouses.lot_stock_id
         if not stock_locs:
             return  # nothing to anchor to (e.g. very early in an install)
+        # Check the written records AND their typed descendants. Moving an
+        # UNTYPED parent — a plain area with racks under it — drags the whole
+        # subtree out of the warehouse, and checking only the written record
+        # waves that through: the area carries no WMS type, so it is not
+        # "structural", so nothing gets validated and the racks below it leave
+        # the audit's view in silence. That is the original defect arriving by
+        # a side door, so the subtree has to be part of the check.
+        candidates = (
+            self.sudo()
+            .with_context(active_test=False)
+            .search(
+                [
+                    ("id", "child_of", self.ids),
+                    ("wms_location_type", "in", _STRUCTURAL_TYPES),
+                ]
+            )
+        )
+        if not candidates:
+            return
         # active_test=False on the LOCATION side only: an archived rack that
         # sits inside the tree is still inside it.
         inside = set(
@@ -312,7 +329,7 @@ class StockLocation(models.Model):
             .search([("id", "child_of", stock_locs.ids)])
             .ids
         )
-        for loc in structural:
+        for loc in candidates:
             if loc.id not in inside:
                 raise ValidationError(
                     "%(name)s would sit OUTSIDE the warehouse storage tree "
