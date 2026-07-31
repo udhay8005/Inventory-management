@@ -20,17 +20,28 @@ class WmsReorderSummary(models.Model):
             """
             CREATE OR REPLACE VIEW wms_reorder_summary AS
               SELECT MIN(f.id) AS id,
-                     ps.partner_id,
+                     pref.partner_id,
                      COUNT(DISTINCT f.product_id) AS product_count,
                      SUM(f.reorder_qty)           AS total_qty
                 FROM wms_forecast f
-                LEFT JOIN product_supplierinfo ps
-                       ON ps.product_tmpl_id = (
-                          SELECT pt.id FROM product_product pp
-                            JOIN product_template pt ON pt.id = pp.product_tmpl_id
-                           WHERE pp.id = f.product_id LIMIT 1
-                       )
+                JOIN product_product pp ON pp.id = f.product_id
+                -- ONE preferred supplier per product before aggregating.
+                -- A plain template join fanned a product with two vendors
+                -- into BOTH vendor totals (double-count) and missed
+                -- variant-level supplierinfo. This lateral picks the single
+                -- best seller for THIS variant - mirroring Odoo's own
+                -- seller_ids[:1] (variant-specific match first, then lowest
+                -- sequence) - so each product's reorder_qty lands in exactly
+                -- one vendor bucket (or the NULL "no vendor" bucket).
+                LEFT JOIN LATERAL (
+                    SELECT ps.partner_id
+                      FROM product_supplierinfo ps
+                     WHERE ps.product_tmpl_id = pp.product_tmpl_id
+                       AND (ps.product_id = pp.id OR ps.product_id IS NULL)
+                     ORDER BY (ps.product_id = pp.id) DESC, ps.sequence, ps.id
+                     LIMIT 1
+                ) pref ON TRUE
                WHERE f.reorder_qty > 0
-            GROUP BY ps.partner_id
+            GROUP BY pref.partner_id
         """
         )

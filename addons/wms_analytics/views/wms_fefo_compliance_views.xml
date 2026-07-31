@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #7 — FEFO compliance: list / graph / pivot + search. -->
+        <record id="view_wms_fefo_compliance_list" model="ir.ui.view">
+            <field name="name">wms.fefo.compliance.list</field>
+            <field name="model">wms.fefo.compliance</field>
+            <field name="arch" type="xml">
+                <list string="FEFO compliance" create="false"
+                      default_order="issue_date desc">
+                    <field name="issue_date"/>
+                    <field name="picking_id"/>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="quantity" sum="Quantity"/>
+                    <field name="drawn_expiry"/>
+                    <field name="earliest_expiry"/>
+                    <field name="compliant" widget="boolean_toggle"
+                           decoration-danger="not compliant"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_fefo_compliance_graph" model="ir.ui.view">
+            <field name="name">wms.fefo.compliance.graph</field>
+            <field name="model">wms.fefo.compliance</field>
+            <field name="arch" type="xml">
+                <graph string="FEFO compliance rate" type="bar">
+                    <field name="month" type="row"/>
+                    <field name="compliant" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_fefo_compliance_pivot" model="ir.ui.view">
+            <field name="name">wms.fefo.compliance.pivot</field>
+            <field name="model">wms.fefo.compliance</field>
+            <field name="arch" type="xml">
+                <pivot string="FEFO compliance">
+                    <field name="month" type="row"/>
+                    <field name="product_id" type="col"/>
+                    <field name="compliant" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_fefo_compliance_search" model="ir.ui.view">
+            <field name="name">wms.fefo.compliance.search</field>
+            <field name="model">wms.fefo.compliance</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="picking_id"/>
+                    <filter name="compliant" string="Compliant"
+                            domain="[('compliant','=',True)]"/>
+                    <filter name="violations" string="Violations"
+                            domain="[('compliant','=',False)]"/>
+                    <separator/>
+                    <filter name="group_month" string="Month"
+                            context="{'group_by': 'month'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_compliant" string="Compliant"
+                            context="{'group_by': 'compliant'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_fefo_compliance" model="ir.actions.act_window">
+            <field name="name">FEFO Compliance</field>
+            <field name="res_model">wms.fefo.compliance</field>
+            <field name="view_mode">graph,pivot,list</field>
+            <field name="search_view_id" ref="view_wms_fefo_compliance_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No scan issues to score yet</p>
+                <p>Each Scan Issue of a perishable lot is checked: was the
+                   earliest-expiry batch the one drawn? The compliance rate
+                   trended by month tells you how well issues are honouring
+                   first-expiry-first-out.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_fefo_compliance"
+                  name="FEFO Compliance"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_fefo_compliance"
+                  sequence="75"/>
+    </data>
+</odoo>

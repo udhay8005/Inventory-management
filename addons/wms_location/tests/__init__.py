@@ -1,1 +1,17 @@
-from . import test_location, test_location_delete
+from . import (
+    test_barcode_format,
+    test_barcode_integrity,
+    test_capacity,
+    test_category_config,
+    test_fpat_fx1,
+    test_issue_planner_sink,
+    test_location,
+    test_location_delete,
+    test_min_life_days,
+    test_polyomino,
+    test_removal_engine,
+    test_sku_integrity,
+    test_structured_sku,
+    test_uat_r3_fixes,
+    test_warehouse_tree_integrity,
+)

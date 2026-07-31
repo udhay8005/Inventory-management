@@ -251,7 +251,10 @@ class WmsRackGenerator(models.TransientModel):
         parent = self.env["stock.location"].browse(spec["parent_location_id"])
         if not parent:
             raise UserError("Parent location is required.")
-        company_id = parent.company_id.id
+        # Fall back to the active company so generated locations always carry a
+        # concrete company (a NULL company would weaken the per-company barcode
+        # scope and surface the location in every company on a multi-co DB).
+        company_id = parent.company_id.id or self.env.company.id
 
         rack_code = spec["rack_code"].strip()
         if not rack_code:
@@ -326,6 +329,10 @@ class WmsRackGenerator(models.TransientModel):
                     "wms_column_left": left,
                     "wms_column_right": right,
                     "wms_slot_count": slot_count,
+                    # Persist the exact cell list for polyominoes so the map
+                    # renderer can draw the true shape; rectangles need only
+                    # the bounding box, so leave it empty for them.
+                    "wms_cells_json": json.dumps(cells) if is_polyomino else False,
                     "barcode": barcode,
                 }
             )

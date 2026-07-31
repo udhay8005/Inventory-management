@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 — Stock Health Score: list / graph + search. One row per company. -->
+        <record id="view_wms_stock_health_list" model="ir.ui.view">
+            <field name="name">wms.stock.health.list</field>
+            <field name="model">wms.stock.health</field>
+            <field name="arch" type="xml">
+                <list string="Stock health" create="false">
+                    <field name="company_id"/>
+                    <!-- No widget="badge": Odoo's badge widget does not
+                         support float fields (the browser logs "The widget:
+                         badge don't support the type float" and the score
+                         renders unstyled). The decorations below colour the
+                         value on their own, which is what we actually want. -->
+                    <field name="overall_score"
+                           decoration-danger="overall_score &lt; 60"
+                           decoration-warning="overall_score &gt;= 60 and overall_score &lt; 85"
+                           decoration-success="overall_score &gt;= 85"/>
+                    <field name="total_qty" sum="Total"/>
+                    <field name="healthy_qty" sum="Healthy"/>
+                    <field name="near_qty" sum="Near expiry"/>
+                    <field name="expired_qty" sum="Expired"/>
+                    <field name="quarantine_qty" sum="Quarantine"/>
+                    <field name="recall_qty" sum="Recall"/>
+                    <field name="healthy_pct"/>
+                    <field name="near_pct"/>
+                    <field name="expired_pct"/>
+                    <field name="quarantine_pct"/>
+                    <field name="recall_pct"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_stock_health_graph" model="ir.ui.view">
+            <field name="name">wms.stock.health.graph</field>
+            <field name="model">wms.stock.health</field>
+            <field name="arch" type="xml">
+                <graph string="Stock health" type="bar">
+                    <field name="company_id"/>
+                    <field name="healthy_qty" type="measure"/>
+                    <field name="near_qty" type="measure"/>
+                    <field name="expired_qty" type="measure"/>
+                    <field name="quarantine_qty" type="measure"/>
+                    <field name="recall_qty" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_stock_health_search" model="ir.ui.view">
+            <field name="name">wms.stock.health.search</field>
+            <field name="model">wms.stock.health</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="company_id"/>
+                    <filter name="group_company" string="Company"
+                            context="{'group_by': 'company_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_stock_health" model="ir.actions.act_window">
+            <field name="name">Stock Health</field>
+            <field name="res_model">wms.stock.health</field>
+            <field name="view_mode">list,graph</field>
+            <field name="search_view_id" ref="view_wms_stock_health_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No stock to score yet</p>
+                <p>This scorecard classifies all on-hand storage stock into health
+                   buckets — recalled, quarantined, expired, near-expiry, and healthy —
+                   and rolls them up into an overall health score per company.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_stock_health"
+                  name="Stock Health"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_stock_health"
+                  sequence="20"/>
+    </data>
+</odoo>

@@ -1,10 +1,21 @@
 numpy>=2.4.6,<3.0
 pandas>=2.0,<3.0
-statsmodels>=0.14
-Pillow>=10.0
-reportlab>=4.0
+statsmodels>=0.14.6
+Pillow>=12.3.0
+# Cap reportlab < 5.0. reportlab 5.0 drops the _renderPM fallback and hard-requires
+# the rlPyCairo backend (which we don't ship), so PDF barcode rendering raises
+# RenderPMError ("cannot import desired renderPM backend rlPyCairo") and the cert /
+# onboard label tests error. Odoo 19 pins reportlab==4.1.0; staying on the 4.x line
+# keeps the rl-renderPM (_renderPM) backend working. (A >=4.5.1 floor pulled 5.0.0.)
+reportlab>=4.0,<5.0
 # reportlab 4.x ships without a built-in renderPM backend; without one,
 # Odoo's ir.actions.report.barcode() raises RenderPMError at PDF time
 # and our thermal label endpoint returns HTTP 500. Has a precompiled
 # wheel for cp311 (we're not on 3.13 where it fails to build).
 rl-renderPM>=4.0
+# Odoo's HttpCase talks to headless Chrome over the DevTools websocket, so the
+# real-browser UI tours (wms_training/static/tests/tours) need this. WITHOUT it
+# Odoo SKIPS those tests while still printing "0 failed" — a green-looking run
+# that exercised no UI at all. Our CI's zero-skipped-tests gate turns that
+# silent hole into a hard failure; this dependency is what keeps it green.
+websocket-client>=1.7

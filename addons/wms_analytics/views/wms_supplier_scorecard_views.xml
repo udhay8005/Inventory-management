@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- ============================================================ -->
+        <!-- Supplier quality scorecard: list / pivot / graph + search.   -->
+        <!-- ============================================================ -->
+        <record id="view_wms_supplier_scorecard_list" model="ir.ui.view">
+            <field name="name">wms.supplier.scorecard.list</field>
+            <field name="model">wms.supplier.scorecard</field>
+            <field name="arch" type="xml">
+                <list string="Supplier scorecard" create="false" default_order="quality_score">
+                    <field name="quality_band"
+                           decoration-danger="quality_band == 'poor'"
+                           decoration-warning="quality_band == 'watch'"
+                           decoration-success="quality_band == 'good'"
+                           widget="badge"/>
+                    <field name="partner_id"/>
+                    <field name="quality_score"/>
+                    <field name="acceptance_rate"/>
+                    <field name="rejection_rate"/>
+                    <field name="lots_received" sum="Lots received"/>
+                    <field name="recall_count" sum="Recalls"/>
+                    <field name="quarantine_total" sum="QC holds"/>
+                    <field name="quarantine_reject_count" sum="QC rejections"/>
+                    <field name="damaged_qty" sum="Damaged qty"/>
+                    <field name="damaged_value" sum="Damaged value"/>
+                    <field name="expired_lot_count" sum="Expired lots"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_supplier_scorecard_pivot" model="ir.ui.view">
+            <field name="name">wms.supplier.scorecard.pivot</field>
+            <field name="model">wms.supplier.scorecard</field>
+            <field name="arch" type="xml">
+                <pivot string="Supplier scorecard">
+                    <field name="partner_id" type="row"/>
+                    <field name="quality_score" type="measure"/>
+                    <field name="recall_count" type="measure"/>
+                    <field name="quarantine_reject_count" type="measure"/>
+                    <field name="damaged_value" type="measure"/>
+                    <field name="expired_lot_count" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_supplier_scorecard_graph" model="ir.ui.view">
+            <field name="name">wms.supplier.scorecard.graph</field>
+            <field name="model">wms.supplier.scorecard</field>
+            <field name="arch" type="xml">
+                <graph string="Supplier scorecard" type="bar">
+                    <field name="partner_id"/>
+                    <field name="quality_score" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_supplier_scorecard_search" model="ir.ui.view">
+            <field name="name">wms.supplier.scorecard.search</field>
+            <field name="model">wms.supplier.scorecard</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="partner_id"/>
+                    <filter name="poor" string="Poor" domain="[('quality_band','=','poor')]"/>
+                    <filter name="watch" string="Watch" domain="[('quality_band','=','watch')]"/>
+                    <filter name="good" string="Good" domain="[('quality_band','=','good')]"/>
+                    <separator/>
+                    <filter name="has_recalls" string="Has recalls"
+                            domain="[('recall_count','&gt;',0)]"/>
+                    <filter name="has_rejections" string="Has QC rejections"
+                            domain="[('quarantine_reject_count','&gt;',0)]"/>
+                    <filter name="has_damage" string="Has damage"
+                            domain="[('damaged_qty','&gt;',0)]"/>
+                    <filter name="has_expiry" string="Has expired lots"
+                            domain="[('expired_lot_count','&gt;',0)]"/>
+                    <separator/>
+                    <filter name="group_band" string="Quality band"
+                            context="{'group_by': 'quality_band'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_supplier_scorecard" model="ir.actions.act_window">
+            <field name="name">Supplier Scorecard</field>
+            <field name="res_model">wms.supplier.scorecard</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_supplier_scorecard_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No supplier quality data yet</p>
+                <p>One row per supplier that has delivered stock, scoring each on
+                   recalls, QC rejections, damage, and expired lots. Drill into a
+                   supplier via the receipt ledger to see the batches behind the score.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_supplier_scorecard"
+                  name="Supplier Scorecard"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_supplier_scorecard"
+                  sequence="30"/>
+
+        <!-- ============================================================ -->
+        <!-- Supplier receipt ledger: per-lot receipts.                   -->
+        <!-- ============================================================ -->
+        <record id="view_wms_supplier_ledger_list" model="ir.ui.view">
+            <field name="name">wms.supplier.ledger.list</field>
+            <field name="model">wms.supplier.ledger</field>
+            <field name="arch" type="xml">
+                <list string="Supplier ledger" create="false" default_order="received_on desc">
+                    <field name="received_on"/>
+                    <field name="partner_id"/>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="supplier_batch"/>
+                    <field name="supplier_invoice" optional="hide"/>
+                    <field name="expiration_date"/>
+                    <field name="lot_state"
+                           decoration-danger="lot_state == 'recalled' or lot_state == 'destroyed'"
+                           decoration-warning="lot_state == 'quarantine'"
+                           decoration-success="lot_state == 'available'"
+                           widget="badge"/>
+                    <field name="on_hand" sum="On hand"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_supplier_ledger_pivot" model="ir.ui.view">
+            <field name="name">wms.supplier.ledger.pivot</field>
+            <field name="model">wms.supplier.ledger</field>
+            <field name="arch" type="xml">
+                <pivot string="Supplier ledger">
+                    <field name="partner_id" type="row"/>
+                    <field name="product_id" type="row"/>
+                    <field name="on_hand" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_supplier_ledger_graph" model="ir.ui.view">
+            <field name="name">wms.supplier.ledger.graph</field>
+            <field name="model">wms.supplier.ledger</field>
+            <field name="arch" type="xml">
+                <graph string="Supplier ledger" type="bar">
+                    <field name="partner_id"/>
+                    <field name="on_hand" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_supplier_ledger_search" model="ir.ui.view">
+            <field name="name">wms.supplier.ledger.search</field>
+            <field name="model">wms.supplier.ledger</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="partner_id"/>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="supplier_batch"/>
+                    <field name="supplier_invoice"/>
+                    <filter name="in_stock" string="On hand" domain="[('on_hand','&gt;',0)]"/>
+                    <filter name="recalled" string="Recalled"
+                            domain="[('lot_state','=','recalled')]"/>
+                    <filter name="quarantine" string="Quarantine"
+                            domain="[('lot_state','=','quarantine')]"/>
+                    <separator/>
+                    <filter name="group_supplier" string="Supplier"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_state" string="Lot state"
+                            context="{'group_by': 'lot_state'}"/>
+                    <filter name="group_received" string="Received"
+                            context="{'group_by': 'received_on:month'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_supplier_ledger" model="ir.actions.act_window">
+            <field name="name">Supplier Ledger</field>
+            <field name="res_model">wms.supplier.ledger</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_supplier_ledger_search"/>
+            <field name="context">{'search_default_group_supplier': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No supplier receipts yet</p>
+                <p>Every lot received from a supplier, in chronological order, with
+                   its batch, expiry, lifecycle state, and live on-hand quantity.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_supplier_ledger"
+                  name="Supplier Ledger"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_supplier_ledger"
+                  sequence="31"/>
+    </data>
+</odoo>

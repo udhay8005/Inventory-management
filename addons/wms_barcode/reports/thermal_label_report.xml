@@ -48,10 +48,14 @@
             <field name="report_type">qweb-pdf</field>
             <field name="report_name">wms_barcode.report_product_label_thermal</field>
             <field name="report_file">wms_barcode.report_product_label_thermal</field>
-            <field name="print_report_name">'Thermal-product-labels-%d' % len(docs)</field>
+            <field name="print_report_name">'Thermal-product-label-%s' % (object.default_code or object.id)</field>
             <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
-            <field name="binding_model_id" ref="product.model_product_product"/>
-            <field name="binding_type">report</field>
+            <!--
+                Unbound from the Print menu: direct printing (Action → Print
+                labels (direct)) is the primary path and avoids browser scaling.
+                The report stays defined as a non-Windows fallback.
+            -->
+            <field name="binding_model_id" eval="False"/>
         </record>
 
         <record id="action_report_wms_location_label_thermal" model="ir.actions.report">
@@ -60,10 +64,21 @@
             <field name="report_type">qweb-pdf</field>
             <field name="report_name">wms_barcode.report_location_label_thermal</field>
             <field name="report_file">wms_barcode.report_location_label_thermal</field>
-            <field name="print_report_name">'Thermal-location-labels-%d' % len(docs)</field>
+            <field name="print_report_name">'Thermal-location-label-%s' % (object.barcode or object.id)</field>
             <field name="paperformat_id" ref="paperformat_wms_thermal_4x1"/>
-            <field name="binding_model_id" ref="stock.model_stock_location"/>
-            <field name="binding_type">report</field>
+            <!-- Unbound from the Print menu (see product report above). -->
+            <field name="binding_model_id" eval="False"/>
+        </record>
+
+        <!--
+            Also unbind Odoo's built-in "Location Barcode" PDF report from the
+            location Print menu. It is browser-scaled (the small / off-size PDF
+            operators kept hitting); direct printing (Action -> Print labels
+            (direct)) is the one path. The report stays defined, just not in the
+            Print dropdown.
+        -->
+        <record id="stock.action_report_location_barcode" model="ir.actions.report">
+            <field name="binding_model_id" eval="False"/>
         </record>
 
     </data>

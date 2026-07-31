@@ -1,4 +1,4 @@
-from odoo import fields, models
+from odoo import api, fields, models
 
 
 class WmsForecast(models.Model):
@@ -31,6 +31,28 @@ class WmsForecast(models.Model):
     lead_time_days = fields.Integer(readonly=True)
     safety_stock = fields.Float(readonly=True)
     note = fields.Char(readonly=True)
+    unit_cost = fields.Float(
+        string="Unit cost", compute="_compute_stock_value", store=True, readonly=True
+    )
+    stock_value = fields.Float(
+        string="Stock value",
+        compute="_compute_stock_value",
+        store=True,
+        readonly=True,
+        help="On-hand x unit cost. On the Dead Stock view this is the capital "
+        "tied up in non-moving stock the trust could free by consuming it.",
+    )
+
+    @api.depends("on_hand", "product_id", "product_id.standard_price")
+    def _compute_stock_value(self):
+        # standard_price is in the dependency set so a later cost change
+        # re-rates the row, not just an on-hand change. (It is a
+        # company-dependent field; the ORM still flags dependents for
+        # recompute when it's written through the normal product cost path.)
+        for rec in self:
+            cost = rec.product_id.standard_price or 0.0
+            rec.unit_cost = cost
+            rec.stock_value = (rec.on_hand or 0.0) * cost
 
     _product_unique = models.Constraint(
         "UNIQUE(product_id)",
@@ -90,8 +112,18 @@ class WmsForecastHistory(models.Model):
     _description = "Forecast training snapshot"
     _order = "trained_at desc"
 
-    product_id = fields.Many2one("product.product", required=True, index=True)
-    trained_at = fields.Datetime(default=fields.Datetime.now)
+    product_id = fields.Many2one(
+        "product.product",
+        required=True,
+        index=True,
+        # Training snapshots are regenerable analytics, NOT an audit trail, so
+        # they must not block deleting an otherwise-unused product. Without this
+        # the FK defaults to RESTRICT and an admin cannot remove a test/spare
+        # product that merely accrued a few forecast rows. Real operational
+        # history (stock.move / quants) still blocks deletion as it should.
+        ondelete="cascade",
+    )
+    trained_at = fields.Datetime(default=fields.Datetime.now, index=True)
     model_name = fields.Char()
     predicted_qty = fields.Float()
     rmse = fields.Float()

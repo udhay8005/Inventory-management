@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- ============================================================ -->
+        <!-- Wave 2 — Movement ledgers: Lot / Product / Warehouse.        -->
+        <!-- Three chronological views over done stock.move.line.         -->
+        <!-- ============================================================ -->
+
+        <!-- ===================== LOT LEDGER ========================== -->
+        <record id="view_wms_lot_ledger_list" model="ir.ui.view">
+            <field name="name">wms.lot.ledger.list</field>
+            <field name="model">wms.lot.ledger</field>
+            <field name="arch" type="xml">
+                <list string="Lot ledger" create="false" default_order="date desc">
+                    <field name="date"/>
+                    <field name="lot_id"/>
+                    <field name="product_id"/>
+                    <field name="direction"
+                           decoration-success="direction == 'in'"
+                           decoration-danger="direction == 'out'"
+                           decoration-muted="direction == 'internal'"
+                           widget="badge"/>
+                    <field name="quantity" sum="Total quantity"/>
+                    <field name="location_id"/>
+                    <field name="location_dest_id"/>
+                    <field name="picking_id"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_ledger_search" model="ir.ui.view">
+            <field name="name">wms.lot.ledger.search</field>
+            <field name="model">wms.lot.ledger</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="lot_id"/>
+                    <field name="product_id"/>
+                    <field name="location_id"/>
+                    <field name="location_dest_id"/>
+                    <field name="picking_id"/>
+                    <filter name="dir_in" string="In" domain="[('direction','=','in')]"/>
+                    <filter name="dir_out" string="Out" domain="[('direction','=','out')]"/>
+                    <filter name="dir_internal" string="Internal"
+                            domain="[('direction','=','internal')]"/>
+                    <separator/>
+                    <filter name="group_lot" string="Lot"
+                            context="{'group_by': 'lot_id'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_location" string="From location"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="group_dest" string="To location"
+                            context="{'group_by': 'location_dest_id'}"/>
+                    <filter name="group_direction" string="Direction"
+                            context="{'group_by': 'direction'}"/>
+                    <filter name="group_date" string="Date"
+                            context="{'group_by': 'date'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_ledger_pivot" model="ir.ui.view">
+            <field name="name">wms.lot.ledger.pivot</field>
+            <field name="model">wms.lot.ledger</field>
+            <field name="arch" type="xml">
+                <pivot string="Lot ledger">
+                    <field name="lot_id" type="row"/>
+                    <field name="direction" type="col"/>
+                    <field name="quantity" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_ledger_graph" model="ir.ui.view">
+            <field name="name">wms.lot.ledger.graph</field>
+            <field name="model">wms.lot.ledger</field>
+            <field name="arch" type="xml">
+                <graph string="Lot ledger" type="bar">
+                    <field name="direction"/>
+                    <field name="quantity" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_ledger" model="ir.actions.act_window">
+            <field name="name">Lot Ledger</field>
+            <field name="res_model">wms.lot.ledger</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_lot_ledger_search"/>
+            <field name="context">{'search_default_group_lot': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No lot movements yet</p>
+                <p>Every completed movement of a lot-tracked product — receipts,
+                   issues and internal relocations — in chronological order.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_lot_ledger"
+                  name="Lot Ledger"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_lot_ledger"
+                  sequence="40"/>
+
+        <!-- =================== PRODUCT LEDGER ======================== -->
+        <record id="view_wms_product_ledger_list" model="ir.ui.view">
+            <field name="name">wms.product.ledger.list</field>
+            <field name="model">wms.product.ledger</field>
+            <field name="arch" type="xml">
+                <list string="Product ledger" create="false" default_order="date desc">
+                    <field name="date"/>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="direction"
+                           decoration-success="direction == 'in'"
+                           decoration-danger="direction == 'out'"
+                           decoration-muted="direction == 'internal'"
+                           widget="badge"/>
+                    <field name="quantity" sum="Total quantity"/>
+                    <field name="location_id"/>
+                    <field name="location_dest_id"/>
+                    <field name="picking_id"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_product_ledger_search" model="ir.ui.view">
+            <field name="name">wms.product.ledger.search</field>
+            <field name="model">wms.product.ledger</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="location_id"/>
+                    <field name="location_dest_id"/>
+                    <field name="picking_id"/>
+                    <filter name="dir_in" string="In" domain="[('direction','=','in')]"/>
+                    <filter name="dir_out" string="Out" domain="[('direction','=','out')]"/>
+                    <filter name="dir_internal" string="Internal"
+                            domain="[('direction','=','internal')]"/>
+                    <separator/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_lot" string="Lot"
+                            context="{'group_by': 'lot_id'}"/>
+                    <filter name="group_location" string="From location"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="group_dest" string="To location"
+                            context="{'group_by': 'location_dest_id'}"/>
+                    <filter name="group_direction" string="Direction"
+                            context="{'group_by': 'direction'}"/>
+                    <filter name="group_date" string="Date"
+                            context="{'group_by': 'date'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="view_wms_product_ledger_pivot" model="ir.ui.view">
+            <field name="name">wms.product.ledger.pivot</field>
+            <field name="model">wms.product.ledger</field>
+            <field name="arch" type="xml">
+                <pivot string="Product ledger">
+                    <field name="product_id" type="row"/>
+                    <field name="direction" type="col"/>
+                    <field name="quantity" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_product_ledger_graph" model="ir.ui.view">
+            <field name="name">wms.product.ledger.graph</field>
+            <field name="model">wms.product.ledger</field>
+            <field name="arch" type="xml">
+                <graph string="Product ledger" type="bar">
+                    <field name="direction"/>
+                    <field name="quantity" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="action_wms_product_ledger" model="ir.actions.act_window">
+            <field name="name">Product Ledger</field>
+            <field name="res_model">wms.product.ledger</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_product_ledger_search"/>
+            <field name="context">{'search_default_group_product': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No product movements yet</p>
+                <p>Every completed stock movement, by product — a full
+                   chronological in/out/internal trail.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_product_ledger"
+                  name="Product Ledger"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_product_ledger"
+                  sequence="41"/>
+
+        <!-- ================== WAREHOUSE LEDGER ======================= -->
+        <record id="view_wms_warehouse_ledger_list" model="ir.ui.view">
+            <field name="name">wms.warehouse.ledger.list</field>
+            <field name="model">wms.warehouse.ledger</field>
+            <field name="arch" type="xml">
+                <list string="Warehouse ledger" create="false" default_order="date desc">
+                    <field name="date"/>
+                    <field name="location_dest_id"/>
+                    <field name="location_id"/>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="direction"
+                           decoration-success="direction == 'in'"
+                           decoration-danger="direction == 'out'"
+                           decoration-muted="direction == 'internal'"
+                           widget="badge"/>
+                    <field name="quantity" sum="Total quantity"/>
+                    <field name="picking_id"/>
+                    <field name="company_id" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_warehouse_ledger_search" model="ir.ui.view">
+            <field name="name">wms.warehouse.ledger.search</field>
+            <field name="model">wms.warehouse.ledger</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="location_dest_id"/>
+                    <field name="location_id"/>
+                    <field name="dest_warehouse_id"/>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field name="picking_id"/>
+                    <filter name="dir_in" string="In" domain="[('direction','=','in')]"/>
+                    <filter name="dir_out" string="Out" domain="[('direction','=','out')]"/>
+                    <filter name="dir_internal" string="Internal"
+                            domain="[('direction','=','internal')]"/>
+                    <separator/>
+                    <filter name="group_dest" string="To location"
+                            context="{'group_by': 'location_dest_id'}"/>
+                    <filter name="group_location" string="From location"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="group_dest_wh" string="To warehouse"
+                            context="{'group_by': 'dest_warehouse_id'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="group_direction" string="Direction"
+                            context="{'group_by': 'direction'}"/>
+                    <filter name="group_date" string="Date"
+                            context="{'group_by': 'date'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="view_wms_warehouse_ledger_pivot" model="ir.ui.view">
+            <field name="name">wms.warehouse.ledger.pivot</field>
+            <field name="model">wms.warehouse.ledger</field>
+            <field name="arch" type="xml">
+                <pivot string="Warehouse ledger">
+                    <field name="location_dest_id" type="row"/>
+                    <field name="direction" type="col"/>
+                    <field name="quantity" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_warehouse_ledger_graph" model="ir.ui.view">
+            <field name="name">wms.warehouse.ledger.graph</field>
+            <field name="model">wms.warehouse.ledger</field>
+            <field name="arch" type="xml">
+                <graph string="Warehouse ledger" type="bar">
+                    <field name="location_dest_id"/>
+                    <field name="quantity" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="action_wms_warehouse_ledger" model="ir.actions.act_window">
+            <field name="name">Warehouse Ledger</field>
+            <field name="res_model">wms.warehouse.ledger</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_warehouse_ledger_search"/>
+            <field name="context">{'search_default_group_dest': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No warehouse movements yet</p>
+                <p>Every completed stock movement by location — what landed where,
+                   and what left, in chronological order.</p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_warehouse_ledger"
+                  name="Warehouse Ledger"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_warehouse_ledger"
+                  sequence="42"/>
+    </data>
+</odoo>

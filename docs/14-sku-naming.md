@@ -1,131 +1,140 @@
-# 14 — SKU Naming Policy
+# 14 — SKU & Product-Code Policy
 
-Pin this on the wall. **Every** product gets a SKU that follows this rule
-before it's saved.
+The Product Master uses **two identifiers** per product. The system builds and
+protects both — you mostly choose the identity fields and let it compose the SKU.
 
-## Format
+| Identifier | Field | Example | Who reads it |
+|---|---|---|---|
+| **Business SKU** | Internal Reference (`default_code`) | `MED-PARA-CIP-TAB-500MG-10` | people: search, print, recognise |
+| **Internal Product Code** | Internal product code (`wms_product_code`) | `PRD-000017` | the system: audits, imports, history, integrations — **permanent** |
+
+> **Why two?** The SKU is *readable* but composed from attributes; the PRD code is
+> a *permanent* handle that never changes even if the SKU is regenerated before
+> stock. Together you get clean labels **and** rock-solid data integrity. This is
+> how SAP / ERPNext / Dynamics separate "item number" from "internal id".
+
+---
+
+## The Business SKU
+
+### Format (composed automatically)
 
 ```
-<CATEGORY>-<ITEM>-<VARIANT>
+<KIND>-<FAMILY>-<BRAND>-[VARIANT]-<FORM>-[STRENGTH]-[PACK]
 ```
 
-- All uppercase, **A–Z 0–9 hyphen only**. No spaces, no other punctuation.
-- Total length ≤ 20 characters (fits on a 25 mm thermal sticker).
-- Three segments. If a segment doesn't apply, use `000` not blank.
+- All uppercase, **A–Z 0–9 hyphen** only — the system enforces it.
+- Optional segments (Variant, Strength, Pack) **collapse** when empty — no blank
+  dashes, no `000` filler.
+- You do **not** type the SKU. You pick the identity fields and the system
+  composes it. (A manager can fix it before stock via **Regenerate SKU**.)
 
-## Segment rules
+### Where each segment comes from
 
-### 1. CATEGORY (2–3 letters)
-
-| Prefix | Meaning | Examples |
+| Segment | Source | How |
 |---|---|---|
-| `RM` | Raw Material | `RM-ASH-001`, `RM-COTTON-50K` |
-| `PK` | Packaging | `PK-JAR-500`, `PK-BOX-S` |
-| `FL` | Fluids / Liquids / Oils | `FL-OIL-001`, `FL-PETROL-95` |
-| `FG` | Finished Goods | `FG-SOAP-100G` |
-| `WIP` | Work in Progress | `WIP-MIX-A1` |
-| `CONS` | Consumables (office, cleaning) | `CONS-PEN-BLUE` |
-| `TOOL` | Reusable tools / equipment | `TOOL-DRILL-18V` |
-| `SPARE` | Spare parts | `SPARE-BLT-M4` |
+| KIND | WMS Kind | fixed prefix (`MED`, `FEED`, `TOOL`, `SAN`, …) |
+| FAMILY | **Families** register | the family's stable **code** (Paracetamol → `PARA`) |
+| BRAND | **Brands** register | the brand's stable **code** (Cipla → `CIP`) |
+| VARIANT | Variant text | squeezed (Premium → `PREM`) |
+| FORM | **Forms** register | the form's stable **code** (Tablet → `TAB`) |
+| STRENGTH | Strength / dosage text | squeezed (`500 mg` → `500MG`) |
+| PACK | Pack size text | squeezed (`50kg` → `50KG`, `10` → `10`) |
 
-Add categories only when you actually have items in them. Don't pre-declare.
+The codes for Family / Brand / Form are set **once** in their registers
+(Configuration → Families / Brands / Forms) and reused forever — so abbreviations
+never drift. Enter a pack size as just the quantity + unit (`10`, `50kg`, `5L`)
+for a clean segment.
 
-### 2. ITEM (3–6 letters or short word)
+### Examples
 
-Strict rule: pick **one** abbreviation per item and stick to it forever.
-A change here ruins history.
-
-- Good: `ASH`, `JAR`, `OIL`, `SOAP`, `COTTON`
-- Bad: `ASH-RAW`, `RAW-ASH`, `aShN` (case / dash inconsistency)
-
-### 3. VARIANT (3 chars, digits or short tag)
-
-- Size, capacity, model, colour, grade — whichever is the **primary**
-  attribute that differentiates the variant.
-- For sequential items with no real variant: `001`, `002`…
-- Examples:
-  - `500` (ml) → `PK-JAR-500`
-  - `M4` (thread) → `SPARE-BLT-M4`
-  - `RED` (colour) → `PK-CAP-RED`
-  - `001` (no variant axis) → `RM-ASH-001`
-
-## Examples (real-world)
-
-| SKU | Item | Reasoning |
-|---|---|---|
-| `RM-ASH-001` | Ash, raw material | Single variant for now |
-| `RM-ASH-FINE` | Ash, fine grade | Same item, finer variant |
-| `PK-JAR-500` | 500 ml glass jar | Capacity is the primary axis |
-| `PK-JAR-1000` | 1 L glass jar | Same family, different size |
-| `FL-OIL-001` | Gingelly oil | Could later add `FL-OIL-COCO`, `FL-OIL-NEEM` |
-| `FG-SOAP-100G` | 100 g finished soap bar | Weight as variant |
-| `TOOL-DRILL-18V` | Cordless drill 18V | Voltage as variant |
-| `SPARE-BLT-M4` | M4 bolt | Thread as variant |
-
-## What's banned
-
-| Anti-pattern | Why it's banned |
+| Identity | Business SKU |
 |---|---|
-| `SOAP-NEW` | "NEW" stops being new in three months |
-| `temp-001` | Lowercase + meaningless "temp" |
-| `Ash Raw Material` | Spaces, mixed case, too long |
-| `BOX1`, `BOX2` | No category prefix, no variant rule |
-| Renaming an existing SKU | Breaks audit trail — create a new one and archive the old |
+| Medicine · Paracetamol · Cipla · Tablet · 500 mg · 10 | `MED-PARA-CIP-TAB-500MG-10` |
+| Feed · Cow Feed · ABC · Premium · Pellet · 50 kg | `FEED-COWFD-ABC-PREM-PEL-50KG` |
+| Sanitation · Phenyl · Local · — · Liquid · — · 1 L | `SAN-PHEN-LOCAL-LIQ-1L` |
+| Tool · Drill · Bosch · — · Cordless (model) · 18 V | `TOOL-DRILL-BOSCH-CORD-18V` |
 
-## How to add a new SKU
+### Fallback
 
-1. Inventory In-charge confirms the item doesn't already exist (search the
-   product list by name + by SKU prefix).
-2. Pick the right CATEGORY from the table above. If none fit, propose
-   a new prefix to the In-charge — add to this doc *before* creating any
-   product with it.
-3. Pick the ITEM abbreviation. Re-use existing if it's the same item.
-4. Pick the VARIANT — primary differentiator only.
-5. Create the product in Odoo (**WMS Manager** group required):
-   - **Internal Reference** = the SKU
-   - **Barcode** = the same SKU (so scanning the SKU sticker also finds the product)
-   - **Name** = the human name
-   - **Unit of Measure** = correct unit (Units / Litre / kg / m / …)
-6. Print the product label and stick it on the item.
+If you create a product **without** a Family + Brand (e.g. quick entry or the bulk
+onboard list), the SKU falls back to the legacy auto sequence `KIND-NNNNN`
+(`CONS-00042`). Every product still gets a permanent `PRD-` code.
+
+---
+
+## Collision: the system BLOCKS, it never auto-numbers
+
+If the identity you entered would compose a SKU that already exists, **creation is
+blocked** with a message naming the existing product:
+
+```
+SKU 'MED-PARA-CIP-TAB-500MG-10' already exists.
+Existing product: Paracetamol Tablet 500mg (PRD-000017)
+Adjust the Brand, Variant, Pack size or Strength to make it distinct.
+```
+
+The system will **never** create `…-10-2` or `…-10-0002`. Fix the catalogue
+instead — a true duplicate identity *is* the same product.
+
+---
+
+## Freeze: once it's in circulation, the code locks
+
+The moment a product has **stock or movement**, its Business SKU and Code128
+barcode **freeze** (the PRD code is permanent from creation):
+
+- the SKU / barcode can no longer be edited;
+- to change a frozen item, **archive it and create a new product** — never rename
+  a code that is already in stock history (and likely on a printed sticker).
+- *Filling a blank* barcode still works on a stocked product (so the system can
+  back-fill a missing Code128); only **renaming** an existing code is locked.
+
+Before freeze (no stock yet) a manager can still correct identity fields and click
+**Regenerate SKU from identity**.
+
+---
+
+## How to add a new product
+
+1. Confirm it doesn't already exist (search by name / family / brand / SKU).
+2. On the product form, set **WMS Kind**, then **Family**, **Brand**, **Form**,
+   and (as needed) **Variant**, **Strength**, **Pack size**. Pick existing
+   register entries; add new Families/Brands/Forms (with a short code) under
+   Configuration if missing.
+3. Save — the system stamps the **PRD code**, composes the **Business SKU**, sets
+   the Code128 barcode (= SKU) and a numeric EAN-13, and applies the form's
+   suggested unit.
+4. Print the label and stick it on the item.
+
+---
 
 ## Why this matters
 
-- **Search**: `SCRW-` instantly lists every screw variant.
-- **Counting**: ordered list, no "which Ash is this?" confusion.
-- **Purchase**: vendor sees a stable code on every order, not changing names.
-- **Barcode**: the SKU *is* the barcode by default — one printable string.
-- **Audit**: 5 years from now the SKU still means the same physical thing.
+- **Readable + stable**: `MED-PARA-CIP-…` tells a human what it is; `PRD-000017`
+  never changes underneath it.
+- **No drift**: family/brand/form codes are set once and reused.
+- **No duplicates**: collisions are blocked, not silently suffixed.
+- **Audit-safe**: the PRD code means the same physical thing for the life of the
+  trust, regardless of renames or recategorisation.
 
-## Migration tip (if you have existing items)
-
-Don't bulk-rename. Instead:
-
-1. Pick a **cutover date**.
-2. From that date, every new product follows this policy.
-3. Existing products: rename only when you next touch them anyway (price
-   change, vendor change, etc.).
-4. Within 3 months you'll have ~80% of active inventory on the new scheme.
-   The other 20% (dead stock) doesn't matter.
+---
 
 ## One-page wall print version
 
 ```
-SKU = CATEGORY-ITEM-VARIANT
+TWO CODES per product:
+  • Business SKU   = KIND-FAMILY-BRAND-[VARIANT]-FORM-[STRENGTH]-[PACK]
+                     (auto-built, readable, on the label)
+  • Internal code  = PRD-000123  (permanent, never changes)
 
-CATEGORY:
-  RM     Raw Material
-  PK     Packaging
-  FL     Fluid / Oil
-  FG     Finished Good
-  WIP    Work in Progress
-  CONS   Consumable
-  TOOL   Tool / Equipment
-  SPARE  Spare part
+SET the identity fields; the system builds the SKU:
+  Kind → Family → Brand → [Variant] → Form → [Strength] → [Pack]
 
-Rules:
-  • UPPERCASE, A-Z 0-9 hyphen only
-  • ≤ 20 characters
-  • If no variant axis: use 001, 002, ...
-  • NEVER rename an existing SKU.
-  • Always add Internal Reference + Barcode (same value).
+RULES:
+  • Codes are UPPERCASE A-Z 0-9; family/brand/form codes set once in their register.
+  • Duplicate SKU? The system BLOCKS it — adjust Brand/Variant/Pack/Strength.
+  • After stock/movement, the SKU + barcode FREEZE — archive + recreate
+    instead of renaming.
+  • No Family/Brand entered → SKU falls back to KIND-00001.
 ```

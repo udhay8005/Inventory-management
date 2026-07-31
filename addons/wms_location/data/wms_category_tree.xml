@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Generic enterprise category tree with gaushala presets. This file
+            ONLY CREATES new product.category records — it writes categ_id on
+            NO existing product, so seeding can never reparent or move any
+            item already in the catalogue (the additive invariant). noupdate="1"
+            so the admin can freely rename / move / archive / extend the tree
+            afterwards without an upgrade undoing it.
+
+            Each LEAF carries wms_default_kind (so the creation wizard always
+            resolves a WMS kind -> SKU prefix / unit / lifecycle) plus the
+            owner's per-category required-identity flags. Those flags are INERT
+            until P3 wires enforcement; they are seeded as sensible defaults the
+            admin tunes. Branch nodes are organisational (products live on the
+            leaves).
+        -->
+
+        <!-- ============ Animal Care ============ -->
+        <record id="cat_animal_care" model="product.category">
+            <field name="name">Animal Care</field>
+        </record>
+        <record id="cat_medicines" model="product.category">
+            <field name="name">Medicines</field>
+            <field name="parent_id" ref="cat_animal_care"/>
+            <field name="wms_default_kind">medicine</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_strength">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_vaccines" model="product.category">
+            <field name="name">Vaccines</field>
+            <field name="parent_id" ref="cat_animal_care"/>
+            <field name="wms_default_kind">medicine</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_strength">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_supplements" model="product.category">
+            <field name="name">Supplements</field>
+            <field name="parent_id" ref="cat_animal_care"/>
+            <field name="wms_default_kind">medicine</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_strength">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_first_aid" model="product.category">
+            <field name="name">First Aid</field>
+            <field name="parent_id" ref="cat_animal_care"/>
+            <field name="wms_default_kind">medicine</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+
+        <!-- ============ Feed ============ -->
+        <record id="cat_feed" model="product.category">
+            <field name="name">Feed</field>
+        </record>
+        <record id="cat_green_feed" model="product.category">
+            <field name="name">Green Feed</field>
+            <field name="parent_id" ref="cat_feed"/>
+            <field name="wms_default_kind">feed</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_dry_feed" model="product.category">
+            <field name="name">Dry Feed</field>
+            <field name="parent_id" ref="cat_feed"/>
+            <field name="wms_default_kind">feed</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_concentrate" model="product.category">
+            <field name="name">Concentrate</field>
+            <field name="parent_id" ref="cat_feed"/>
+            <field name="wms_default_kind">feed</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_mineral_mix" model="product.category">
+            <field name="name">Mineral Mix</field>
+            <field name="parent_id" ref="cat_feed"/>
+            <field name="wms_default_kind">feed</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_silage" model="product.category">
+            <field name="name">Silage</field>
+            <field name="parent_id" ref="cat_feed"/>
+            <field name="wms_default_kind">feed</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+
+        <!-- ============ Consumables ============ -->
+        <record id="cat_consumables" model="product.category">
+            <field name="name">Consumables</field>
+        </record>
+        <record id="cat_cleaning" model="product.category">
+            <field name="name">Cleaning</field>
+            <field name="parent_id" ref="cat_consumables"/>
+            <field name="wms_default_kind">sanitation</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_stationery" model="product.category">
+            <field name="name">Stationery</field>
+            <field name="parent_id" ref="cat_consumables"/>
+            <field name="wms_default_kind">stationery</field>
+        </record>
+        <record id="cat_packaging" model="product.category">
+            <field name="name">Packaging</field>
+            <field name="parent_id" ref="cat_consumables"/>
+            <field name="wms_default_kind">packaging</field>
+        </record>
+
+        <!-- ============ Chemicals ============ -->
+        <record id="cat_chemicals" model="product.category">
+            <field name="name">Chemicals</field>
+        </record>
+        <record id="cat_sanitizers" model="product.category">
+            <field name="name">Sanitizers</field>
+            <field name="parent_id" ref="cat_chemicals"/>
+            <field name="wms_default_kind">sanitation</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_disinfectants" model="product.category">
+            <field name="name">Disinfectants</field>
+            <field name="parent_id" ref="cat_chemicals"/>
+            <field name="wms_default_kind">sanitation</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+        <record id="cat_detergents" model="product.category">
+            <field name="name">Detergents</field>
+            <field name="parent_id" ref="cat_chemicals"/>
+            <field name="wms_default_kind">sanitation</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_req_size">True</field>
+            <field name="wms_req_pack">True</field>
+        </record>
+
+        <!-- ============ Tools (Form shown as 'Model') ============ -->
+        <record id="cat_tools" model="product.category">
+            <field name="name">Tools</field>
+        </record>
+        <record id="cat_hand_tools" model="product.category">
+            <field name="name">Hand Tools</field>
+            <field name="parent_id" ref="cat_tools"/>
+            <field name="wms_default_kind">tool</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_form_is_model">True</field>
+        </record>
+        <record id="cat_power_tools" model="product.category">
+            <field name="name">Power Tools</field>
+            <field name="parent_id" ref="cat_tools"/>
+            <field name="wms_default_kind">tool</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_form_is_model">True</field>
+        </record>
+        <record id="cat_measuring_tools" model="product.category">
+            <field name="name">Measuring</field>
+            <field name="parent_id" ref="cat_tools"/>
+            <field name="wms_default_kind">tool</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_form_is_model">True</field>
+        </record>
+
+        <!-- ============ Spare Parts (Form shown as 'Model') ============ -->
+        <record id="cat_spare_parts" model="product.category">
+            <field name="name">Spare Parts</field>
+        </record>
+        <record id="cat_spare_electrical" model="product.category">
+            <field name="name">Electrical</field>
+            <field name="parent_id" ref="cat_spare_parts"/>
+            <field name="wms_default_kind">electrical</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_form_is_model">True</field>
+        </record>
+        <record id="cat_spare_plumbing" model="product.category">
+            <field name="name">Plumbing</field>
+            <field name="parent_id" ref="cat_spare_parts"/>
+            <field name="wms_default_kind">plumbing</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_form_is_model">True</field>
+        </record>
+        <record id="cat_spare_mechanical" model="product.category">
+            <field name="name">Mechanical</field>
+            <field name="parent_id" ref="cat_spare_parts"/>
+            <field name="wms_default_kind">spare</field>
+            <field name="wms_req_brand">True</field>
+            <field name="wms_req_form">True</field>
+            <field name="wms_form_is_model">True</field>
+        </record>
+
+        <!-- ============ Top-level leaves ============ -->
+        <record id="cat_equipment" model="product.category">
+            <field name="name">Equipment</field>
+            <field name="wms_default_kind">tool</field>
+            <field name="wms_req_brand">True</field>
+        </record>
+        <record id="cat_office" model="product.category">
+            <field name="name">Office</field>
+            <field name="wms_default_kind">stationery</field>
+        </record>
+        <record id="cat_kitchen" model="product.category">
+            <field name="name">Kitchen</field>
+            <field name="wms_default_kind">consumable</field>
+        </record>
+        <record id="cat_agriculture" model="product.category">
+            <field name="name">Agriculture</field>
+            <field name="wms_default_kind">consumable</field>
+        </record>
+        <record id="cat_other" model="product.category">
+            <field name="name">Other</field>
+            <field name="wms_default_kind">consumable</field>
+        </record>
+    </data>
+</odoo>

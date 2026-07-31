@@ -17,6 +17,8 @@
 - [ ] wms_repair_damage
 - [ ] wms_ai_forecast
 - [ ] wms_reports
+- [ ] wms_training
+- [ ] wms_perishable *(v20)*
 - [ ] docs / scripts / CI
 
 ## How was it tested?

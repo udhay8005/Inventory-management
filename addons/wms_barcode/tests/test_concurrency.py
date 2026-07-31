@@ -109,6 +109,59 @@ class TestScanConcurrency(TransactionCase):
             wiz2.action_validate()
         self.assertFalse(wiz2.picking_id)
 
+    def test_daily_cap_window_counts_20h_excludes_25h(self):
+        """The rolling 24h cap window is measured against each move-line's UTC
+        create_date. An issue ~20h ago must still count toward the cap; one
+        ~25h ago must have aged out.
+
+        Regression guard for the timezone fix: the cutoff is computed with
+        fields.Datetime.now() (UTC) to match the UTC create_date column. The
+        old code used datetime.now() (server-LOCAL), which on the IST deploy
+        shrank the window by the offset (~18.5h) and let the cap fail OPEN.
+        Both the cutoff and the back-dated create_date here are anchored in
+        UTC, so the assertion is deterministic on any server timezone.
+
+        Back-dating create_date via SQL is the only way to age a row inside a
+        single non-committing test transaction.
+        """
+        # Plenty of stock so the SECOND issue can only be blocked by the cap,
+        # never by an empty slot.
+        self.env["stock.quant"]._update_available_quantity(self.product, self.stock, 100.0)
+        self.product.product_tmpl_id.wms_daily_cap = 15.0
+
+        self._new_issue(10.0).action_validate()  # 10 issued "now"
+        prior = self.env["stock.move.line"].search(
+            [("product_id", "=", self.product.id), ("state", "=", "done")]
+        )
+        self.assertTrue(prior, "the first issue should have left done move-lines")
+
+        # Age the prior issue to ~20h ago -> still inside the 24h window.
+        self.env.cr.execute(
+            "UPDATE stock_move_line "
+            "SET create_date = (now() AT TIME ZONE 'UTC') - INTERVAL '20 hours' "
+            "WHERE id IN %s",
+            (tuple(prior.ids),),
+        )
+        prior.invalidate_recordset(["create_date"])
+        # 10 (in-window) + 8 = 18 > 15 -> must block.
+        with self.assertRaises(UserError):
+            self._new_issue(8.0).action_validate()
+
+        # Age it to ~25h ago -> out of the window, no longer counts.
+        self.env.cr.execute(
+            "UPDATE stock_move_line "
+            "SET create_date = (now() AT TIME ZONE 'UTC') - INTERVAL '25 hours' "
+            "WHERE id IN %s",
+            (tuple(prior.ids),),
+        )
+        prior.invalidate_recordset(["create_date"])
+        # 0 in-window + 8 = 8 < 15 -> allowed again.
+        wiz = self._new_issue(8.0)
+        wiz.action_validate()
+        self.assertTrue(
+            wiz.picking_id, "an issue must be allowed once the prior one ages out of the 24h window"
+        )
+
     # ---- Happy path exercises the product-row FOR UPDATE lock ----------
     def test_issue_happy_path_with_product_lock(self):
         start = self._on_hand()
@@ -116,6 +169,53 @@ class TestScanConcurrency(TransactionCase):
         wiz.action_validate()  # runs the FOR UPDATE lock SQL + assigns + validates
         self.assertTrue(wiz.picking_id)
         self.assertAlmostEqual(self._on_hand(), start - 2.0, places=3)
+
+    # ---- Daily cap counts via the immutable flag, not the origin string -
+    def test_scan_issue_picking_carries_immutable_flag(self):
+        wiz = self._new_issue(2.0)
+        wiz.action_validate()
+        self.assertTrue(
+            wiz.picking_id.wms_is_scan_issue,
+            "Scan Issue picking must carry the immutable daily-cap marker",
+        )
+
+    def test_daily_cap_ignores_unflagged_pickings(self):
+        """The cap counts only flagged Scan Issue pickings. A picking that
+        merely shares the 'Barcode FIFO' origin but lacks the flag (an edit, a
+        collision, a non-wizard transfer) must NOT count - the old origin-based
+        counter would have wrongly counted it.
+
+        FPAT High: the original test mutated wms_is_scan_issue on a freshly-
+        validated picking. We now block that mutation at the ORM layer (the
+        flag is immutable on done Scan Issues - it gates Consumption Value
+        and the cap), so this test instead INSERTS a fresh historical row
+        directly via the ORM with wms_is_scan_issue=False from the start -
+        which is what a legacy pre-flag picking would look like.
+        """
+        self.product.product_tmpl_id.wms_daily_cap = 5.0
+        # Seed a historical unflagged row: same product, same origin pattern,
+        # but never went through the Scan Issue wizard.
+        historical = (
+            self.env["stock.picking"]
+            .sudo()
+            .create(
+                {
+                    "picking_type_id": self.wh.int_type_id.id,
+                    "location_id": self.wh.lot_stock_id.id,
+                    "location_dest_id": self.wh.lot_stock_id.id,
+                    "origin": "Barcode FIFO issue",
+                    "wms_is_scan_issue": False,
+                    "wms_storekeeper_id": self.keeper.id,
+                }
+            )
+        )
+        self.assertFalse(historical.wms_is_scan_issue)
+        wiz = self._new_issue(3.0)
+        wiz.action_validate()  # projected 0+3 < 5 -> allowed
+        self.assertTrue(
+            wiz.picking_id,
+            "unflagged historical pickings must not count toward the daily cap",
+        )
 
 
 @tagged("post_install", "-at_install", "wms", "wms_concurrency")

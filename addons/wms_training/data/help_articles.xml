@@ -32,23 +32,23 @@
                     <p>When you issue an item, the system looks at <i>when each batch arrived</i> (its "in-date") and gives you the oldest one first.</p>
                     <p><b>Why it matters</b> Stock that sits too long goes stale, rusts, or gets forgotten at the back of a rack. FIFO keeps things moving in the order they came in, so nothing rots while newer stock gets used.</p>
                     <p><b>Real trust example</b> You have two sacks of cattle feed: one received in January, one in March. When a helper does a Scan Issue, the system points them to the <b>January</b> sack first. The older feed gets used while it's still good, and the March sack waits its turn.</p>
-                    <p><b>Good to know</b> FIFO is the normal rule for most items. For things that can expire (medicine, feed, fluids, pooja items), the system uses a smarter rule called <b>FEFO</b> instead — see that article.</p>
+                    <p><b>Good to know</b> FIFO is the rule for <i>every</i> issue — the wizard always points you to the oldest-arrived stock. For things that can expire (medicine, feed, fluids, pooja items), also watch the <b>Expiry Alerts</b> report so you rotate the soonest-to-expire batch out before it spoils — see <b>Expiry &amp; rotation</b>.</p>
             </div></field>
         </record>
 
         <record id="help_what_is_fefo" model="wms.help.article">
             <field name="slug">what-is-fefo</field>
-            <field name="name">FEFO — First Expiry, First Out</field>
+            <field name="name">Expiry &amp; rotation — issue oldest-first, watch Expiry Alerts</field>
             <field name="category">terminology</field>
             <field name="audience">all</field>
             <field name="sequence">102</field>
-            <field name="keywords">fefo, first expiry first out, expiry, medicine, feed, pooja, expiry date</field>
+            <field name="keywords">fefo, expiry, rotation, first expiry, oldest first, fifo, expiry alert, medicine, feed, pooja, expiry date</field>
             <field name="body" type="html"><div>
-                    <p><b>FEFO means the item that expires soonest leaves the shelf first</b> — even if a different batch arrived earlier.</p>
-                    <p>The system uses FEFO automatically for anything that can go bad: <b>medicine, feed, fluids, and pooja items</b>, or any product that has an expiry date set.</p>
-                    <p><b>Why it matters</b> With ordinary FIFO you ship the <i>oldest-arrived</i> item. But a batch that arrived first might expire <i>later</i> than a batch that arrived second. FEFO fixes that: the soonest-to-expire goes out first, so medicine and feed are never wasted sitting on the shelf past their date.</p>
-                    <p><b>Real trust example</b> FEFO means the bottle of calcium that expires first leaves the shelf first — so medicine never expires unused. If you have one calcium batch expiring December 2026 and a newer-looking batch expiring June 2027, FEFO still hands you the <b>December</b> batch first.</p>
-                    <p><b>Clever detail</b> FEFO even looks across <i>different batches of the same product name</i>. If two deliveries of "Calcium Bolus" sit in different slots, the wizard will pull from the earlier-expiring slot first and tell you which slot to pick from.</p>
+                    <p><b>When you issue stock, the system always gives you the oldest-arrived batch first (FIFO)</b> — for every product, including things that can expire. A single issue is for one product, so there is nothing to "expiry-sort" within it.</p>
+                    <p><b>So how do we avoid medicine and feed expiring on the shelf?</b> Use the <b>Expiry Alerts</b> report (Reports → Expiry alerts). It lists everything by how soon it expires — <b>red = expired, amber = within 30 days, blue = within 90 days</b> — so you can deliberately issue or set aside the soonest-to-expire batch before it spoils.</p>
+                    <p><b>Real trust example</b> You have one calcium batch expiring December 2026 and a newer one expiring June 2027. The Expiry Alerts report shows the <b>December</b> batch first (red/amber) — issue from that slot next, so the medicine is used while it's still good.</p>
+                    <p><b>Set the expiry date</b> on medicine and feed when you onboard them — that is what powers the Expiry Alerts report.</p>
+                    <p><i>(You may still hear the term "FEFO — First Expiry, First Out". This trust manages expiry through the Expiry Alerts report rather than at the issue picker, because stock is tracked per product, not per physical batch.)</i></p>
             </div></field>
         </record>
 
@@ -126,7 +126,7 @@
             <field name="body" type="html"><div>
                     <p><b>A Floor location is open-area storage</b> — a pallet spot, a floor stack, or an outside yard bay where stock sits directly on the ground, <i>not</i> on rack shelving.</p>
                     <p><b>Why it matters</b> Not everything fits in a neat rack compartment. Big sacks of feed, drums of fluid, or bulky tools often live on the floor or on a pallet. A floor location lets the system track that stock just like a slot does.</p>
-                    <p><b>Real trust example</b> Twenty sacks of cattle feed arrive and won't fit on a shelf, so they go on a pallet in the feed store. That pallet is a <b>Floor</b> location. When a helper receives or issues feed, the system can point to the floor area exactly the way it points to a rack slot — and FIFO/FEFO still work.</p>
+                    <p><b>Real trust example</b> Twenty sacks of cattle feed arrive and won't fit on a shelf, so they go on a pallet in the feed store. That pallet is a <b>Floor</b> location. When a helper receives or issues feed, the system can point to the floor area exactly the way it points to a rack slot — and FIFO (oldest-first issuing) still works.</p>
                     <p><b>Good to know</b> Floor locations behave the same as slots for receiving, issuing, counting (cycle count), damage, and repair. The difference is only that there's no compartment/shelf/column above them — stock lands there directly.</p>
             </div></field>
         </record>
@@ -192,7 +192,7 @@
                     <p><b>Good to know</b></p>
                     <ul>
                     <li>You don't type the in-date yourself; it's set when stock is received.</li>
-                    <li>For items that expire, the system prefers the <b>expiry date</b> over the in-date (that's FEFO). The in-date is the tie-breaker when two batches share an expiry.</li>
+                    <li>Issuing always goes by in-date (oldest first), for every product. For items that expire, the separate <b>Expiry date</b> drives the <b>Expiry Alerts</b> report so you can rotate the soonest-to-expire batch out before it spoils — see <b>Expiry &amp; rotation</b>.</li>
                     </ul>
             </div></field>
         </record>
@@ -254,12 +254,12 @@
             <field name="category">terminology</field>
             <field name="audience">all</field>
             <field name="sequence">115</field>
-            <field name="keywords">scan issue, issue, take out, fifo, fefo, withdraw, usage note, taken by</field>
+            <field name="keywords">scan issue, issue, take out, fifo, oldest first, withdraw, usage note, taken by</field>
             <field name="body" type="html"><div>
                     <p><b>Scan Issue is the screen you use to take stock out for use.</b> Since the trust uses inventory itself (it never sells), this is how feed, medicine, ghee, and tools leave the store for the cows, the pooja room, or a repair job.</p>
-                    <p><b>How it works</b> 1. Scan the product and enter how many you need. 2. The system <b>plans the pick using FIFO</b> (oldest first) — or <b>FEFO</b> (soonest-to-expire first) for medicine/feed/fluid/pooja — and shows you the exact slot(s) to take from <i>before</i> anything is finalised. 3. Fill in <b>who is taking it</b>, <b>who authorised it</b>, the <b>on-duty Store Keeper</b>, and a short <b>reason</b> (e.g. "morning feed for shed B"). A photo is required for liquids or weighed items. 4. Validate.</p>
+                    <p><b>How it works</b> 1. Scan the product and enter how many you need. 2. The system <b>plans the pick using FIFO</b> (oldest stock first) — for every product, including medicine, feed, fluids, and pooja — and shows you the exact slot(s) to take from <i>before</i> anything is finalised. 3. Fill in <b>who is taking it</b>, <b>who authorised it</b>, the <b>on-duty Store Keeper</b>, and a short <b>reason</b> (e.g. "morning feed for shed B"). A photo is required for liquids or weighed items. 4. Validate.</p>
                     <p><b>Why it matters</b> This is the heart of the audit trail: every issue records who, why, and which keeper — so usage can be checked against the monthly cow-care plan.</p>
-                    <p><b>Real trust example</b> A helper needs 2 calcium bottles. The wizard says "take 2 from the December-expiry batch in slot PHARM01 / SH01 / C01" (FEFO). They enter taken-by, ordered-by, reason, validate — done, and it's all logged.</p>
+                    <p><b>Real trust example</b> A helper needs 2 calcium bottles. The wizard says "take 2 from the oldest-arrived batch in slot PHARM01 / SH01 / C01". They enter taken-by, ordered-by, reason, validate — done, and it's all logged. (To rotate a soon-to-expire medicine batch out first, check the <b>Expiry Alerts</b> report before issuing — see <b>Expiry &amp; rotation</b>.)</p>
                     <p><b>If stock is short</b> The screen clearly warns "STOCK OUT" or "only N on hand" so you know to wait for a return or ask an Admin to receive more — it won't let you over-issue.</p>
             </div></field>
         </record>
@@ -399,7 +399,7 @@
                     <p><b>A backup is a complete, encrypted copy of the warehouse system's data</b>, saved so everything can be recovered if the main computer fails, is lost, or gets corrupted.</p>
                     <p>Backups are written as encrypted files (<code>.dump.gpg</code>) on a schedule, and each one's size, checksum, and result are recorded in the <b>Backup &amp; DR Audit</b> dashboard. No passwords or secrets are ever stored in that record — only filenames, sizes, and status.</p>
                     <p><b>Why it matters</b> All the trust's stock history — every receipt, issue, audit, and the location map — lives in one database. If that's lost without a backup, years of records vanish. Backups are the safety net.</p>
-                    <p><b>Real trust example</b> The store-room PC's drive dies one morning. Because an encrypted backup ran the night before, an Admin restores it onto a new machine and the trust is back to within a day of where it was — all the medicine and feed history intact.</p>
+                    <p><b>Real trust example</b> The store-room PC's drive dies one morning. Because an encrypted backup ran the previous afternoon, an Admin restores it onto a new machine and the trust is back to within a day of where it was — all the medicine and feed history intact.</p>
                     <p><b>Important</b> A backup is only trustworthy if it has been <b>proven to restore</b> — which is exactly why we run a weekly <b>Restore drill</b> (see that article). The system also raises a warning if no successful backup has been recorded in the last 24 hours.</p>
             </div></field>
         </record>
@@ -435,7 +435,7 @@
                     <li><b>CRITICAL</b> — no successful backup has ever been recorded, or the system can't be reached. Act now.</li>
                     </ul>
                     <p><b>Why it matters</b> Problems with backups are invisible until you need them. The health check turns "are we protected?" into a single glance, and a monitoring tool can poll it automatically and alert someone the moment status drops.</p>
-                    <p><b>Real trust example</b> A monitoring service checks <code>/wms/health</code> every few minutes. Last night's backup didn't run, so the status turns <b>DEGRADED</b> and an alert goes out. The Admin fixes the backup the same morning — long before anyone needs to restore.</p>
+                    <p><b>Real trust example</b> A monitoring service checks <code>/wms/health</code> every few minutes. Yesterday's 4:30 PM backup didn't run, so the status turns <b>DEGRADED</b> and an alert goes out. The Admin fixes the backup the same morning — long before anyone needs to restore.</p>
                     <p><b>Safe to expose</b> The health report deliberately contains no sensitive data — only statuses and how old the last backup/drill are — so it's safe for a monitor to read without a password.</p>
             </div></field>
         </record>
@@ -533,23 +533,23 @@
 
         <record id="help_admin_path_stock_flow_fifo_fefo" model="wms.help.article">
             <field name="slug">admin-path-stock-flow-fifo-fefo</field>
-            <field name="name">Admin Path 5: How stock flows in and out (FIFO and FEFO)</field>
+            <field name="name">Admin Path 5: How stock flows in and out (FIFO and expiry rotation)</field>
             <field name="category">role</field>
             <field name="audience">admin</field>
             <field name="sequence">40</field>
-            <field name="keywords">admin stock flow fifo fefo expiry in_date receipt issue return removal oldest earliest</field>
+            <field name="keywords">admin stock flow fifo expiry in_date receipt issue return removal oldest expiry alerts rotation perishable</field>
             <field name="body" type="html"><div>
-                    <p><b>You will learn:</b> the in-and-out flow and the two rules the system uses to pick which stock leaves first.</p>
+                    <p><b>You will learn:</b> the in-and-out flow, the one rule the system uses at issue, and how you keep perishables from expiring on the shelf.</p>
                     <p><b>The flow:</b> stock comes in via <b>Scan Receipt</b>, sits in a slot or floor zone, and leaves via <b>Scan Issue</b>. Returns of reusable items come back via <b>Scan Return</b>.</p>
-                    <p><b>FIFO — First In, First Out:</b> the stock that arrived earliest leaves first. The system stamps an arrival time (<code>in_date</code>) on every receipt and, when you issue, automatically picks the oldest first across all slots. The keeper never has to remember which sack is oldest.</p>
-                    <p><b>FEFO — First Expiry, First Out:</b> for things that spoil, arrival order is not enough. For the kinds <b>medicine, feed, fluid, and pooja</b> (and anything with an expiry date set), the system switches to picking the <b>soonest-to-expire</b> batch first. So a new medicine batch expiring in 2027 is never handed out while an older one expiring next month still sits on the shelf.</p>
-                    <p><b>Steps to confirm it works:</b> 1. Open <b>Reporting &gt; Oldest Stock First (FIFO)</b> and check the aging buckets. 2. Open the <b>Expiry Alert</b> report to see what is close to expiry. 3. Set an <b>Expiry date</b> on perishable products so FEFO and the alert can do their job.</p>
-                    <p><b>Why it matters:</b> FIFO stops old stock rotting forgotten at the back; FEFO stops the trust handing out a medicine or feed that expires first while keeping a fresher one.</p>
+                    <p><b>FIFO — First In, First Out (the issue rule for everything):</b> the stock that arrived earliest leaves first. The system stamps an arrival time (<code>in_date</code>) on every receipt and, when you issue, automatically picks the oldest first across all slots — for <i>every</i> product, including medicine, feed, fluid, and pooja. The keeper never has to remember which sack is oldest. A single Scan Issue is for one product, and expiry is tracked per product (not per physical batch), so there is nothing to expiry-sort at the picker.</p>
+                    <p><b>Stopping perishables from expiring — the Expiry Alerts report:</b> arrival order alone won't catch a batch that's close to its date, so for things that spoil you watch the <b>Expiry Alerts</b> report (Reporting → Expiry alerts). It lists items by how soon they expire — <b>red = expired, amber = within 30 days, blue = within 90 days</b> — so you can deliberately issue or set aside the soonest-to-expire batch before it goes bad. That is how a medicine expiring next month gets used up instead of sitting while a fresher one is handed out.</p>
+                    <p><b>Steps to confirm it works:</b> 1. Open <b>Reporting &gt; Oldest Stock First (FIFO)</b> and check the aging buckets. 2. Open the <b>Expiry Alert</b> report to see what is close to expiry. 3. Set an <b>Expiry date</b> on perishable products so the Expiry Alerts report can do its job.</p>
+                    <p><b>Why it matters:</b> FIFO stops old stock rotting forgotten at the back; the Expiry Alerts report stops the trust letting a medicine or feed expire on the shelf while a fresher one is used first.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
-                    <li>Leaving expiry dates blank on medicine/feed/fluid/pooja — FEFO then has nothing to sort by.</li>
-                    <li>Telling a keeper to "grab any one" — let the scan plan choose for them.</li>
-                    <li>Assuming FIFO covers perishables; for those kinds, FEFO is the rule.</li>
+                    <li>Leaving expiry dates blank on medicine/feed/fluid/pooja — the Expiry Alerts report then has nothing to sort by.</li>
+                    <li>Telling a keeper to "grab any one" — let the scan plan choose the oldest for them.</li>
+                    <li>Assuming the issue picker rotates perishables for you — it issues oldest-arrived; you rotate by expiry using the Expiry Alerts report.</li>
                     </ul>
             </div></field>
         </record>
@@ -591,7 +591,7 @@
             <field name="body" type="html"><div>
                     <p><b>You will learn:</b> how the trust's data is protected and why a backup is only real once it has been restored.</p>
                     <p>The system makes <b>encrypted backups</b> (an encrypted <code>.dump.gpg</code> file) on a schedule. But a backup that has never been restored is not a backup — so a <b>restore drill</b> runs <b>weekly</b> to prove the latest backup can actually be recovered, <i>without ever touching the live database</i>.</p>
-                    <p><b>Steps to keep this healthy:</b> 1. Make sure a <b>daily backup</b> task is scheduled (Windows Task Scheduler, around 2am). 2. Set a <b>real backup passphrase</b> in the <code>.env</code> file — the drill refuses to run while it is still the placeholder. 3. Let the <b>weekly drill</b> run (Sunday early morning). It checks the backup is complete and decryptable. <b>Once a quarter</b>, run a <b>full restore</b> drill so the database actually rebuilds into a throwaway copy. 4. Keep an <b>off-site copy</b> of the encrypted backups (a NAS or cloud) and drill against it at least monthly.</p>
+                    <p><b>Steps to keep this healthy:</b> 1. Make sure a <b>daily backup</b> task is scheduled (Windows Task Scheduler, every afternoon at 4:30 PM). 2. Set a <b>real backup passphrase</b> in the <code>.env</code> file — the drill refuses to run while it is still the placeholder. 3. Let the <b>weekly drill</b> run (Sunday early morning). It checks the backup is complete and decryptable. <b>Once a quarter</b>, run a <b>full restore</b> drill so the database actually rebuilds into a throwaway copy. 4. Keep an <b>off-site copy</b> of the encrypted backups (a NAS or cloud) and drill against it at least monthly.</p>
                     <p><b>Why it matters:</b> Three silent failures — a half-written backup, a schema change that breaks restore, and a rotated-but-untested passphrase — are caught only by an end-to-end restore. The weekly drill catches all three within seven days.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
@@ -667,7 +667,7 @@
                     </ul>
                     <p>If the recommendation is <b>URGENT BUY</b>, every WMS Manager gets a <b>notification</b> in their Discuss inbox automatically.</p>
                     <p><b>Repair Orders</b> follow a simple state machine: <b>draft → in repair → done</b> (or <b>scrapped</b>). Each step moves the item between the Damage and Repair locations and records the audit set.</p>
-                    <p><b>Steps:</b> 1. Watch your inbox for <b>URGENT BUY</b> notifications and act on them. 2. Open <b>Operations &gt; Repair Orders</b> to start, finish, or scrap repairs (only Managers and Repair Techs can do this). 3. Use the <b>Repair Pipeline</b> report to see what is stuck in repair.</p>
+                    <p><b>Steps:</b> 1. Watch your inbox for <b>URGENT BUY</b> notifications and act on them. 2. Open <b>Operations &gt; Repair orders</b> to start, finish, or scrap repairs (only Managers and Repair Techs can do this). 3. Use the <b>Repair Pipeline</b> report to see what is stuck in repair.</p>
                     <p><b>Why it matters:</b> Damaged stock that is not recorded becomes a silent shortage. The recommendation engine tells you instantly whether a breakage is an emergency or just a note.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
@@ -709,7 +709,7 @@
             <field name="body" type="html"><div>
                     <p><b>You will learn:</b> what your job is and how to find your way around on your first day.</p>
                     <p>As a <b>Store Keeper</b> you do the daily hands-on work: take in deliveries, put them away, hand things out, take reusable things back, and report damage. You do <b>not</b> edit racks or products — that is the Admin's job. You can look at every report.</p>
-                    <p><b>Steps:</b> 1. Log in (your supervisor gives you the login). On a tablet, the screen is touch-friendly. 2. Keep <b>Beginner Mode ON</b> at first — it shows extra hints and stronger "are you sure?" warnings. You can switch it off in your own preferences once you are confident. 3. Open the <b>WMS &gt; Operations</b> menu. Your daily tools live here: <b>Scan Receipt</b>, <b>Scan Issue (FIFO)</b>, <b>Scan Return</b>, and <b>Damages</b>. 4. If a menu you expect is missing, tell your Admin — they grant each tool with a tick. 5. Search the <b>Help Center</b> for any word you do not know (try "FIFO" or "compartment").</p>
+                    <p><b>Steps:</b> 1. Log in (your supervisor gives you the login). On a tablet, the screen is touch-friendly. 2. Keep <b>Beginner Mode ON</b> at first — it shows extra hints and stronger "are you sure?" warnings. You can switch it off in your own preferences once you are confident. 3. Open the <b>WMS &gt; Operations</b> menu. Your daily tools live here: <b>Scan Receipt</b>, <b>Scan Issue</b>, <b>Scan Return</b>, and <b>Damages</b>. 4. If a menu you expect is missing, tell your Admin — they grant each tool with a tick. 5. Search the <b>Help Center</b> for any word you do not know (try "FIFO" or "compartment").</p>
                     <p><b>Why it matters:</b> The trust's whole stock count depends on you scanning every move at the time it happens. Doing it right is more important than doing it fast.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
@@ -789,14 +789,14 @@
             <field name="category">role</field>
             <field name="audience">keeper</field>
             <field name="sequence">51</field>
-            <field name="keywords">keeper issue scan issue fifo fefo oldest expiry plan validate photo short shortage audit taken by</field>
+            <field name="keywords">keeper issue scan issue fifo oldest plan validate photo short shortage audit taken by expiry alerts</field>
             <field name="body" type="html"><div>
-                    <p><b>You will learn:</b> how to hand out stock so the oldest (or soonest-to-expire) goes first, automatically.</p>
-                    <p><b>Steps:</b> 1. Open <b>WMS &gt; Operations &gt; Scan Issue (FIFO)</b>. 2. <b>Scan the product</b> and enter how many are needed. 3. The system builds a <b>plan</b> showing exactly which slots to take from — <b>oldest first</b> (FIFO). For medicine, feed, fluid, and pooja items it picks the <b>soonest-to-expire</b> first (FEFO). You do not have to decide which batch. 4. Fill the <b>audit panel</b>: who is taking it, who ordered/approved it, and the on-duty Store Keeper. 5. If the product is measured (litres, kg), you must <b>attach a photo</b> of the dispensed amount before you can finish. 6. Press <b>Validate</b>. The stock leaves and the move is recorded with your audit details.</p>
-                    <p><b>Why it matters:</b> You do not have to remember which sack is oldest — the plan tells you. This stops old stock rotting at the back and stops a soon-to-expire medicine sitting while a fresher one is handed out.</p>
+                    <p><b>You will learn:</b> how to hand out stock so the oldest arrived goes first, automatically.</p>
+                    <p><b>Steps:</b> 1. Open <b>WMS &gt; Operations &gt; Scan Issue</b>. 2. <b>Scan the product</b> and enter how many are needed. 3. The system builds a <b>plan</b> showing exactly which slots to take from — <b>oldest first</b> (FIFO), for every product including medicine, feed, fluid, and pooja. You do not have to decide which batch. 4. Fill the <b>audit panel</b>: who is taking it, who ordered/approved it, and the on-duty Store Keeper. 5. If the product is measured (litres, kg), you must <b>attach a photo</b> of the dispensed amount before you can finish. 6. Press <b>Validate</b>. The stock leaves and the move is recorded with your audit details.</p>
+                    <p><b>Why it matters:</b> You do not have to remember which sack is oldest — the plan tells you. This stops old stock rotting at the back. To keep a soon-to-expire medicine or feed from sitting while a fresher one is handed out, check the <b>Expiry Alerts</b> report (Reports → Expiry alerts) and rotate the soonest-to-expire batch out first.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
-                    <li>Picking from a different slot than the plan shows "because it is closer" — that breaks FIFO/FEFO.</li>
+                    <li>Picking from a different slot than the plan shows "because it is closer" — that breaks FIFO.</li>
                     <li>Skipping the required photo for measured items (Validate will stop you).</li>
                     <li>If the system says <b>short</b> (not enough stock), do <b>not</b> part-issue and hope — tell the Admin so it can be bought.</li>
                     <li>Taking material first and planning to log it later — always scan at the moment you hand it out.</li>
@@ -861,7 +861,7 @@
             <field name="body" type="html"><div>
                     <p><b>You will learn:</b> your part in the repair process, and where it stops.</p>
                     <p>When you file a damage on a <b>reusable</b> item, you may see a <b>Create Repair Order</b> button on the damage form. Clicking it opens a repair request, already filled in from your damage report.</p>
-                    <p><b>Steps:</b> 1. On a confirmed damage of a repairable item, click <b>Create Repair Order</b> if your supervisor wants it repaired. 2. That creates the repair request and links it back to your damage event (the <b>Linked repair order</b> field). 3. You can <b>open and read</b> that repair order, but you cannot change it. The buttons to <b>Start</b>, <b>Finish</b>, or <b>Scrap</b> the repair are hidden from you. 4. A <b>Repair Tech</b> or the <b>Admin</b> does the actual repair steps from the <b>Repair Orders</b> menu.</p>
+                    <p><b>Steps:</b> 1. On a confirmed damage of a repairable item, click <b>Create Repair Order</b> if your supervisor wants it repaired. 2. That creates the repair request and links it back to your damage event (the <b>Linked repair order</b> field). 3. You can <b>open and read</b> that repair order, but you cannot change it. The buttons to <b>Start</b>, <b>Finish</b>, or <b>Scrap</b> the repair are hidden from you. 4. A <b>Repair Tech</b> or the <b>Admin</b> does the actual repair steps from the <b>Repair orders</b> menu.</p>
                     <p><b>Why it matters:</b> You raise the request; the repair itself is handled by someone with the Repair Tech role. This keeps a clear hand-off and avoids stock getting stuck halfway through a repair.</p>
                     <p><b>Common mistakes to avoid:</b></p>
                     <ul>
@@ -907,7 +907,7 @@
             <field name="keywords">keeper daily routine checklist habit same day scan first golden rules end of day spot check</field>
             <field name="body" type="html"><div>
                     <p><b>You will learn:</b> a simple daily rhythm that keeps the whole system accurate.</p>
-                    <p><b>Steps — a typical day:</b> 1. <b>Log in</b> and glance at <b>Operations</b> for anything pending. 2. <b>Receive</b> every delivery the moment it arrives — count, quality check, <b>Scan Receipt</b>, then shelve it. 3. <b>Issue</b> items only through <b>Scan Issue (FIFO)</b> — follow the plan, oldest/soonest-expiry first. 4. <b>Take back</b> reusable items through <b>Scan Return</b>. 5. <b>Report</b> anything broken or expired through <b>Damages</b> straight away. 6. Do a small <b>spot count</b> of a few high-value slots (a quick cycle count). 7. At the end of the day, ask: <b>does the screen match the shelves?</b> If not, flag it.</p>
+                    <p><b>Steps — a typical day:</b> 1. <b>Log in</b> and glance at <b>Operations</b> for anything pending. 2. <b>Receive</b> every delivery the moment it arrives — count, quality check, <b>Scan Receipt</b>, then shelve it. 3. <b>Issue</b> items only through <b>Scan Issue</b> — follow the plan, oldest stock first. 4. <b>Take back</b> reusable items through <b>Scan Return</b>. 5. <b>Report</b> anything broken or expired through <b>Damages</b> straight away. 6. Do a small <b>spot count</b> of a few high-value slots (a quick cycle count). 7. At the end of the day, ask: <b>does the screen match the shelves?</b> If not, flag it.</p>
                     <p><b>The golden rules:</b></p>
                     <ul>
                     <li><b>Scan first, shelve second.</b> Stock never touches a shelf before it is scanned in.</li>
@@ -1142,10 +1142,10 @@
             <field name="category">workflow</field>
             <field name="audience">keeper</field>
             <field name="sequence">257</field>
-            <field name="keywords">issue scan issue fifo fefo take out give out outbound use stock oldest first expiry photo reason taken by</field>
+            <field name="keywords">issue scan issue fifo take out give out outbound use stock oldest first expiry alerts photo reason taken by</field>
             <field name="body" type="html"><div>
-                    <p><b>What this is for</b> Use Scan Issue whenever stock leaves the store for use: feed for the shed, medicine for a calf, ghee for pooja, a tool for a job. The system automatically takes the oldest stock first (FIFO), or the soonest-to-expire first (FEFO) for medicine, feed, fluids, and pooja items.</p>
-                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Operations -&gt; Scan Issue (FIFO)</b>. 2. Set <b>Requested Qty</b>, then scan the product barcode. The system shows a plan of which slot(s) it will take from, before anything moves. 3. Check the plan rows. If a slot is actually empty, reduce that row. 4. Fill the audit panel (all required): <b>Taken by</b> (who is carrying it away), <b>Ordered by</b> (who authorised it), <b>Store Keeper on duty</b> (you), and a <b>Reason / usage note</b> (for example 'morning feed for shed B'). 5. If the item is measured by weight or volume (kg, litres), snap the required <b>Item photo</b>. 6. Click <b>Validate</b>.</p>
+                    <p><b>What this is for</b> Use Scan Issue whenever stock leaves the store for use: feed for the shed, medicine for a calf, ghee for pooja, a tool for a job. The system automatically takes the oldest stock first (FIFO) — for every product, including medicine, feed, fluids, and pooja. To rotate a soon-to-expire perishable out first, check the <b>Expiry Alerts</b> report before you issue.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Operations -&gt; Scan Issue</b>. 2. Set <b>Requested Qty</b>, then scan the product barcode. The system shows a plan of which slot(s) it will take from, before anything moves. 3. Check the plan rows. If a slot is actually empty, reduce that row. 4. Fill the audit panel (all required): <b>Taken by</b> (who is carrying it away), <b>Ordered by</b> (who authorised it), <b>Store Keeper on duty</b> (you), and a <b>Reason / usage note</b> (for example 'morning feed for shed B'). 5. If the item is measured by weight or volume (kg, litres), snap the required <b>Item photo</b>. 6. Click <b>Validate</b>.</p>
                     <p><b>Why this workflow exists</b> It forces older stock out first so nothing rots at the back, and it records who took what and why, which is how a non-profit proves its inventory was used honestly.</p>
                     <p><b>Risks / what NOT to do</b></p>
                     <ul>
@@ -1154,7 +1154,7 @@
                     <li>A measured item will not validate without a photo.</li>
                     </ul>
                     <p><b>Best practice</b> Issue at the moment of handover, not later from memory. Trust the plan; the system already knows the oldest batch.</p>
-                    <p><b>Trust example</b> The keeper needs 5 calcium boluses. He scans them; FEFO plans them from the batch expiring this December, not next June. He types Taken by 'Dr Rao', Ordered by 'Farm lead', reason 'vaccination round for calves', and clicks Validate.</p>
+                    <p><b>Trust example</b> The keeper needs 5 calcium boluses. He scans them; the plan points to the oldest-arrived slot. (Earlier that morning he checked the Expiry Alerts report and saw a December-expiry batch in amber, so he knows that older stock is the one to use up first.) He types Taken by 'Dr Rao', Ordered by 'Farm lead', reason 'vaccination round for calves', and clicks Validate.</p>
             </div></field>
         </record>
 
@@ -1210,7 +1210,7 @@
             <field name="keywords">repair repairs repair order fix tool start repair mark done scrap in repair return slot technician</field>
             <field name="body" type="html"><div>
                     <p><b>What this is for</b> A Repair Order tracks a fixable item (usually a returnable tool or spare) from the Damage area, through repair, and back onto its shelf, or to scrap if it cannot be saved. Managers run repairs; the Admin authorises each step.</p>
-                    <p><b>Step by step</b> 1. The easiest start: open the confirmed Damage event and click <b>Create Repair Order</b>. It pre-fills the product, quantity, original slot, return slot, and the audit names. (Or open <b>WMS -&gt; Operations -&gt; Repair Orders -&gt; New</b> for a standalone one.) 2. Make sure <b>Reported by</b>, <b>Authorised by</b>, and <b>Store Keeper on duty</b> are filled. 3. Click <b>Start Repair</b>. The item moves from the Damage location to the Repair-Out bench (state becomes In repair). 4. When the fix is finished, set the <b>Return slot</b> if it differs from the original, then click <b>Mark Done</b>. The item goes back to its slot and is available to issue again. 5. If it cannot be fixed, click <b>Scrap</b> instead. It is written off from the Repair-Out location.</p>
+                    <p><b>Step by step</b> 1. The easiest start: open the confirmed Damage event and click <b>Create Repair Order</b>. It pre-fills the product, quantity, original slot, return slot, and the audit names. (Or open <b>WMS -&gt; Operations -&gt; Repair orders -&gt; New</b> for a standalone one.) 2. Make sure <b>Reported by</b>, <b>Authorised by</b>, and <b>Store Keeper on duty</b> are filled. 3. Click <b>Start Repair</b>. The item moves from the Damage location to the Repair-Out bench (state becomes In repair). 4. When the fix is finished, set the <b>Return slot</b> if it differs from the original, then click <b>Mark Done</b>. The item goes back to its slot and is available to issue again. 5. If it cannot be fixed, click <b>Scrap</b> instead. It is written off from the Repair-Out location.</p>
                     <p><b>Why this workflow exists</b> The trust keeps tools, not throwaways. Repairing and returning them saves money, and the order keeps the item's location honest at every step instead of leaving it 'somewhere being fixed'.</p>
                     <p><b>Risks / what NOT to do</b></p>
                     <ul>
@@ -1241,7 +1241,7 @@
                     <li>The health page shows ages and status only, never secrets, so it is safe for a monitor to poll.</li>
                     </ul>
                     <p><b>Best practice</b> Make the weekly backup check part of the same routine as the weekly inventory audit. If status is not HEALTHY, read the Restore drill guide and the deployment doc.</p>
-                    <p><b>Trust example</b> Every Monday the Admin opens the Backup &amp; DR Audit dashboard, sees last night's database backup ticked green and Sunday's restore drill verified, opens /wms/health to confirm HEALTHY, and moves on.</p>
+                    <p><b>Trust example</b> Every Monday the Admin opens the Backup &amp; DR Audit dashboard, sees yesterday afternoon's database backup ticked green and Sunday's restore drill verified, opens /wms/health to confirm HEALTHY, and moves on.</p>
             </div></field>
         </record>
 
@@ -1264,7 +1264,7 @@
                     <li>Do not delete the backups folder.</li>
                     </ul>
                     <p><b>Best practice</b> Leave the automatic weekly task running, and once a quarter run a full restore by hand to be extra sure. Each drill writes a line to the Backup &amp; DR Audit dashboard so you have a record.</p>
-                    <p><b>Trust example</b> On the first Sunday of the quarter the Admin runs the full drill. The script restores last night's backup into a temporary wms_drill database, confirms it is complete, drops it, and logs a green verified row. The trust now knows its data is genuinely safe.</p>
+                    <p><b>Trust example</b> On the first Sunday of the quarter the Admin runs the full drill. The script restores the newest backup into a temporary wms_drill database, confirms it is complete, drops it, and logs a green verified row. The trust now knows its data is genuinely safe.</p>
             </div></field>
         </record>
 
@@ -1589,23 +1589,23 @@
 
         <record id="help_safety_double_check_fefo_medicine" model="wms.help.article">
             <field name="slug">safety-double-check-fefo-medicine</field>
-            <field name="name">SAFETY: Double-check expiry on medicine and feed (FEFO)</field>
+            <field name="name">SAFETY: Double-check expiry on medicine and feed</field>
             <field name="category">safety</field>
             <field name="audience">all</field>
             <field name="sequence">127</field>
-            <field name="keywords">safety FEFO expiry medicine feed fluid pooja earliest first check date expired batch</field>
+            <field name="keywords">safety expiry medicine feed fluid pooja expiry alerts report check date expired batch rotation</field>
             <field name="body" type="html"><div>
                     <p><b>Warning: giving out expired medicine or feed can harm the cows.</b> Always take a moment to check the expiry date with your own eyes.</p>
-                    <p>For medicine, feed, fluids, and pooja items, the system uses <b>FEFO</b> — First Expiry, First Out. When you issue, it automatically picks the batch that expires <b>soonest</b>, not just the oldest by arrival date. It will even pull from a different batch of the same item if that batch expires earlier.</p>
-                    <p><b>What you must still do:</b></p>
+                    <p>At the issue picker the system plans by <b>arrival order (FIFO — oldest first)</b>, the same as every other product. It does <b>not</b> hunt for the soonest-to-expire batch for you. So for medicine, feed, fluids, and pooja items, <b>you</b> are the one who keeps expiry safe — by watching the Expiry Alerts report and reading the date on the item in your hand.</p>
+                    <p><b>What you must do:</b></p>
                     <ul>
-                    <li><b>Read the slot the wizard tells you to pick from</b>, and take from exactly that slot. The plan lists the right batch for a reason.</li>
+                    <li><b>Watch the Expiry Alerts report</b> (WMS → Reports → Expiry alerts) — <b>red = expired, amber = within 30 days, blue = within 90 days</b>. Deliberately issue or set aside the soonest-to-expire batch first so it gets used while it is still good.</li>
                     <li><b>Check the expiry date printed on the item</b> before it leaves your hands. If it has already passed, do <b>not</b> issue it.</li>
                     <li>An expired item should go through the <b>Damage</b> flow (reason: Expired), not out to the cows.</li>
                     </ul>
-                    <p><b>Example:</b> you scan a calcium bolus. The wizard says take from the slot holding the batch expiring this December, not the fresh one expiring next year. That is FEFO doing its job, follow it.</p>
-                    <p><b>If the system points you at one slot but you grabbed from another,</b> the counts will drift, tell the Admin so it can be corrected.</p>
-                    <p><b>Why it matters:</b> the software gets the order right, but only you can see the actual date on the actual item in your hand. The two together keep the animals safe.</p>
+                    <p><b>Example:</b> the Expiry Alerts report shows a calcium batch expiring this December in amber, and a fresher one expiring next year. You go to the December slot and issue from it first, so the soon-to-expire stock is used up before it spoils.</p>
+                    <p><b>If you take stock from a slot the issue plan didn't point to,</b> the counts will drift, tell the Admin so it can be corrected.</p>
+                    <p><b>Why it matters:</b> the issue picker only knows arrival order — only you, with the Expiry Alerts report and your own eyes on the date, can make sure the soonest-to-expire batch goes out first and nothing expired reaches the animals.</p>
             </div></field>
         </record>
 
@@ -1702,7 +1702,7 @@
             <field name="body" type="html"><div>
                     <p>You don't need to walk the floor hunting for an item, let the system tell you where it is.</p>
                     <p><b>Steps:</b></p>
-                    <p>1. Go to <b>WMS → Reports → Where is product X?</b> 2. Search by the product name or its SKU code. 3. The list shows <b>every slot</b> that holds it, with the quantity in each. 4. The slot the system would pick next (oldest stock, or earliest expiry for medicine/feed) is marked <b>"Next to pick"</b>.</p>
+                    <p>1. Go to <b>WMS → Reports → Where is product X?</b> 2. Search by the product name or its SKU code. 3. The list shows <b>every slot</b> that holds it, with the quantity in each. 4. The slot the system would pick next (the oldest-arrived stock — FIFO, for every product) is marked <b>"Next to pick"</b>.</p>
                     <p>Click any row to open that slot. From the rack you can open the <b>visual grid</b> to see the slot highlighted on a picture of the rack, handy for guiding a new helper to the right shelf.</p>
                     <p><b>Example:</b> a vet asks for dewormer. You search it, see it's in two slots, and the report marks the older batch as "Next to pick". You go straight there instead of opening every drawer.</p>
                     <p><b>Tip:</b> the "Next to pick" slot matches what Scan Issue will choose, so following it keeps your physical picking and the system in step.</p>
@@ -1716,21 +1716,20 @@
             <field name="category">faq</field>
             <field name="audience">all</field>
             <field name="sequence">383</field>
-            <field name="keywords">fifo fefo difference oldest earliest expiry first in out medicine feed order picking rotation</field>
+            <field name="keywords">fifo fefo difference oldest expiry first in out medicine feed order picking rotation expiry alerts</field>
             <field name="body" type="html"><div>
-                    <p>When you issue stock, the system decides which units to take first, you don't have to choose. It uses one of two rules:</p>
+                    <p>When you issue stock, the system decides which units to take first, you don't have to choose. <b>At the issue picker there is only one rule:</b></p>
                     <ul>
-                    <li><b>FIFO (First In, First Out)</b> — takes the <b>oldest arrival</b> first. Used for most items. It stops stock sitting forgotten at the back until it goes bad.</li>
-                    <li><b>FEFO (First Expiry, First Out)</b> — takes the batch that <b>expires soonest</b> first. Used for medicine, feed, fluids, and pooja items, anything where the expiry date matters more than the arrival date.</li>
+                    <li><b>FIFO (First In, First Out)</b> — takes the <b>oldest arrival</b> first. Used for <b>every</b> product, including medicine, feed, fluids, and pooja items. It stops stock sitting forgotten at the back until it goes bad.</li>
                     </ul>
-                    <p>For FEFO items, the system can even reach across different batches of the same product to grab the one expiring earliest, so a fresh batch never gets used up before an older one that's about to expire.</p>
+                    <p><b>What about FEFO (First Expiry, First Out)?</b> You may hear that term — it means "issue the soonest-to-expire batch first". This trust does <b>not</b> apply it at the Scan Issue picker: a single issue is for one product, and expiry is tracked <i>per product</i> (not per physical batch), so there is nothing to expiry-sort inside an issue. Instead, you manage expiry with the <b>Expiry Alerts</b> report (WMS → Reports → Expiry alerts), which lists items by how soon they expire — <b>red = expired, amber = within 30 days, blue = within 90 days</b> — so you can deliberately rotate the soonest-to-expire batch out before it spoils.</p>
                     <p><b>Example:</b></p>
                     <ul>
-                    <li><i>FIFO:</i> you issue cleaning cloths, the system takes the pack that arrived first.</li>
-                    <li><i>FEFO:</i> you issue calcium bolus, the system takes the batch expiring this December even if a newer batch arrived more recently.</li>
+                    <li><i>At issue (FIFO):</i> you issue cleaning cloths — or calcium boluses — and the system takes the batch that arrived first.</li>
+                    <li><i>Expiry rotation:</i> the Expiry Alerts report flags a calcium batch expiring this December in amber, so you go to that slot and issue from it first, even if a newer batch arrived more recently.</li>
                     </ul>
-                    <p><b>What you do:</b> follow the slot the wizard tells you to pick from, and still eyeball the expiry date on medicine/feed (see the FEFO safety note).</p>
-                    <p><b>Why it matters:</b> the right order means less waste for ordinary stock, and no expired medicine reaching the cows.</p>
+                    <p><b>What you do:</b> follow the slot the wizard tells you to pick from, watch the Expiry Alerts report for medicine/feed, and still eyeball the expiry date on the item (see the expiry safety note).</p>
+                    <p><b>Why it matters:</b> oldest-first issuing means less waste for ordinary stock, and watching the Expiry Alerts report keeps expired medicine from reaching the cows.</p>
             </div></field>
         </record>
 
@@ -1835,6 +1834,179 @@
                     <p>The clip is stored inside the system and is included in every backup. It plays right inside the article — <b>no internet needed</b>, which is ideal for a tablet in the shed.</p>
                     <p><b>Other way — paste a YouTube or Vimeo link:</b> if the video is already online, paste its link into <b>Video link</b> instead of uploading. It shows inside the article, but this one <b>needs internet</b> to play. (If you fill both, the uploaded clip wins.)</p>
                     <p><b>Tip:</b> keep videos short and focused. Five 1-minute clips beat one 5-minute clip — people find the part they need faster.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_cloud_backup" model="wms.help.article">
+            <field name="slug">what-is-cloud-backup</field>
+            <field name="name">Cloud backup (Google Drive)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">129</field>
+            <field name="keywords">cloud backup google drive off-site offsite upload encrypted copy inventory_backups second copy fire theft</field>
+            <field name="body" type="html"><div>
+                    <p><b>The cloud backup is a second copy of every encrypted backup, kept in the trust's Google Drive</b> — off the store-room computer, so a fire, theft, or dead disk in the building cannot take the data and its backups together.</p>
+                    <p>It happens automatically: after the daily backup finishes (every afternoon at 4:30 PM), the same encrypted files are uploaded to a Drive folder called <b>Inventory_Backups</b>, organised by year, month, and day. The files are <b>encrypted before they leave the computer</b>, so even someone who got into the Drive account could not read the trust's data.</p>
+                    <p><b>Why it matters</b> Keeping the only backups next to the live computer protects against a software fault but not against the building. The Drive copy is the "out of the building" safety net.</p>
+                    <p><b>Real trust example</b> The store-room PC is stolen over a weekend. On a replacement machine, the Admin signs the system back into Google Drive, downloads the newest backup set, and restores it — the trust loses at most one day of records.</p>
+                    <p><b>Good to know</b></p>
+                    <ul>
+                    <li>If the internet is down, <b>the local backup is still made and kept</b> — the Drive upload simply retries on the next run.</li>
+                    <li>A keeper with the <b>Back Up Now</b> permission can send an extra copy any time (see "How to back up to Google Drive now").</li>
+                    <li>Old copies are tidied automatically: daily copies are kept about a month, weekly ones about six months, monthly ones about two years. Manual copies are kept until a Manager decides otherwise.</li>
+                    <li><b>Never move, rename, or delete anything inside the Inventory_Backups folder in Google Drive.</b> The system can only see the files it created itself; tidying the folder by hand makes backups invisible to it.</li>
+                    </ul>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_cloud_backup_now" model="wms.help.article">
+            <field name="slug">workflow-cloud-backup-now</field>
+            <field name="name">How to back up to Google Drive now</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">266</field>
+            <field name="keywords">back up now backup now google drive manual extra copy cloud upload safe copy button refresh</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Sending a safe copy of all WMS data to Google Drive <i>right now</i>, without waiting for the daily 4:30 PM backup — for example after a big receiving day, before a stormy night, or whenever a Manager asks for one. It needs no technical knowledge: one button.</p>
+                    <p><b>Step by step</b> 1. Open <b>WMS -&gt; Back Up Now</b>. (The menu only appears if you have the <i>Can Run Backup Now</i> permission — Managers always have it; ask the Admin if you need it.) 2. Read the note: nothing is deleted or changed, and you can keep working while it runs. 3. Click <b>Back Up Now</b>. 4. The screen says the backup has started. It takes a few minutes — click <b>Refresh</b> to check, or close the window and come back later. 5. When it finishes, the success screen shows the <b>backup filename</b>, its <b>size in MB</b>, and the <b>time it was uploaded to Google Drive</b>.</p>
+                    <p><b>If it says "Drive upload pending"</b> The safe copy was made on the server but the internet or Google Drive was not reachable. Nothing is lost — the upload is retried automatically on the next backup run.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Double-clicking the button is harmless — the backup never runs twice at once.</li>
+                    <li>Do not go into Google Drive and "tidy" the <b>Inventory_Backups</b> folder. Moving or renaming files there hides them from the system.</li>
+                    <li>This screen only <i>makes</i> backups. Bringing data <i>back</i> is a separate, Manager-only job — if something is wrong with the system, tell a Manager rather than trying to fix it yourself.</li>
+                    </ul>
+                    <p><b>Best practice</b> Run a Back Up Now before anything unusual — a bulk correction, a planned power cut, a machine move — so the newest possible copy is already off the building.</p>
+                    <p><b>Trust example</b> A festival week ends with hundreds of receipts and issues entered by evening. The keeper clicks Back Up Now before locking up; two minutes later the success screen shows the file, its size, and the Drive upload time. The day's work is safe even if the PC fails overnight.</p>
+            </div></field>
+        </record>
+
+        <record id="help_workflow_cloud_backup_offline_queue" model="wms.help.article">
+            <field name="slug">workflow-cloud-backup-offline-queue</field>
+            <field name="name">Offline cloud backups &amp; the Disaster Recovery page</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">267</field>
+            <field name="keywords">offline queue pending upload waiting internet reconnect retry abandoned backup disaster recovery DR page google drive validate folder disconnect connect retry now backoff manager</field>
+            <field name="body" type="html"><div>
+                    <p><b>Who this is for</b> Managers and Admins. It explains what happens to a Google Drive backup when the internet is down, and how to use the <b>Backup &amp; Disaster Recovery</b> page. Store Keepers do not need this — their one job is <b>Back Up Now</b> (see "How to back up to Google Drive now"); the page below is Manager-only.</p>
+
+                    <p><b>The promise: the cloud copy can lag, but it can never lose.</b> The local encrypted backup is always made and always kept, whatever the internet is doing. If Google Drive cannot be reached, the day's set is not thrown away — it is <i>queued</i> and uploaded automatically the moment the connection comes back. Nobody has to remember to retry it.</p>
+
+                    <p><b>How the offline queue works</b></p>
+                    <ul>
+                    <li><b>Waiting for internet</b> — the local backup is safe on the computer; the Drive upload is parked. As soon as the box is back online, an hourly check sends it up. No action needed.</li>
+                    <li><b>Automatic retries with a cooling-off gap</b> — if an upload keeps failing, the system waits a little longer between each attempt (15 minutes, then 30, then an hour, and so on, up to once a day) so it never hammers a flaky line.</li>
+                    <li><b>Abandoned</b> — only after many attempts over about two weeks does a set give up and show as <i>abandoned</i>. That means a real, lasting problem (the Google sign-in expired, the Drive is full, or the internet was down for a long time). The system stays healthy-with-a-warning, never "critical": the local backup is still safe.</li>
+                    </ul>
+
+                    <p><b>The Backup &amp; Disaster Recovery page</b> Open <b>WMS &#8594; Configuration &#8594; Backup &amp; Disaster Recovery</b>. From top to bottom it shows:</p>
+                    <ul>
+                    <li><b>Connection</b> — whether the trust is signed in to Google Drive, and which Gmail account. It shows only <i>whether</i> the credentials are present ("configured" / "present"), <b>never the secret values themselves</b> — by design, the page cannot read or store a password or token.</li>
+                    <li><b>Backup folder</b> — paste a Google Drive folder link and press <b>Validate Folder</b> to confirm the system can write there.</li>
+                    <li><b>Schedule &amp; Retention</b> — the daily backup time and how long copies are kept.</li>
+                    <li><b>Offline upload queue</b> — how many sets are pending, waiting for internet, or abandoned, plus the last successful upload and the last error. This is your at-a-glance health for the cloud tier.</li>
+                    <li><b>Retry Now</b> — a button that tries the queued uploads immediately instead of waiting for the hourly check. Safe to press any time.</li>
+                    </ul>
+
+                    <p><b>What to do when something is wrong</b></p>
+                    <ul>
+                    <li><b>"Waiting for internet" sets</b> — usually nothing; they clear themselves when the line is back. Press <b>Retry Now</b> to test at once.</li>
+                    <li><b>"Auth expired"</b> — the Google sign-in lapsed. Ask the Admin to re-run the one-time sign-in at the server (<code>scripts\setup-gdrive-auth.ps1</code>); the backlog then uploads on its own. Connecting <i>cannot</i> be done from this web page — Google opens a browser on the server for it.</li>
+                    <li><b>"Abandoned" sets</b> — fix the cause (sign-in, full Drive, or a long outage), then click <b>Back Up Now</b>: a fresh copy uploads cleanly and the warning clears. Nothing was lost — the local encrypted copy is still on the computer.</li>
+                    </ul>
+
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>This page never restores anything. Bringing data <i>back</i> is a separate, console-only, Manager-supervised job (see the restore guide). The web app has no "restore" button on purpose.</li>
+                    <li>Do not paste any Google password, client secret, or token anywhere on this page — there is no field for it, and there should never be one.</li>
+                    <li>Do not "tidy" the <b>Inventory_Backups</b> folder in Google Drive; moving or renaming files there hides them from the system.</li>
+                    </ul>
+
+                    <p><b>Trust example</b> A monsoon storm knocks out the broadband for two days. Each afternoon the 4:30 PM backup still runs and is kept on the store-room PC; the Drive uploads queue as <i>waiting</i>. When the line is restored on the third morning, the hourly check quietly uploads all three days' sets within minutes — the Manager sees the queue empty itself and the last-upload time go green, with no lost data and nothing to do by hand.</p>
+            </div></field>
+        </record>
+
+        <record id="help_issue_dimensions_department_purpose_animal" model="wms.help.article">
+            <field name="slug">issue-dimensions-department-purpose-animal</field>
+            <field name="name">Department, Purpose, and Animal on a Scan Issue</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">268</field>
+            <field name="keywords">department purpose animal cow scan issue gaushala cowshed veterinary panchgavya dairy fodder kitchen bhojanalaya consumption value report issued for routine treatment vaccination deworming</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Every Scan Issue now records <b>where the stock is going</b> and <b>why</b>, so the trust can see, for example, how much feed the cowshed used or how much medicine the veterinary hospital consumed. Three fields capture this on the issue: <b>Department</b>, <b>Purpose</b>, and an optional <b>Animal / Cow</b>.</p>
+                    <p><b>The three fields</b></p>
+                    <ul>
+                    <li><b>Department</b> (required) — the part of the trust the stock is for. The list is set up by a Manager and includes Gaushala / Cowshed, Veterinary Hospital, R&amp;D / Panchgavya, Dairy, Fodder &amp; Agriculture, Kitchen / Bhojanalaya, Maintenance, Construction / Project, Administration, Temple / Pooja, and Other. If you are unsure, it defaults to <b>Other</b>, but pick the right one whenever you can — it is what makes the consumption reports useful.</li>
+                    <li><b>Purpose</b> — why the stock is being taken: Routine consumption, Animal treatment, Vaccination / deworming, Maintenance, Research, or Other.</li>
+                    <li><b>Animal / Cow</b> (optional) — if the issue is for one specific animal (say a calf under treatment), pick it from the lightweight register, which holds each animal's name, tag, shed, and age-class. Leave it blank for general issues like a sack of feed for the whole shed.</li>
+                    </ul>
+                    <p>The familiar audit names — <b>Taken by</b>, <b>Ordered by</b>, and the on-duty <b>Store Keeper</b> — are unchanged; Department, Purpose, and Animal sit alongside them.</p>
+                    <p><b>Where the master lists come from</b> The Department, Purpose, and Animal lists are managed by a <b>Manager</b> under <b>WMS &#8594; Configuration</b> (Departments, Purposes, Animals). A Store Keeper picks from the lists but does not edit them.</p>
+                    <p><b>Why this workflow exists</b> A gaushala spends very differently across the cowshed, the veterinary hospital, the dairy, and the kitchen. Tagging each issue with a Department turns the raw issue history into a <b>Consumption Value report split by Department</b>, so a Manager can see exactly where the trust's feed, medicine, and supplies are going.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Do not leave everything on <b>Other</b> out of habit — the Department split is only as honest as the field you pick.</li>
+                    <li>Do not force an Animal when the issue is general; the field is optional on purpose.</li>
+                    </ul>
+                    <p><b>Good to know</b> The old "Issued for" value is now worked out automatically from the Department, so older reports that relied on it keep working.</p>
+                    <p><b>Trust example</b> A keeper issues 5 calcium boluses for a calf under treatment. He sets Department <b>Veterinary Hospital</b>, Purpose <b>Animal treatment</b>, picks the calf in <b>Animal / Cow</b>, fills Taken by and Ordered by, and validates. At month end the Manager opens the Consumption Value report and sees the veterinary spend separated from the cowshed's routine feed.</p>
+            </div></field>
+        </record>
+
+        <record id="help_returnable_items_and_returns" model="wms.help.article">
+            <field name="slug">returnable-items-and-returns</field>
+            <field name="name">Returnable items and expected returns</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">269</field>
+            <field name="keywords">returnable returnable items expected return days due date overdue returns due report scan return tools spares borrowed not returned daily alert manager cron</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Some items leave the store expecting to come <b>back</b> — tools and spares above all. The system can mark such products as <b>returnable</b> and keep track of whether they have actually returned, so a borrowed drill or torque wrench is never quietly lost.</p>
+                    <p><b>How returnable items work</b></p>
+                    <ul>
+                    <li>A product can be flagged <b>returnable</b> with an <b>expected return days</b> window. Tools and spares are seeded at <b>14 days</b>; a Manager can change the window per product.</li>
+                    <li>When you issue a returnable item, the system stamps an <b>expected return date</b> on that issue (today plus the window).</li>
+                    <li>A <b>daily check</b> looks for returnable items that are past their expected return date and not yet returned, and <b>alerts the Managers</b> about them.</li>
+                    <li>The <b>Returns-due report</b> (under <b>WMS &#8594; Reports</b>) lists everything outstanding or overdue, so anyone can see what is still out.</li>
+                    </ul>
+                    <p><b>Bringing an item back</b> Use <b>Scan Return</b> as before: scan the item coming back and validate. The system matches it to the outstanding issue and marks that item <b>returned</b>, so it drops off the Returns-due report and the overdue alerts stop. (See "How to handle returns" for the full Scan Return steps.)</p>
+                    <p><b>Why this workflow exists</b> Tools are expensive for a donation-funded trust and easy to forget once lent out. An expected return date plus a daily nudge means a Manager knows within a day when something is overdue, instead of discovering a missing tool months later.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Items that get used up — feed, medicine, fluids, pooja items, cement, soap — are <b>not</b> returnable; Scan Return refuses them. If such an item is spoiled, use the Damage workflow instead.</li>
+                    <li>Do not leave a returned tool on the shelf without a Scan Return — the system still thinks it is out and will keep flagging it overdue.</li>
+                    </ul>
+                    <p><b>Trust example</b> A keeper issues a cordless drill (returnable, 14-day window) for a fence repair; the issue is stamped due in two weeks. The job drags on, the date passes, and the next morning the Managers get an overdue alert and see the drill on the Returns-due report. When the worker brings it back, the keeper does a Scan Return; the drill is marked returned and the alert clears.</p>
+            </div></field>
+        </record>
+
+        <record id="help_issue_approval_min_life_high_value" model="wms.help.article">
+            <field name="slug">issue-approval-min-life-high-value</field>
+            <field name="name">When an issue needs manager approval (and how managers approve)</field>
+            <field name="category">workflow</field>
+            <field name="audience">all</field>
+            <field name="sequence">270</field>
+            <field name="keywords">approval pending approval manager approve reject min life minimum life re-request guard high value threshold 5000 hold issue reason discuss notify self-approval approvals menu</field>
+            <field name="body" type="html"><div>
+                    <p><b>What this is for</b> Most issues go straight through. Two situations put an issue on <b>hold</b> until a <b>Manager approves</b> it: a too-soon re-request of the same item, and a high-value issue. This protects the trust against waste and against large amounts leaving the store without a second pair of eyes.</p>
+                    <p><b>1. Minimum-life re-request guard</b> A product can have a <b>minimum life</b> (a number of days). Sanitation, textile, and safety items are seeded at <b>7 days</b>, with a global fallback for the rest. If the <b>same Department</b> re-requests the <b>same product</b> within that window — for example asking for more soap two days after the last batch — the keeper must enter a <b>reason</b> and a <b>Manager must approve</b> before it issues.</p>
+                    <p><b>2. High-value approval</b> An issue worth more than a configurable threshold (default <b>Rs 5,000</b>) also needs a Manager's approval, however ordinary the item.</p>
+                    <p><b>What a Store Keeper sees</b> When either rule triggers, the issue does not complete — it becomes a <b>Pending Approval</b>. As a keeper you can <b>see</b> the pending request (and the reason you gave), but you <b>cannot approve it yourself</b> — only a Manager can. There is no self-approval: you raise it and wait. Carry on with other work; you will be told once a Manager has decided.</p>
+                    <p><b>What a Manager does (managers only)</b> Pending requests appear under <b>WMS &#8594; Approvals</b> — a menu only Managers see. Managers are also notified in <b>Discuss</b>. Open the request and either:</p>
+                    <ul>
+                    <li><b>Approve</b> — the system re-checks that the stock is still available, then issues it.</li>
+                    <li><b>Reject</b> — nothing is issued; the request is closed.</li>
+                    </ul>
+                    <p><b>Why this workflow exists</b> The min-life guard stops the same department drawing the same consumable again and again far faster than it could really be used (a classic sign of waste or leakage). The high-value rule means nothing expensive leaves on one person's say-so. Both keep a donation-funded trust honest without slowing down ordinary day-to-day issues.</p>
+                    <p><b>Risks / what NOT to do</b></p>
+                    <ul>
+                    <li>Keepers: do not try to dodge a hold by splitting one large issue into several small ones, or by re-keying it — raise the request and let a Manager decide.</li>
+                    <li>The whole approval step can be switched off by a Manager (System Parameter <code>wms_barcode.issue_approval_enabled</code>); leave it on unless a Manager has decided otherwise.</li>
+                    </ul>
+                    <p><b>Good to know</b> The high-value threshold lives in the System Parameter <code>wms_barcode.high_value_threshold</code> (default 5000) and can be tuned by a Manager.</p>
+                    <p><b>Trust example</b> A keeper re-requests 20 cakes of soap for the cowshed just three days after the last lot (minimum life 7 days). The issue holds, the keeper types the reason "extra cleaning before inspection", and it appears under Approvals. The Manager gets a Discuss message, opens it, agrees, and clicks Approve; the system re-checks stock and issues the soap. Had it been an unexplained repeat, the Manager would Reject it and nothing would leave the store.</p>
             </div></field>
         </record>
     </data>

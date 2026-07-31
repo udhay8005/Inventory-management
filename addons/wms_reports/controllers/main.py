@@ -10,8 +10,24 @@ CSS Grid with `grid-row` / `grid-column` spans so multi-shelf
 compartments render at their natural height.
 """
 
-from odoo import http
+import json
+
+from odoo import fields, http
 from odoo.http import request
+
+
+def _fmt_qty(value):
+    """Trim a quantity for human display: 3.0 -> '3', 2.5 -> '2.5', 0 -> '0'.
+
+    Used by the /wms/find product card. The trust stocks measured goods
+    (litres of fluid, kilograms of feed), so the old '%.0f' rounded 2.5 L to
+    '2'/'3' and silently misreported on-hand. We keep up to 3 decimals and trim
+    trailing zeros; we avoid '%g' because it switches to scientific notation for
+    large numbers.
+    """
+    text = "%.3f" % float(value or 0.0)
+    text = text.rstrip("0").rstrip(".")
+    return text or "0"
 
 
 def _slot_color(occupancy_pct, on_hand):
@@ -34,6 +50,10 @@ class WmsRackGridController(http.Controller):
 
     @http.route("/wms/rack/<int:rack_id>/grid", type="http", auth="user", website=False)
     def rack_grid(self, rack_id, **kw):
+        # Gate on WMS membership: the handler sudo()-reads all stock, so a
+        # non-WMS authenticated user must not be able to enumerate racks/stock.
+        if not request.env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
         rack = request.env["stock.location"].browse(rack_id).sudo().exists()
         if not rack or rack.wms_location_type != "rack":
             return request.not_found()
@@ -67,25 +87,61 @@ class WmsRackGridController(http.Controller):
             # Aggregate occupancy = filled slots / total slots.
             occupied = sum(1 for s in slots if s.wms_current_qty > 0)
             pct = (occupied / len(slots) * 100.0) if slots else 0.0
-            cells.append(
-                {
-                    "compartment": c,
-                    "slots": slots,
-                    "on_hand": on_hand,
-                    "on_hand_label": "%.0f" % on_hand,
-                    "occupancy_pct": pct,
-                    "pct_label": "%.0f%%" % pct,
-                    "products": c.wms_product_ids,
-                    "color": _slot_color(pct, on_hand),
-                    # CSS grid-row/grid-column use `start / end`. A 2D
-                    # span (top=1, bottom=3, left=1, right=2) becomes
-                    # grid-row: 1 / 4; grid-column: 1 / 3.
-                    "row_start": c.wms_shelf_top or 1,
-                    "row_end": (c.wms_shelf_bottom or c.wms_shelf_top or 1) + 1,
-                    "col_start": c.wms_column_left or 1,
-                    "col_end": (c.wms_column_right or c.wms_column_left or 1) + 1,
-                }
-            )
+            base = {
+                "compartment": c,
+                "slots": slots,
+                "on_hand": on_hand,
+                "on_hand_label": "%.0f" % on_hand,
+                "occupancy_pct": pct,
+                "pct_label": "%.0f%%" % pct,
+                "products": c.wms_product_ids,
+                "color": _slot_color(pct, on_hand),
+                "head_name": c.name,
+                "title": "%s — %.0f units" % (c.complete_name, on_hand),
+            }
+            # Non-rectangular compartments persist their exact cells; render
+            # each as a 1x1 square so the true L/T/U shape shows instead of the
+            # misleading bounding-box rectangle. The anchor (first cell) carries
+            # the label/products; the rest are blank fillers.
+            shape = []
+            if c.wms_cells_json:
+                try:
+                    shape = json.loads(c.wms_cells_json)
+                except (ValueError, TypeError):
+                    shape = []
+            if shape:
+                for i, rc in enumerate(shape):
+                    sh, col = int(rc[0]), int(rc[1])
+                    entry = dict(base)
+                    entry.update(
+                        {"row_start": sh, "row_end": sh + 1, "col_start": col, "col_end": col + 1}
+                    )
+                    if i != 0:
+                        entry.update(
+                            {
+                                "head_name": "",
+                                "title": "",
+                                "on_hand_label": "",
+                                "on_hand": 0.0,
+                                "pct_label": "",
+                                "products": [],
+                            }
+                        )
+                    cells.append(entry)
+            else:
+                entry = dict(base)
+                entry.update(
+                    {
+                        # CSS grid-row/grid-column use `start / end`. A 2D span
+                        # (top=1, bottom=3, left=1, right=2) becomes
+                        # grid-row: 1 / 4; grid-column: 1 / 3.
+                        "row_start": c.wms_shelf_top or 1,
+                        "row_end": (c.wms_shelf_bottom or c.wms_shelf_top or 1) + 1,
+                        "col_start": c.wms_column_left or 1,
+                        "col_end": (c.wms_column_right or c.wms_column_left or 1) + 1,
+                    }
+                )
+                cells.append(entry)
 
         return request.render(
             "wms_reports.rack_grid_page",
@@ -100,11 +156,233 @@ class WmsRackGridController(http.Controller):
             },
         )
 
+    @http.route("/wms/dashboard", type="http", auth="user", website=False)
+    def dashboard(self, **kw):
+        """One-screen admin overview: stock totals, attention badges, today's
+        activity, and system health. Manager-only. Reuses the existing report
+        models + wms.backup.audit._health_snapshot() - invents no new queries."""
+        env = request.env
+        if not env.user.has_group("wms_location.group_wms_manager"):
+            return request.not_found()
+        Quant = env["stock.quant"].sudo()
+
+        def sc(model, domain):
+            try:
+                return env[model].sudo().search_count(domain)
+            except Exception:  # noqa: BLE001 - a missing model must not break the page
+                return 0
+
+        snap = env["wms.backup.audit"].sudo()._health_snapshot()
+        _bk = snap.get("last_backup_age_hours")
+        last_backup_label = ("%s h ago" % _bk) if _bk is not None else "never"
+        total_products = sc("product.product", [("is_storable", "=", True), ("active", "=", True)])
+        # Count only WAREHOUSE STORAGE (lot-stock + its slot/rack/floor children).
+        # The 'Trust internal use' sink (where Scan Issue sends consumed goods and
+        # which never drains) and the Damage/Repair locations are also usage=internal,
+        # so a blanket usage='internal' sum grows without bound and double-counts
+        # consumed/set-aside stock. Mirrors the lot_stock_id child_of scope used by
+        # wms_value_reports / wms_expiry_alert.
+        lot_stock_ids = env["stock.warehouse"].sudo().search([]).mapped("lot_stock_id").ids
+        on_hand = (
+            sum(
+                Quant.search(
+                    [("location_id", "child_of", lot_stock_ids), ("quantity", ">", 0)]
+                ).mapped("quantity")
+            )
+            if lot_stock_ids
+            else 0.0
+        )
+        loc_counts = {
+            t: sc("stock.location", [("wms_location_type", "=", t)])
+            for t in ("zone", "rack", "compartment", "slot", "floor")
+        }
+        attention = [
+            ("Low stock / reorder", sc("wms.forecast", [("reorder_qty", ">", 0)]), "#b45309"),
+            (
+                "Expiring / expired",
+                sc("wms.expiry.alert", [("status", "in", ("expired", "urgent"))]),
+                "#b91c1c",
+            ),
+            ("Dead stock", sc("wms.forecast", [("velocity_class", "=", "dead")]), "#6b7280"),
+            ("Damaged (in Damage loc)", sc("wms.damage", [("state", "=", "confirmed")]), "#b91c1c"),
+            ("Under repair", sc("wms.repair.order", [("state", "=", "in_repair")]), "#2563eb"),
+            ("Pending audits", sc("wms.audit", [("state", "=", "submitted")]), "#b45309"),
+            ("Slots due for count", sc("wms.cycle.count.due", []), "#2563eb"),
+        ]
+        today = fields.Date.context_today(env.user)
+        labels = [
+            ("receipt", "Receipts"),
+            ("issue", "Issues"),
+            ("return", "Returns"),
+            ("damage", "Damages"),
+            ("repair", "Repairs"),
+            ("internal", "Internal moves"),
+        ]
+        today_act = [
+            (
+                label,
+                sc(
+                    "wms.storekeeper.activity",
+                    [("activity_date", "=", today), ("activity_type", "=", key)],
+                ),
+            )
+            for key, label in labels
+        ]
+        return request.render(
+            "wms_reports.dashboard_page",
+            {
+                "snap": snap,
+                "last_backup_label": last_backup_label,
+                "total_products": total_products,
+                "on_hand": "%.0f" % on_hand,
+                "loc_counts": loc_counts,
+                "attention": attention,
+                "today_act": today_act,
+                "today": today,
+            },
+        )
+
+    @http.route("/wms/find", type="http", auth="user", website=False)
+    def find(self, q=None, **kw):
+        """Smart 'where is it / how much / what's low' page (Batch 7).
+
+        One box answers the warehouse's most common questions. A few keywords
+        ('low', 'expiring', 'dead', 'damaged', 'repair') route to a quick list;
+        anything else is treated as a product lookup (barcode / SKU / name) and
+        answered with WHERE the stock is and HOW MUCH. No NLP — plain keyword
+        routing over the existing models. Open to any WMS user."""
+        env = request.env
+        if not env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
+        q = (q or "").strip()
+        ql = q.lower()
+        ctx = {"q": q, "mode": "empty", "products": [], "items": [], "heading": ""}
+
+        def sc(model, domain):
+            try:
+                return env[model].sudo().search(domain)
+            except Exception:  # noqa: BLE001 - a missing model must not break the page
+                return env["res.partner"].sudo().browse()  # empty-ish recordset
+
+        if not q:
+            return request.render("wms_reports.find_page", ctx)
+
+        # ---- Keyword quick-answers --------------------------------------
+        if ql in ("low", "reorder", "low stock", "whats low", "what's low", "lowstock"):
+            ctx["mode"], ctx["heading"] = "list", "Products at or below reorder level"
+            ctx["items"] = [
+                {"name": f.product_id.display_name, "detail": "suggest ordering %g" % f.reorder_qty}
+                for f in sc("wms.forecast", [("reorder_qty", ">", 0)])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        # FPAT High: route ONLY exact-match keywords - the chips at the top of
+        # the find page pass canonical 'expiring' / 'dead' / 'damaged' /
+        # 'repair'. The previous substring routing hijacked legitimate product
+        # searches whose name contained 'expir', 'dead', 'slow', 'damag', or
+        # 'repair' (e.g. 'Slow Cooker 5L' returned the dead-stock list).
+        if ql in ("expiring", "expired", "expiry"):
+            ctx["mode"], ctx["heading"] = "list", "Expiring / expired products"
+            ctx["items"] = [
+                {"name": a.product_id.display_name, "detail": (a.status or "").title()}
+                for a in sc("wms.expiry.alert", [("status", "in", ("expired", "urgent"))])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        if ql in ("dead", "dead stock", "slow"):
+            ctx["mode"], ctx["heading"] = "list", "Dead / slow stock"
+            ctx["items"] = [
+                {"name": f.product_id.display_name, "detail": "no recent movement"}
+                for f in sc("wms.forecast", [("velocity_class", "=", "dead")])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        if ql in ("damaged", "damage"):
+            ctx["mode"], ctx["heading"] = "list", "Damaged items"
+            ctx["items"] = [
+                {"name": d.product_id.display_name, "detail": "qty %g" % d.quantity}
+                for d in sc("wms.damage", [("state", "=", "confirmed")])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+        if ql in ("repair", "under repair", "repairing"):
+            ctx["mode"], ctx["heading"] = "list", "Items under repair"
+            ctx["items"] = [
+                {"name": r.product_id.display_name, "detail": "qty %g" % r.quantity}
+                for r in sc("wms.repair.order", [("state", "=", "in_repair")])
+            ]
+            return request.render("wms_reports.find_page", ctx)
+
+        # ---- Product lookup: where is it + how much ---------------------
+        Product = env["product.product"].sudo()
+        products = Product.search(
+            [
+                "|",
+                "|",
+                "|",
+                ("barcode", "=", q),
+                ("default_code", "=", q),
+                ("default_code", "ilike", q),
+                ("name", "ilike", q),
+            ],
+            limit=20,
+        )
+        if not products:
+            # FPAT: wms.barcode.alias's column is 'barcode' (the actual code),
+            # not 'name'. Using 'name' here raised ValueError on every lookup
+            # of an auto-generated EAN-13 - every alias resolution from /wms/find
+            # crashed silently into the noresult page.
+            alias = env["wms.barcode.alias"].sudo().search([("barcode", "=", q)], limit=1)
+            products = alias.product_id if alias else products
+        # Storage locations only (descendants of a warehouse lot-stock): a
+        # child_of filter naturally excludes the 'Trust internal use' sink.
+        lot_stocks = env["stock.warehouse"].sudo().search([]).mapped("lot_stock_id")
+        Quant = env["stock.quant"].sudo()
+        low_ids = set(sc("wms.forecast", [("reorder_qty", ">", 0)]).mapped("product_id").ids)
+
+        def loc_row(g):
+            """Where + how much + which batch / expiry / status, in one row.
+            Expiry (product_expiry) and lot status (wms_perishable) are
+            getattr-guarded so the find page still renders on a minimal install
+            that lacks those addons."""
+            lot = g.lot_id
+            expiry = getattr(lot, "expiration_date", False) if lot else False
+            status = getattr(lot, "wms_lot_state", "") if lot else ""
+            return {
+                "location": g.location_id.display_name,
+                "qty": _fmt_qty(g.quantity),
+                "batch": lot.name if lot else "",
+                "expiry": expiry.date().isoformat() if expiry else "",
+                "status": status.replace("_", " ").title() if status else "",
+            }
+
+        rows = []
+        for p in products:
+            quants = Quant.search(
+                [
+                    ("product_id", "=", p.id),
+                    ("location_id", "child_of", lot_stocks.ids),
+                    ("quantity", ">", 0),
+                ]
+            )
+            rows.append(
+                {
+                    "name": p.display_name,
+                    "sku": p.default_code or "",
+                    "barcode": p.barcode or "",
+                    "total": _fmt_qty(sum(quants.mapped("quantity"))),
+                    "uom": p.uom_id.name or "",
+                    "low": p.id in low_ids,
+                    "locations": [loc_row(g) for g in quants],
+                }
+            )
+        ctx["mode"] = "product" if rows else "noresult"
+        ctx["products"] = rows
+        return request.render("wms_reports.find_page", ctx)
+
     @http.route("/wms/warehouse/map", type="http", auth="user", website=False)
     def warehouse_map(self, **kw):
         """Whole-warehouse overview: every zone with its racks + floor zones,
         colour-coded by % full. Single page, mobile-friendly.
         """
+        if not request.env.user.has_group("wms_location.group_wms_user"):
+            return request.not_found()
         Location = request.env["stock.location"].sudo()
         zones = Location.search([("wms_location_type", "=", "zone")], order="complete_name")
 

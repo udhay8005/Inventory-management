@@ -5,16 +5,17 @@
             <field name="name">wms.oldest.stock.list</field>
             <field name="model">wms.oldest.stock.report</field>
             <field name="arch" type="xml">
-                <list decoration-danger="age_days > 365"
+                <list default_order="age_days desc"
+                      decoration-danger="age_days > 365"
                       decoration-warning="age_days > 180"
                       decoration-info="age_days > 90">
                     <field name="product_id"/>
-                    <field name="quantity"/>
-                    <field name="location_id"/>
+                    <field name="quantity" string="Qty"/>
+                    <field name="location_id" string="Slot"/>
                     <field name="compartment_id"/>
                     <field name="rack_id"/>
-                    <field name="in_date"/>
-                    <field name="age_days"/>
+                    <field name="in_date" string="Received on"/>
+                    <field name="age_days" string="Age (days)"/>
                 </list>
             </field>
         </record>
@@ -35,6 +36,14 @@
             <field name="name">Oldest stock (FIFO)</field>
             <field name="res_model">wms.oldest.stock.report</field>
             <field name="view_mode">list,pivot</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No stored stock yet.</p>
+                <p>
+                    The oldest batch of each product, so you always pick the oldest
+                    first. <b>Red</b> = over a year old, <b>amber</b> = over 6 months,
+                    <b>blue</b> = over 3 months.
+                </p>
+            </field>
         </record>
     </data>
 </odoo>

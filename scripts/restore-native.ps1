@@ -11,6 +11,11 @@
     Safety: by default refuses to overwrite an existing database. Pass
     -Force to drop + recreate.
 
+    Google Drive-sourced backups: scripts\gdrive-restore.ps1 downloads a
+    Drive set, verifies it (SHA-256 + GPG envelope), renames it back to
+    the local convention and can orchestrate this script end-to-end
+    (-AutoRestore: emergency backup, service stop/start, integrity probes).
+
 .PARAMETER BackupFile
     Path to the `*.dump.gpg` to restore. The matching
     `-filestore.zip.gpg` is auto-detected from the same folder.
@@ -38,6 +43,19 @@ param(
     [int]$DbPort,
     [string]$DbUser
 )
+
+# --- Identifier safety -----------------------------------------------------
+# $DbName is interpolated UNPARAMETERIZED into psql -c SQL (DROP/CREATE
+# DATABASE) further down, so it MUST be a safe Postgres identifier. Validate
+# it BEFORE any SQL is built: this blocks injection (e.g. a name containing
+# '; DROP DATABASE wms', which psql -c would run as extra statements) and the
+# silent breakage of unquoted identifiers (hyphens, uppercase folding to
+# lowercase). -cnotmatch is case-SENSITIVE so uppercase is rejected; valid
+# names like 'wms' and 'wms_restore_20260612_163000' still pass.
+if ($DbName -cnotmatch '^[a-z_][a-z0-9_]{0,62}$') {
+    Write-Host "Invalid -DbName '$DbName': must be a lowercase Postgres identifier (letters, digits, underscores; start with a letter or underscore; max 63 chars)." -ForegroundColor Red
+    exit 1
+}
 
 $ErrorActionPreference = 'Stop'
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
@@ -67,6 +85,16 @@ if (Test-Path $ConfPath) {
 if (-not $DbHost) { $DbHost = 'localhost' }
 if (-not $DbPort) { $DbPort = 5432 }
 if (-not $DbUser) { $DbUser = 'odoo' }
+
+# --- Ensure psql.exe + pg_restore.exe are callable -----------------------
+# A recovery host often does NOT have PostgreSQL's bin\ on PATH (the installer
+# does not add it). Auto-detect it (service / registry / standard install dirs,
+# newest version first) and prepend it to PATH so the bare psql/pg_restore calls
+# below resolve. Fail up front with a clear message rather than a cryptic
+# "term not recognized" mid-restore. No version is hard-coded.
+. (Join-Path $PSScriptRoot 'pg-bin-lib.ps1')
+try { $null = Use-PgBin }
+catch { Write-Host $_.Exception.Message -ForegroundColor Red; exit 1 }
 
 if (-not (Test-Path $BackupFile)) {
     Write-Host "Backup not found: $BackupFile" -ForegroundColor Red
@@ -112,11 +140,26 @@ function Start-GpgDecrypt {
     # gpg's stdin via cmd's `echo|` (mirrors backup-native.ps1's Start-GpgPipe).
     # Capture stderr; only print it if gpg actually failed (gpg-agent logs
     # aren't errors).
+    # FPAT High: passphrases containing cmd.exe metacharacters (& | < > ^ %)
+    # were silently truncated by the previous `cmd /c echo|gpg` invocation,
+    # making the encrypted backup unrecoverable. Use a passphrase FILE so
+    # the shell never sees the passphrase.
     $errFile = [System.IO.Path]::GetTempFileName()
+    $pwFile = [System.IO.Path]::GetTempFileName()
     $plain = $null
     try {
         $plain = [System.Net.NetworkCredential]::new('', $Pass).Password
-        $cmd = "echo $plain| `"$gpg`" --batch --yes --passphrase-fd 0 --decrypt -o `"$OutputFile`" `"$InputFile`" 2> `"$errFile`""
+        [System.IO.File]::WriteAllBytes(
+            $pwFile, [System.Text.Encoding]::UTF8.GetBytes($plain)
+        )
+        # Closure-sprint: invoke via cmd /c so PowerShell never sees the
+        # gpg-agent start-up text on stderr (PS 5.1 wraps that as a fatal
+        # NativeCommandError under $ErrorActionPreference='Stop'). Same fix
+        # as backup-native.ps1; passphrase-file safety is preserved.
+        $cmd = '"' + $gpg + '" --batch --yes --pinentry-mode loopback ' +
+               '--passphrase-file "' + $pwFile + '" ' +
+               '--decrypt -o "' + $OutputFile + '" "' + $InputFile + '" ' +
+               '2> "' + $errFile + '"'
         & cmd /c $cmd
         $rc = $LASTEXITCODE
         if ($rc -ne 0) {
@@ -125,7 +168,11 @@ function Start-GpgDecrypt {
         }
     } finally {
         $plain = $null   # wipe the plaintext local
-        Remove-Item $errFile -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $pwFile) {
+            try { [System.IO.File]::WriteAllBytes($pwFile, (New-Object byte[] 64)) } catch {}
+            Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue
+        }
+        Remove-Item -LiteralPath $errFile -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -144,10 +191,20 @@ try {
     }
     if ($exists) {
         Write-Host "Dropping existing database '$DbName' (-Force given)" -ForegroundColor Yellow
-        & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -c "DROP DATABASE $DbName;" | Out-Null
+        # Fail LOUD, not silent. A native exe's nonzero exit is NOT turned into a
+        # terminating error by $ErrorActionPreference='Stop', so we must add
+        # ON_ERROR_STOP + an explicit $LASTEXITCODE check (the pg_restore call
+        # below already does this). WITH (FORCE) terminates other sessions (PG13+)
+        # so an up Odoo service cannot block the drop and leave the restore to
+        # layer onto a live database.
+        & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -w -v ON_ERROR_STOP=1 `
+            -c "DROP DATABASE IF EXISTS $DbName WITH (FORCE);"
+        if ($LASTEXITCODE -ne 0) { throw "DROP DATABASE $DbName failed (exit $LASTEXITCODE)." }
     }
     Write-Host "Creating database '$DbName'" -ForegroundColor Cyan
-    & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -c "CREATE DATABASE $DbName OWNER odoo;" | Out-Null
+    & psql -U $DbUser -h $DbHost -p $DbPort -d postgres -w -v ON_ERROR_STOP=1 `
+        -c "CREATE DATABASE $DbName OWNER odoo;"
+    if ($LASTEXITCODE -ne 0) { throw "CREATE DATABASE $DbName failed (exit $LASTEXITCODE)." }
 
     # --- 3. pg_restore -----------------------------------------------------
     Write-Host "Restoring dump into '$DbName'" -ForegroundColor Cyan

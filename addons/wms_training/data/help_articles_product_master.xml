@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Product Master training set (v19.0.36+). Fills the one documentation
+            gap the operational acceptance test found: the new Families / Brands /
+            Forms registers, the structured SKU, the PRD code, the guided Create
+            Product wizard, and the catalogue policy. All NEW slugs (no rewrite of
+            existing noupdate articles). Plain language, gaushala examples.
+        -->
+
+        <!-- ===== Overview (admins) ===== -->
+        <record id="help_product_master_overview" model="wms.help.article">
+            <field name="slug">product-master-overview</field>
+            <field name="name">Product Master — how products are organised</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">200</field>
+            <field name="keywords">product master, catalogue, family, brand, form, sku, prd, identity</field>
+            <field name="body" type="html"><div>
+                <p><b>Every product is described by a few simple parts</b> so the system can name it, give it a code, and group it with its relatives:</p>
+                <ul>
+                    <li><b>Category</b> — where it belongs (Animal Care ▸ Medicines, Feed ▸ Concentrate, Tools…).</li>
+                    <li><b>Family</b> — the generic item (Paracetamol, Cow Feed, Drill).</li>
+                    <li><b>Brand</b> — the maker (Cipla, Himalaya, Bosch, or "Local").</li>
+                    <li><b>Form</b> — the shape (Tablet, Syrup, Pellet) — or the Model for tools.</li>
+                    <li><b>Strength, Pack size, Variant</b> — the specifics (500 mg, 50 kg, Premium).</li>
+                </ul>
+                <p>From these the system builds the <b>SKU</b> (the readable code on the label), a permanent <b>internal code (PRD-…)</b>, and the <b>barcode</b> — automatically. See <b>Create a product (guided)</b> to do it, and the <b>Product Master policy</b> for the one rule that keeps the catalogue clean.</p>
+            </div></field>
+        </record>
+
+        <!-- ===== Guided wizard (admins) ===== -->
+        <record id="help_create_product_guided" model="wms.help.article">
+            <field name="slug">create-product-guided</field>
+            <field name="name">Create a product (guided)</field>
+            <field name="category">workflow</field>
+            <field name="audience">admin</field>
+            <field name="sequence">210</field>
+            <field name="keywords">create product, new product, guided, wizard, sku preview, barcode preview, add product</field>
+            <field name="body" type="html"><div>
+                <p>Use <b>Operations → Create Product (guided)</b> for one product at a time. The screen fills itself in as you go:</p>
+                <ol>
+                    <li><b>Category</b> — pick it; the WMS Kind and which fields are required fill in automatically.</li>
+                    <li><b>Family / Brand / Form</b> — type to search. Not there yet? Pick <b>Create and edit…</b>, enter the Name + a short Code (e.g. Cipla → <code>CIP</code>), save — it's selected for you. No need to leave the screen.</li>
+                    <li><b>Strength / Pack size / Variant</b> — fill what applies (e.g. 500 mg, 10).</li>
+                    <li>Watch the <b>Preview</b> box: the <b>SKU</b> (e.g. <code>MED-PARA-CIP-TAB-500MG-10</code>) and barcode update as you type. If a warning says the item already exists, adjust a field instead of making a duplicate.</li>
+                    <li><b>Create</b> (opens the new product) or <b>Create &amp; New</b> (keep adding).</li>
+                </ol>
+                <p>To load many products at once, use <b>Configuration → Onboard Products</b> instead. To put stock in, use <b>Scan Receipt</b>.</p>
+            </div></field>
+        </record>
+
+        <!-- ===== Policy (admins) ===== -->
+        <record id="help_product_master_policy" model="wms.help.article">
+            <field name="slug">product-master-policy</field>
+            <field name="name">Product Master policy — keep the catalogue clean</field>
+            <field name="category">role</field>
+            <field name="audience">admin</field>
+            <field name="sequence">220</field>
+            <field name="keywords">policy, duplicate, family, brand, form, governance, naming, catalogue clean</field>
+            <field name="body" type="html"><div>
+                <p><b>One golden rule: a Family is the bare item — nothing else.</b> The brand, form, strength, and pack are <i>separate fields</i>, never part of a Family / Brand / Form name.</p>
+                <ul>
+                    <li>❌ Do NOT create families like <i>Paracetamol 500</i>, <i>Paracetamol Tablet</i>, <i>Cipla Paracetamol</i>.</li>
+                    <li>✅ Create the Family <b>Paracetamol</b> once; put 500 mg in <b>Strength</b>, Tablet in <b>Form</b>, Cipla in <b>Brand</b>.</li>
+                </ul>
+                <p><b>One per concept:</b> one Family per item, one Brand per maker, one Form per shape. Before adding a new one, type the first few letters — if it already exists, reuse it.</p>
+                <p>The system blocks exact case/spacing duplicates automatically (<i>Cipla</i> = <i>CIPLA</i>), but only <b>you</b> can avoid synonyms and granularity drift. Full details: the Product Master Creation Policy document.</p>
+            </div></field>
+        </record>
+
+        <!-- ===== Terminology (everyone reads codes on labels) ===== -->
+        <record id="help_what_is_a_family" model="wms.help.article">
+            <field name="slug">what-is-a-family</field>
+            <field name="name">Family — the generic item</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">230</field>
+            <field name="keywords">family, molecule, generic, group, paracetamol, cow feed</field>
+            <field name="body" type="html"><div>
+                <p><b>A Family is the plain item, without brand or pack</b> — Paracetamol, Cow Feed, Phenyl, Drill. Every brand, strength and pack of that item points at the one Family, so you can find <i>all paracetamol</i> in one place.</p>
+                <p><b>Example</b> Cipla Paracetamol Tablet 500 mg and Sun Paracetamol Syrup 60 ml are two products, but the same Family: <b>Paracetamol</b>.</p>
+                <p>Each Family has a short code (Paracetamol → <code>PARA</code>) that becomes part of the SKU.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_brand" model="wms.help.article">
+            <field name="slug">what-is-a-brand</field>
+            <field name="name">Brand — the maker</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">231</field>
+            <field name="keywords">brand, manufacturer, maker, cipla, himalaya, bosch, local</field>
+            <field name="body" type="html"><div>
+                <p><b>The Brand is who makes the item</b> — Cipla, Himalaya, Bosch, Amul, or <b>Local</b> for unbranded goods. One Brand per maker (don't make "Cipla" and "Cipla Ltd").</p>
+                <p>Each Brand has a short code (Cipla → <code>CIP</code>) used in the SKU.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_a_form" model="wms.help.article">
+            <field name="slug">what-is-a-form</field>
+            <field name="name">Form / Model — the shape of the item</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">232</field>
+            <field name="keywords">form, model, tablet, syrup, pellet, spray, dosage form, tool model</field>
+            <field name="body" type="html"><div>
+                <p><b>The Form is the physical shape</b> — Tablet, Syrup, Injection, Powder, Pellet, Spray. For tools and spare parts it is the <b>Model</b> (e.g. Cordless 18 V).</p>
+                <p>The Form also suggests the unit: a Tablet is counted in <b>Units</b>, a Syrup measured in <b>Litres</b>, a Powder in <b>kg</b>. Each Form has a short code (Tablet → <code>TAB</code>) used in the SKU.</p>
+            </div></field>
+        </record>
+
+        <record id="help_structured_sku" model="wms.help.article">
+            <field name="slug">structured-sku</field>
+            <field name="name">The structured SKU — reading the code</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">233</field>
+            <field name="keywords">sku, structured sku, internal reference, code, read sku, segments</field>
+            <field name="body" type="html"><div>
+                <p><b>The SKU is the readable code on the label</b>, built from the item's parts so you can read it at a glance:</p>
+                <p><code>MED-PARA-CIP-TAB-500MG-10</code> = Medicine · Paracetamol · Cipla · Tablet · 500 mg · pack of 10.</p>
+                <p>It is generated automatically when the product is created — you never type it. Two genuinely different items always get different SKUs; an exact repeat is blocked. (Simple items with no brand/family fall back to a short code like <code>CONS-00042</code>.)</p>
+                <p>For day-to-day scanning you usually scan the <b>barcode</b>, not type the SKU.</p>
+            </div></field>
+        </record>
+
+        <record id="help_what_is_prd_code" model="wms.help.article">
+            <field name="slug">what-is-prd-code</field>
+            <field name="name">Internal product code (PRD-…)</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">234</field>
+            <field name="keywords">prd, internal code, permanent code, product id, identifier</field>
+            <field name="body" type="html"><div>
+                <p><b>Every product also has a permanent internal code</b> like <code>PRD-000145</code>. Unlike the SKU (which is readable and could be regenerated before stock arrives), the PRD code is <b>stamped once and never changes</b> — even if the brand, category or name is edited.</p>
+                <p>It is the stable handle for audits, imports and history. You rarely need it day-to-day; it's there so a product can always be traced unambiguously.</p>
+            </div></field>
+        </record>
+
+        <record id="help_sku_barcode_freeze" model="wms.help.article">
+            <field name="slug">sku-barcode-freeze</field>
+            <field name="name">Why the SKU and barcode lock after stock arrives</field>
+            <field name="category">terminology</field>
+            <field name="audience">all</field>
+            <field name="sequence">235</field>
+            <field name="keywords">freeze, locked, sku locked, barcode locked, cannot change, archive recreate</field>
+            <field name="body" type="html"><div>
+                <p><b>Once a product has had stock, its SKU and barcode lock.</b> By then the code is on printed labels and in the stock history, so changing it would break what's already on the shelf.</p>
+                <p>To "change" a locked product, <b>archive it and create a new one</b>. Before any stock arrives you can still fix it with <b>Regenerate SKU from identity</b> on the product form.</p>
+            </div></field>
+        </record>
+
+        <!-- ===== Troubleshooting (admins) ===== -->
+        <record id="help_sku_already_exists" model="wms.help.article">
+            <field name="slug">sku-already-exists</field>
+            <field name="name">"SKU already exists" when creating a product</field>
+            <field name="category">troubleshooting</field>
+            <field name="audience">admin</field>
+            <field name="sequence">240</field>
+            <field name="keywords">sku already exists, duplicate product, blocked, cannot create, near duplicate</field>
+            <field name="body" type="html"><div>
+                <p><b>This is the system protecting the catalogue</b> — a product with the same Family + Brand + Form + Strength + Pack already exists, so it won't make a near-duplicate.</p>
+                <p><b>What to do:</b></p>
+                <ul>
+                    <li>If it's the <b>same item</b>, cancel and open the existing product (the message names it).</li>
+                    <li>If it's <b>genuinely different</b>, change the field that differs — Brand, Variant, Pack size or Strength — and the SKU becomes distinct.</li>
+                </ul>
+                <p>The system never auto-adds "-2"; it asks you to make the item properly distinct so the catalogue stays clean.</p>
+            </div></field>
+        </record>
+    </data>
+</odoo>

@@ -11,9 +11,10 @@ pg_dump). The web manager UI brings no value and a lot of risk, so
 we replace its routes with a redirect to the login page.
 
 We inherit Odoo's `Database` controller in addons/web/controllers/
-database.py and override the four GET endpoints. Existing internal
-calls (the JSON endpoint Odoo uses for the dropdown on /web/login)
-keep working - we only kill the human-facing pages.
+database.py and override BOTH the human-facing GET pages (selector /
+manager) AND the destructive POST endpoints (create / duplicate / drop /
+backup / restore / change_password). The internal JSON endpoint
+/web/database/list (drives the login dropdown) is left working.
 """
 
 from __future__ import annotations
@@ -49,9 +50,13 @@ def _blocked():
 if Database is not None:
 
     class WmsDatabaseLockdown(Database):
-        # Override the two human-facing endpoints. The internal JSON
-        # endpoint /web/database/list (drives the login dropdown) is
-        # NOT touched, so existing flows keep working.
+        # Override the human-facing pages AND the destructive POST endpoints.
+        # The internal JSON endpoint /web/database/list (type=jsonrpc, drives
+        # the login dropdown) is NOT touched, so existing flows keep working.
+        # Blocking only the GET pages would leave create/drop/restore/backup/
+        # duplicate/change_password reachable by a direct POST (guarded solely
+        # by the master password) - so we block those too. Backup/restore is
+        # CLI-only by policy (scripts/backup-native.ps1 / restore-native.ps1).
 
         @http.route("/web/database/selector", type="http", auth="none")
         def selector(self, **kw):  # noqa: D401 - inherited signature
@@ -59,6 +64,41 @@ if Database is not None:
 
         @http.route("/web/database/manager", type="http", auth="none")
         def manager(self, **kw):
+            return _blocked()
+
+        @http.route("/web/database/create", type="http", auth="none", methods=["POST"], csrf=False)
+        def create(self, **kw):
+            return _blocked()
+
+        @http.route(
+            "/web/database/duplicate", type="http", auth="none", methods=["POST"], csrf=False
+        )
+        def duplicate(self, **kw):
+            return _blocked()
+
+        @http.route("/web/database/drop", type="http", auth="none", methods=["POST"], csrf=False)
+        def drop(self, **kw):
+            return _blocked()
+
+        @http.route("/web/database/backup", type="http", auth="none", methods=["POST"], csrf=False)
+        def backup(self, **kw):
+            return _blocked()
+
+        @http.route(
+            "/web/database/restore",
+            type="http",
+            auth="none",
+            methods=["POST"],
+            csrf=False,
+            max_content_length=None,
+        )
+        def restore(self, **kw):
+            return _blocked()
+
+        @http.route(
+            "/web/database/change_password", type="http", auth="none", methods=["POST"], csrf=False
+        )
+        def change_password(self, **kw):
             return _blocked()
 
 

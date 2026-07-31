@@ -4,7 +4,7 @@
 
 1. **Unit (Odoo)** — `tests/test_*.py` in each module, `TransactionCase`.
 2. **Integration** — `HttpCase` for barcode wizards, real picking flow.
-3. **Smoke** — Docker compose + `odoo --test-enable -i wms_location,...`.
+3. **Smoke** — native PowerShell on Windows: `.venv\Scripts\python.exe .odoo\odoo-bin -c config\odoo.native.conf -d wms_smoke --without-demo=all -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training --test-enable --test-tags wms --stop-after-init`. CI runs the same invocation against a fresh Postgres container.
 
 ## What we test, per module
 
@@ -54,7 +54,7 @@ GitHub Actions native runner (Ubuntu + Postgres service + venv) — see
     $HOME/venv/bin/python $HOME/odoo/odoo-bin --test-enable --stop-after-init \
         -d ci_test --db_host=localhost --db_user=odoo --db_password=odoo_ci_password \
         --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
-        -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports \
+        -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training \
         --without-demo=all --test-tags wms --log-level=test
 ```
 

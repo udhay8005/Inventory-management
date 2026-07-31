@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+          /wms/find — one box that answers "where is it / how much / what's
+          low". Server-rendered, no JS, mobile-friendly. Open to any WMS user.
+          The controller does keyword routing + product lookup; this template
+          just paints the answer.
+        -->
+        <template id="find_page" name="WMS Find">
+            <t t-call="web.html_container">
+                <head>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <title>WMS Find</title>
+                    <style>
+                        * { box-sizing: border-box; }
+                        body { margin: 0; background: #f3f4f6; color: #111827;
+                               font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+                        .wrap { max-width: 760px; margin: 0 auto; padding: 18px 16px 48px; }
+                        h1 { font-size: 22px; margin: 4px 0 12px; }
+                        form { display: flex; gap: 8px; margin-bottom: 12px; }
+                        input[name=q] { flex: 1; padding: 11px 13px; font-size: 16px;
+                            border: 1px solid #cbd5e1; border-radius: 9px; }
+                        button { padding: 11px 18px; font-size: 15px; font-weight: 600;
+                            background: #2563eb; color: #fff; border: 0; border-radius: 9px;
+                            cursor: pointer; }
+                        .chips { margin-bottom: 18px; }
+                        .chips a { display: inline-block; margin: 0 6px 6px 0; padding: 5px 11px;
+                            background: #fff; border: 1px solid #e5e7eb; border-radius: 999px;
+                            color: #2563eb; text-decoration: none; font-size: 13px; }
+                        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+                            padding: 13px 15px; margin-bottom: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+                        .pname { font-size: 17px; font-weight: 700; }
+                        .meta { color: #6b7280; font-size: 13px; margin: 2px 0 8px; }
+                        .total { font-size: 15px; }
+                        .total b { font-size: 20px; }
+                        .badge { display: inline-block; padding: 1px 8px; border-radius: 999px;
+                            background: #b45309; color: #fff; font-size: 12px; font-weight: 700; margin-left: 6px; }
+                        .loc { display: flex; justify-content: space-between; padding: 5px 0;
+                            border-bottom: 1px solid #f1f1f4; font-size: 14px; }
+                        .loc:last-child { border-bottom: 0; }
+                        .muted { color: #6b7280; }
+                        .nav { margin-top: 20px; }
+                        .nav a { margin-right: 14px; color: #2563eb; text-decoration: none; font-size: 14px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="wrap">
+                        <h1>Find an item</h1>
+                        <form method="get" action="/wms/find">
+                            <input name="q" t-att-value="q"
+                                   placeholder="Product name, SKU, or barcode..." autofocus="autofocus"/>
+                            <button type="submit">Find</button>
+                        </form>
+                        <div class="chips">
+                            <a href="/wms/find?q=low">&#128201; low stock</a>
+                            <a href="/wms/find?q=expiring">&#9203; expiring</a>
+                            <a href="/wms/find?q=dead">&#128164; dead stock</a>
+                            <a href="/wms/find?q=damaged">&#128165; damaged</a>
+                            <a href="/wms/find?q=repair">&#128295; under repair</a>
+                        </div>
+
+                        <t t-if="mode == 'empty'">
+                            <div class="card muted">
+                                Type a product's name, SKU, or barcode to see <b>where it is</b>
+                                and <b>how much</b> is on hand — or tap a chip above for a quick list.
+                            </div>
+                        </t>
+
+                        <t t-if="mode == 'noresult'">
+                            <div class="card">No match for &#8220;<span t-esc="q"/>&#8221;.
+                                Check the spelling, or scan the barcode.</div>
+                        </t>
+
+                        <t t-if="mode == 'product'">
+                            <t t-foreach="products" t-as="p">
+                                <div class="card">
+                                    <div class="pname">
+                                        <span t-esc="p['name']"/>
+                                        <span t-if="p['low']" class="badge">LOW</span>
+                                    </div>
+                                    <div class="meta">
+                                        <t t-if="p['sku']">SKU <span t-esc="p['sku']"/></t>
+                                        <t t-if="p['barcode']"> &#183; barcode <span t-esc="p['barcode']"/></t>
+                                    </div>
+                                    <div class="total">On hand: <b t-esc="p['total']"/>
+                                        <span t-esc="p['uom']"/></div>
+                                    <div style="margin-top:8px">
+                                        <t t-if="p['locations']">
+                                            <t t-foreach="p['locations']" t-as="loc">
+                                                <div class="loc"><span t-esc="loc['location']"/>
+                                                    <b t-esc="loc['qty']"/>
+                                                    <t t-if="loc['batch']"> &#183; batch <span t-esc="loc['batch']"/></t>
+                                                    <t t-if="loc['expiry']"> &#183; exp <span t-esc="loc['expiry']"/></t>
+                                                    <t t-if="loc['status']"> &#183; <span t-esc="loc['status']"/></t>
+                                                </div>
+                                            </t>
+                                        </t>
+                                        <t t-else="">
+                                            <div class="loc muted">Not in any storage slot right now.</div>
+                                        </t>
+                                    </div>
+                                </div>
+                            </t>
+                        </t>
+
+                        <t t-if="mode == 'list'">
+                            <div class="card">
+                                <div class="pname" style="font-size:15px"><span t-esc="heading"/></div>
+                                <div style="margin-top:8px">
+                                    <t t-if="items">
+                                        <t t-foreach="items" t-as="it">
+                                            <div class="loc"><span t-esc="it['name']"/>
+                                                <span class="muted" t-esc="it['detail']"/></div>
+                                        </t>
+                                    </t>
+                                    <t t-else="">
+                                        <div class="loc muted">Nothing here right now. &#128077;</div>
+                                    </t>
+                                </div>
+                            </div>
+                        </t>
+
+                        <div class="nav">
+                            <a href="/wms/warehouse/map">&#128506; Warehouse map</a>
+                            <a href="/odoo">&#8592; Back to Odoo</a>
+                        </div>
+                    </div>
+                </body>
+            </t>
+        </template>
+
+        <record id="action_wms_find" model="ir.actions.act_url">
+            <field name="name">Find</field>
+            <field name="url">/wms/find</field>
+            <field name="target">new</field>
+        </record>
+
+        <!--
+            Sequence MUST stay above Slots (seq 5). Odoo opens an app on the
+            first leaf menu of its first sub-menu; Find is an act_url that
+            jumps OUT of the backend to the standalone /wms/find page, so if
+            it were the lowest-sequence Operations item (it used to be seq 1)
+            clicking the WMS app dropped the user onto that page instead of a
+            normal backend screen. Slots (the storage-map landing) is seq 5,
+            so Find sits after the daily scan trio.
+        -->
+        <menuitem id="menu_wms_find"
+                  name="Find / Where is it?"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_find"
+                  groups="wms_location.group_wms_user"
+                  sequence="15"/>
+    </data>
+</odoo>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        F4 + F5 — Approval-gate config + the held-issue sequence.
+
+        Params are seeded with set_param (idempotent upsert) inside a
+        noupdate="1" block so a re-install or upgrade never overwrites an
+        Admin's tuned value. They are READ with a default in scan_issue.py,
+        so a missing/non-numeric value never crashes — the gate just treats
+        it as off (issue_approval_enabled) or disabled (high_value_threshold).
+    -->
+    <data noupdate="1">
+
+        <!--
+            Master on/off for the F4+F5 approval gate. '1' = on (default);
+            anything else bypasses the whole gate so issues validate inline,
+            a cheap early-exit like wms_location.enforce_capacity.
+        -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="['wms_barcode.issue_approval_enabled', '1']"/>
+
+        <!--
+            INR value above which an issue needs a Manager's approval (F5).
+            Spec: issues over Rs 20,000 require approval before they leave the
+            store. float()-parsed with try/except in the gate — a non-numeric
+            value disables the high-value check rather than crashing. noupdate
+            keeps an Admin's tuned value on upgrade; migration 19.0.1.49.0 bumps
+            only an untouched old '5000' default up to '20000'.
+        -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="['wms_barcode.high_value_threshold', '20000']"/>
+
+        <!--
+            Sequence for the held-issue approval name (APR-00001, ...). Kept
+            here with the other approval seeds; noupdate guards the running
+            counter from a re-install reset.
+        -->
+        <record id="seq_wms_issue_approval" model="ir.sequence">
+            <field name="name">WMS Issue Approval</field>
+            <field name="code">wms.issue.approval</field>
+            <field name="prefix">APR-</field>
+            <field name="padding">5</field>
+            <field name="number_increment">1</field>
+            <field name="implementation">no_gap</field>
+        </record>
+
+    </data>
+</odoo>

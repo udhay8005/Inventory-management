@@ -30,9 +30,9 @@ from __future__ import annotations
 
 from odoo import _, api, fields, models
 
-# Re-use the canonical kind list so this wizard stays aligned with
-# the source of truth in wms_location.
-from odoo.addons.wms_location.models.product_template import WMS_KIND_SELECTION
+# Re-use the canonical kind list + per-kind UoM defaults so this
+# wizard stays aligned with the source of truth in wms_location.
+from odoo.addons.wms_location.models.product_template import KIND_DEFAULT_UOM, WMS_KIND_SELECTION
 from odoo.exceptions import UserError
 
 
@@ -63,6 +63,46 @@ class WmsProductOnboard(models.TransientModel):
                     "before you can submit."
                 )
             )
+
+        # Pre-import dup / invalid checks (maturity D). Catches a typo at the
+        # 50th row BEFORE any product/quant is created, so the trust never
+        # ends up with 49 half-saved rows and a confusing constraint error.
+        Product = self.env["product.product"].sudo()
+        Alias = self.env["wms.barcode.alias"].sudo()
+        skus_in_batch = set()
+        barcodes_in_batch = set()
+        for line in self.line_ids:
+            code = (line.default_code or "").strip()
+            if code:
+                if code in skus_in_batch:
+                    raise UserError(_("SKU %r is repeated on more than one row.") % code)
+                skus_in_batch.add(code)
+                if Product.search_count([("default_code", "=", code)]):
+                    raise UserError(_("SKU %r is already used by an existing product.") % code)
+            bc = (line.barcode or "").strip()
+            if bc:
+                if bc in barcodes_in_batch:
+                    raise UserError(_("Barcode %r is repeated on more than one row.") % bc)
+                barcodes_in_batch.add(bc)
+                # FPAT: alias column is 'barcode', not 'name'. The original
+                # ('name','=',bc) raised ValueError on every pre-validate run
+                # that supplied a Barcode column, making the new D-batch
+                # 'optional Barcode' feature crash the whole import.
+                if Product.search_count([("barcode", "=", bc)]) or Alias.search_count(
+                    [("barcode", "=", bc)]
+                ):
+                    raise UserError(
+                        _("Barcode %r is already used by an existing product / alias.") % bc
+                    )
+            if line.location_id and line.location_id.wms_location_type not in (
+                "slot",
+                "floor",
+            ):
+                raise UserError(
+                    _("Slot %r isn't a valid storage location - pick a slot " "or a floor zone.")
+                    % line.location_id.display_name
+                )
+
         for line in self.line_ids:
             if not line.name:
                 raise UserError(_("Row %d: product name is required.") % (line._origin.id or 0))
@@ -96,9 +136,9 @@ class WmsProductOnboard(models.TransientModel):
                 raise UserError(
                     _(
                         "Row %r is a %s product, and you must enter an "
-                        "expiry date from the supplier's label. This helps "
-                        "us use the oldest stock first (FEFO) and prevent "
-                        "spoilage."
+                        "expiry date from the supplier's label. It powers the "
+                        "Expiry Alerts report so soon-to-expire stock gets "
+                        "rotated out and used before it spoils."
                     )
                     % (
                         line.name,
@@ -142,6 +182,26 @@ class WmsProductOnboard(models.TransientModel):
 
     def _do_onboard(self):
         """Returns the recordset of newly-created product.product."""
+        # FPAT High: a double-click on "Onboard + Print labels" (or any other
+        # mid-action re-fire of the wizard) used to silently create a SECOND
+        # set of products with different auto-SKUs. Block re-entry by reading
+        # the `summary` field on a fresh DB cursor inside a row lock; the
+        # field is set at the end of the first run, so the second run sees
+        # it and raises before touching product.template.create.
+        self.env.cr.execute(
+            "SELECT summary FROM wms_product_onboard WHERE id = %s FOR UPDATE",
+            (self.id,),
+        )
+        row = self.env.cr.fetchone()
+        if row and row[0]:
+            raise UserError(
+                _(
+                    "This onboarding batch has already been submitted "
+                    "(%s). Open a new 'Onboard products' wizard for the "
+                    "next batch."
+                )
+                % row[0]
+            )
         Product = self.env["product.product"]
         Template = self.env["product.template"]
         Quant = self.env["stock.quant"].sudo()
@@ -163,6 +223,20 @@ class WmsProductOnboard(models.TransientModel):
             }
             if line.list_price:
                 vals["list_price"] = line.list_price
+            if line.standard_price:
+                vals["standard_price"] = line.standard_price
+            if line.default_code:
+                vals["default_code"] = (line.default_code or "").strip()
+            if line.barcode:
+                vals["barcode"] = (line.barcode or "").strip()
+            if line.categ_id:
+                vals["categ_id"] = line.categ_id.id
+            if line.uom_id:
+                vals["uom_id"] = line.uom_id.id
+                # FPAT: product.template.uom_po_id was removed in Odoo 19 in
+                # favour of per-supplier UoM on product.supplierinfo. Writing
+                # it crashed every import that set the optional UoM column.
+                # The active uom_id is sufficient on its own.
             # Hand the kind-specific extras to the template if the
             # Admin filled them on the wizard line.
             if line.expiry_date:
@@ -171,6 +245,10 @@ class WmsProductOnboard(models.TransientModel):
                 vals["wms_batch_number"] = line.batch_number
             if line.volume_litres:
                 vals["wms_volume_litres"] = line.volume_litres
+            # Returnable SLA (F3): only write when set so a blank row keeps
+            # the kind-seeded compute default (tool/spare = 14, etc.).
+            if line.expected_return_days:
+                vals["expected_return_days"] = line.expected_return_days
             tmpl = Template.create(vals)
             variant = tmpl.product_variant_ids[:1]
             created_variants |= variant
@@ -263,6 +341,16 @@ class WmsProductOnboardLine(models.TransientModel):
         string="Volume (L)",
         help="For fluid products: volume of one unit in litres.",
     )
+    # Returnable items (F3). Optional import column for the expected-return
+    # SLA in days; leave 0 to fall back to the kind default / global
+    # System Parameter. Only meaningful for returnable kinds.
+    expected_return_days = fields.Integer(
+        string="Return days",
+        help="For returnable products (tools, spares, textiles): days "
+        "within which the item is expected back. Leave 0 to use the WMS "
+        "Kind default (tool/spare = 14, textile/safety = 7) or the global "
+        "default. Advisory SLA — drives the overdue-returns alert.",
+    )
     location_id = fields.Many2one(
         "stock.location",
         string="Slot",
@@ -280,6 +368,113 @@ class WmsProductOnboardLine(models.TransientModel):
         domain=[("supplier_rank", ">", 0)],
     )
     list_price = fields.Float(string="Unit price (optional)")
+    standard_price = fields.Float(
+        string="Unit cost (optional)",
+        help="Per-unit cost (rupees). Drives the value reports - leave at 0 "
+        "if you don't track cost.",
+    )
+    # Optional pre-set SKU / barcode (the system still auto-generates these
+    # when blank). Surfaced so a CSV import can carry an existing label.
+    default_code = fields.Char(
+        string="SKU (optional)",
+        help="Leave blank to auto-generate from WMS Kind. If set, it must be "
+        "globally unique across all products.",
+    )
+    barcode = fields.Char(
+        string="Barcode (optional)",
+        help="Leave blank to auto-generate a Code128 / EAN-13. If set, it must "
+        "be globally unique across products + aliases.",
+    )
+    categ_id = fields.Many2one(
+        "product.category",
+        string="Category",
+        help="Optional Odoo category. Drives the category breakdown in the "
+        "Stock / Consumption Value reports. Leave blank for the default.",
+    )
+    # Only the warehouse-relevant units are offered in the UoM dropdown — Odoo
+    # ships dozens of irrelevant ones (Minutes, Hours, kWh, miles, ...) that
+    # confused operators. Count / weight / volume / length / area, metric.
+    _WAREHOUSE_UOM_XMLIDS = (
+        "uom.product_uom_unit",
+        "uom.product_uom_dozen",
+        "uom.product_uom_kgm",
+        "uom.product_uom_gram",
+        "uom.product_uom_litre",
+        "uom.product_uom_milliliter",
+        "uom.product_uom_meter",
+        "uom.product_uom_cm",
+        "uom.product_uom_millimeter",
+        "uom.product_uom_square_meter",
+    )
+    allowed_uom_ids = fields.Many2many("uom.uom", compute="_compute_allowed_uom_ids")
+    uom_id = fields.Many2one(
+        "uom.uom",
+        string="UoM",
+        domain="[('id', 'in', allowed_uom_ids)]",
+        help="Unit of measure for the on-hand quantity (Units, kg, L, Metre, ...). "
+        "Picking a WMS Kind sets this automatically (Fluid -> L, Feed -> kg, "
+        "everything else -> Units). Change it to Metre for pipe / cable / rope / "
+        "cloth issued by length, or leave it on Units when issued by the piece.",
+    )
+
+    @api.depends_context("uid")
+    def _compute_allowed_uom_ids(self):
+        uoms = self.env["uom.uom"]
+        for xmlid in self._WAREHOUSE_UOM_XMLIDS:
+            uom = self.env.ref(xmlid, raise_if_not_found=False)
+            if uom:
+                uoms |= uom
+        for line in self:
+            line.allowed_uom_ids = uoms
+
+    @api.onchange("wms_product_kind")
+    def _onchange_wms_product_kind_uom(self):
+        """Set the row's UoM from the chosen WMS kind (Fluid -> L, Feed -> kg,
+        everything else -> Units). Runs on EVERY kind change so picking — or
+        re-picking — the kind always drives the unit; the operator can still
+        override the UoM afterwards (that choice stays until the kind changes
+        again). raise_if_not_found=False so a half-loaded DB degrades to a blank
+        UoM (the product-template default) rather than crashing."""
+        kind = self.wms_product_kind
+        if not kind:
+            return
+        xmlid = KIND_DEFAULT_UOM.get(kind, "uom.product_uom_unit")
+        uom = self.env.ref(xmlid, raise_if_not_found=False)
+        if uom:
+            self.uom_id = uom.id
+
+    @api.onchange("name")
+    def _onchange_name_dup_warning(self):
+        """Soft, non-blocking anti-sprawl warning: if a product with this
+        EXACT name already exists, tell the operator so they open it instead
+        of creating a near-duplicate master.
+
+        This is the cheapest duplicate control that needs nothing new - it
+        keys on the name (always present), adds no field, no model, no step,
+        and never blocks the save: a genuinely different brand / form / size
+        legitimately gets a new product, so the operator stays in control.
+        Match is case-insensitive but exact ('=ilike' with no wildcards) to
+        keep precision high and false alarms low."""
+        name = (self.name or "").strip()
+        if not name:
+            return
+        existing = self.env["product.product"].search([("name", "=ilike", name)], limit=3)
+        if not existing:
+            return
+        skus = ", ".join(p.default_code or _("(no SKU)") for p in existing)
+        return {
+            "warning": {
+                "title": _("This product may already exist"),
+                "message": _(
+                    "A product named %r is already in the catalogue (%s).\n\n"
+                    "If it's the SAME item, cancel and open the existing one "
+                    "instead of creating a duplicate. If this is genuinely a "
+                    "DIFFERENT brand, form, or size, carry on - it should be "
+                    "its own product."
+                )
+                % (name, skus),
+            }
+        }
 
     @api.onchange("location_scan")
     def _onchange_location_scan(self):

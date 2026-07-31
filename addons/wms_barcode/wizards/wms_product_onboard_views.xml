@@ -21,6 +21,13 @@
                             barcode, and an EAN-13 alias. If you set the
                             quantity and slot, the initial stock is placed
                             on submit.
+                            <br/>
+                            <strong>UoM:</strong> the WMS Kind sets the default
+                            unit (Fluid &#8594; L, Feed &#8594; kg, everything
+                            else &#8594; Units). Switch a pipe / rope / cable /
+                            cloth row to <strong>Metre</strong> when it is
+                            issued by length, or leave it on Units when issued
+                            by the piece.
                         </div>
 
                         <field name="line_ids" nolabel="1">
@@ -51,6 +58,15 @@
                                 <field name="volume_litres"
                                        string="Litres"
                                        optional="hide"/>
+                                <field name="expected_return_days"
+                                       string="Return days"
+                                       optional="hide"/>
+                                <field name="default_code" optional="hide"/>
+                                <field name="barcode" optional="hide"/>
+                                <field name="categ_id" optional="hide"/>
+                                <field name="allowed_uom_ids" column_invisible="1"/>
+                                <field name="uom_id" optional="show"/>
+                                <field name="standard_price" optional="hide"/>
                                 <field name="supplier_id" optional="hide"/>
                                 <field name="list_price" optional="hide"/>
                             </list>

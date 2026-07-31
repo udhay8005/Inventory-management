@@ -1,6 +1,8 @@
 from markupsafe import Markup
 from odoo import api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
+
+from .reservation import validate_reserved_or_abort
 
 
 class WmsDamage(models.Model):
@@ -26,6 +28,23 @@ class WmsDamage(models.Model):
     )
     product_id = fields.Many2one("product.product", required=True, tracking=True)
     quantity = fields.Float(required=True, default=1.0, tracking=True)
+    _quantity_positive = models.Constraint(
+        "CHECK(quantity > 0)",
+        "Damage quantity must be greater than zero.",
+    )
+    damage_value = fields.Float(
+        string="Loss value",
+        readonly=True,
+        copy=False,
+        help="Quantity x the product's unit cost at the moment the damage "
+        "event was confirmed - what this loss was worth to the trust at the "
+        "time it happened. NOT recomputed when quantity or cost changes "
+        "later. FPAT High: the previous computed/depends pattern silently "
+        "re-rated past losses whenever quantity was edited (which itself "
+        "should not be allowed - see action_confirm and the readonly state "
+        "on the view).",
+    )
+
     source_slot_id = fields.Many2one(
         "stock.location",
         # Stock can live in slots (inside racks) OR floor zones (open
@@ -114,6 +133,12 @@ class WmsDamage(models.Model):
         domain=[("active", "=", True)],
         help="The on-duty Store Keeper who filed this damage record. "
         "Picked from the roster — same pattern as Scan Issue / Receipt.",
+    )
+    damage_photo = fields.Binary(
+        string="Damage photo",
+        attachment=True,
+        help="Optional photo of the damage. On a phone/tablet the camera opens "
+        "automatically. Stored as proof for the audit trail.",
     )
 
     @api.depends("source_slot_id")
@@ -222,13 +247,14 @@ class WmsDamage(models.Model):
             is_returnable = bool(rec.product_id.wms_is_returnable)
             product_name = rec.product_id.display_name
             qty = rec.quantity or 0.0
+            # FPAT Critical: wms_product_kind on product.product is RELATED to the
+            # field on product.template. For a related Selection, Odoo 19 sets
+            # _fields[...].selection to a lambda that resolves the parent's list
+            # at evaluation time - calling dict() on the lambda raises TypeError
+            # ('function' is not iterable). Read the static list from the
+            # template instead, so this works for both stored and related kinds.
             kind_label = dict(
-                rec.product_id._fields["wms_product_kind"].selection
-                if not callable(rec.product_id._fields["wms_product_kind"].selection)
-                else self.env["product.product"]
-                .fields_get(["wms_product_kind"])
-                .get("wms_product_kind", {})
-                .get("selection", [])
+                rec.product_id.product_tmpl_id._fields["wms_product_kind"].selection
             ).get(rec.product_id.wms_product_kind, "Unclassified")
 
             if remaining <= 0 and is_returnable:
@@ -343,6 +369,47 @@ class WmsDamage(models.Model):
                     )
                 )
 
+    # Once a damage is confirmed the loss is recorded and the stock has already
+    # moved to the Damage location, so a keeper must not be able to revise it
+    # over RPC. Managers (and superuser internal paths) bypass. The keeper IS
+    # still allowed to link a repair order (action_create_repair_order writes
+    # only repair_order_id) and chatter still works, so those fields are
+    # whitelisted; every other business field is frozen once confirmed.
+    _KEEPER_LOCKED_STATES = ("confirmed",)
+    _KEEPER_ALLOWED_ON_LOCKED = frozenset(
+        {
+            "repair_order_id",
+            "message_ids",
+            "message_follower_ids",
+            "message_partner_ids",
+            "message_main_attachment_id",
+            "message_is_follower",
+            "activity_ids",
+        }
+    )
+
+    def write(self, vals):
+        """Freeze a confirmed damage against keeper edits (record-level guard).
+
+        Defence-in-depth behind the readonly-on-confirmed form: the value is a
+        frozen snapshot and the stock has moved, so editing a confirmed damage
+        must not silently rewrite the loss record. Managers bypass; linking a
+        repair order and chatter are still allowed (whitelisted).
+        """
+        if (
+            not self.env.su
+            and set(vals) - self._KEEPER_ALLOWED_ON_LOCKED
+            and not self.env.user.has_group("wms_location.group_wms_manager")
+        ):
+            for rec in self:
+                if rec.state in self._KEEPER_LOCKED_STATES:
+                    raise AccessError(
+                        "Damage %s is already confirmed — only a Manager can "
+                        "change it. The loss is recorded and the stock has "
+                        "moved; create a repair order if the item needs fixing." % (rec.name or "?")
+                    )
+        return super().write(vals)
+
     def action_confirm(self):
         for rec in self:
             if rec.state != "draft":
@@ -416,13 +483,18 @@ class WmsDamage(models.Model):
                     "location_dest_id": damage_loc.id,
                 }
             )
-            picking.action_confirm()
-            picking.action_assign()
-            for ml in picking.move_ids.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-            picking.button_validate()
-            rec.write({"state": "confirmed", "picking_id": picking.id})
+            validate_reserved_or_abort(picking, rec.product_id, "send to Damage")
+            # FPAT High: snapshot the loss value at confirm time, then never
+            # touch it. quantity_value-x-cost is what the loss WAS worth when
+            # the damage actually happened; a later cost change or quantity
+            # edit must not rewrite history.
+            rec.write(
+                {
+                    "state": "confirmed",
+                    "picking_id": picking.id,
+                    "damage_value": (rec.quantity or 0.0) * (rec.product_id.standard_price or 0.0),
+                }
+            )
 
             # Mirror the audit-trail summary into the chatter so the
             # damage history stands on its own without cross-referencing
@@ -476,13 +548,38 @@ class WmsDamage(models.Model):
             "auth": self.wms_authorized_by or "(unspecified)",
             "keeper": (self.wms_storekeeper_id.name if self.wms_storekeeper_id else "(unknown)"),
         }
-        for user in group.all_user_ids:
-            user.partner_id.message_post(
-                body=body,
-                subject="WMS — URGENT BUY: %s" % self.product_id.display_name,
-                message_type="notification",
-                subtype_xmlid="mail.mt_note",
-            )
+        # message_notify -> Discuss Inbox + systray. A plain message_post on
+        # a partner only reaches followers; a user is NOT a follower of their
+        # own contact, so the previous loop was silently dropping urgent-buy
+        # alerts. See addons/wms_reports/models/wms_notify.py for the rationale.
+        self.env["mail.thread"].message_notify(
+            partner_ids=group.all_user_ids.partner_id.ids,
+            body=body,
+            subject="WMS - URGENT BUY: %s" % self.product_id.display_name,
+        )
+
+    def action_confirm_and_repair(self):
+        """One-flow (UAT R3): the operator found Confirm -> Create Repair ->
+        Start Repair too many separate screens for the everyday case of "this
+        broke, send it for repair". One click now: confirms the damage (stock
+        moves to the Damage location), creates the linked repair order, and —
+        when the user has repair-tech / manager rights — starts it. A Store
+        Keeper without those rights gets the repair created in draft for the
+        Manager, which is exactly the approval boundary the ACL enforces.
+        """
+        self.ensure_one()
+        if self.state == "draft":
+            self.action_confirm()
+        action = self.action_create_repair_order()
+        repair = self.repair_order_id
+        if repair and repair.state == "draft":
+            # Gate on the ACL that actually governs the transition (Store
+            # Keepers have no write access to repair orders) rather than on
+            # group membership — the ACL is the real boundary, and checking it
+            # keeps this correct for any future role that gets repair rights.
+            if repair.check_access_rights("write", raise_exception=False):
+                repair.action_start_repair()
+        return action
 
     def action_create_repair_order(self):
         """Open a new wms.repair.order pre-filled from this damage event.

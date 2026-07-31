@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #13 — Bulk Operations on lots.
+             A multi-select list of lots, plus server actions (bound to
+             stock.lot) that recall / quarantine / destroy the whole selection
+             in one ticket. -->
+
+        <!-- Multi-select list of lots for bulk action. -->
+        <record id="view_stock_lot_list_bulk" model="ir.ui.view">
+            <field name="name">stock.lot.list.wms.bulk</field>
+            <field name="model">stock.lot</field>
+            <field name="arch" type="xml">
+                <list string="Lots (bulk)" create="false" multi_edit="0"
+                      default_order="product_id, name">
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="wms_lot_state" widget="badge"
+                           decoration-success="wms_lot_state == 'available'"
+                           decoration-warning="wms_lot_state == 'quarantine'"
+                           decoration-danger="wms_lot_state in ('recalled','destroyed')"/>
+                    <field name="expiration_date" optional="show"/>
+                    <field name="wms_is_expired" optional="hide"/>
+                    <field name="wms_supplier_id" optional="hide"/>
+                    <field name="company_id" optional="hide" groups="base.group_multi_company"/>
+                </list>
+            </field>
+        </record>
+
+        <!-- Search view: filter by lifecycle state, group by product/state. -->
+        <record id="view_stock_lot_search_bulk" model="ir.ui.view">
+            <field name="name">stock.lot.search.wms.bulk</field>
+            <field name="model">stock.lot</field>
+            <field name="arch" type="xml">
+                <search string="Lots (bulk)">
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="wms_supplier_id"/>
+                    <filter name="bulk_available" string="Available"
+                            domain="[('wms_lot_state', '=', 'available')]"/>
+                    <filter name="bulk_quarantine" string="Quarantine"
+                            domain="[('wms_lot_state', '=', 'quarantine')]"/>
+                    <filter name="bulk_recalled" string="Recalled"
+                            domain="[('wms_lot_state', '=', 'recalled')]"/>
+                    <filter name="bulk_destroyed" string="Destroyed"
+                            domain="[('wms_lot_state', '=', 'destroyed')]"/>
+                    <separator/>
+                    <filter name="bulk_group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                    <filter name="bulk_group_state" string="Lot state"
+                            context="{'group_by': 'wms_lot_state'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_bulk" model="ir.actions.act_window">
+            <field name="name">Lots (bulk)</field>
+            <field name="res_model">stock.lot</field>
+            <field name="view_mode">list,form</field>
+            <field name="view_id" ref="view_stock_lot_list_bulk"/>
+            <field name="search_view_id" ref="view_stock_lot_search_bulk"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No lots yet</p>
+                <p>Tick several lots, then use the action menu to recall,
+                   quarantine, or destroy the whole selection at once.</p>
+            </field>
+        </record>
+
+        <!-- Server actions bound to stock.lot: appear in the list "Actions"
+             menu when rows are selected. Each calls the matching bulk method,
+             which reads context active_ids and creates ONE recall/quarantine
+             over the selection. Manager-gating is enforced in the method. -->
+        <record id="action_server_wms_bulk_recall" model="ir.actions.server">
+            <field name="name">Recall selected lots</field>
+            <field name="model_id" ref="stock.model_stock_lot"/>
+            <field name="binding_model_id" ref="stock.model_stock_lot"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">action = records.action_wms_bulk_recall()</field>
+        </record>
+
+        <record id="action_server_wms_bulk_quarantine" model="ir.actions.server">
+            <field name="name">Quarantine selected lots</field>
+            <field name="model_id" ref="stock.model_stock_lot"/>
+            <field name="binding_model_id" ref="stock.model_stock_lot"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">action = records.action_wms_bulk_quarantine()</field>
+        </record>
+
+        <record id="action_server_wms_bulk_destroy" model="ir.actions.server">
+            <field name="name">Destroy selected lots</field>
+            <field name="model_id" ref="stock.model_stock_lot"/>
+            <field name="binding_model_id" ref="stock.model_stock_lot"/>
+            <field name="binding_view_types">list</field>
+            <field name="state">code</field>
+            <field name="code">action = records.action_wms_bulk_destroy()</field>
+        </record>
+
+        <menuitem id="menu_wms_lot_bulk"
+                  name="Lots (bulk)"
+                  parent="menu_wms_analytics_root"
+                  action="action_wms_lot_bulk"
+                  sequence="80"/>
+    </data>
+</odoo>

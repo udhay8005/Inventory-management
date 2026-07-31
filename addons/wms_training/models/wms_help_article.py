@@ -145,6 +145,12 @@ class WmsHelpArticle(models.Model):
                 "allowfullscreen></iframe></div>"
             ).format(vid=m.group(1))
         # Unknown host: do NOT embed — offer a safe outbound link instead.
+        # Only http(s) may become a clickable href. Markup.format escapes HTML
+        # metacharacters but NOT the URL scheme, so a javascript:/data: URL would
+        # otherwise be reflected straight into href and run on click. Render any
+        # non-http(s) scheme as inert, escaped text instead of a link.
+        if not re.match(r"(?i)^https?://", url):
+            return Markup("<p>{url}</p>").format(url=url)
         return Markup(
             '<p><a href="{url}" target="_blank" rel="noopener noreferrer">'
             "▶ Watch the training video (opens in a new tab)</a></p>"

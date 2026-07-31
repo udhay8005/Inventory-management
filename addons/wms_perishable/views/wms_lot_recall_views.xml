@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_lot_recall_form" model="ir.ui.view">
+            <field name="name">wms.lot.recall.form</field>
+            <field name="model">wms.lot.recall</field>
+            <field name="arch" type="xml">
+                <form string="Lot Recall">
+                    <header>
+                        <button name="action_recall" type="object" string="Activate Recall"
+                                class="btn-danger" invisible="state != 'draft'"
+                                confirm="Activate this recall? The lots will be frozen (un-issuable) and any open reservations cancelled."/>
+                        <button name="action_release" type="object" string="Release Recall"
+                                class="btn-primary" invisible="state != 'active'"
+                                confirm="Release this recall? The lots return to issuable 'available' state."/>
+                        <field name="state" widget="statusbar" statusbar_visible="draft,active,released"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1><field name="name" readonly="1"/></h1>
+                        </div>
+                        <group>
+                            <group>
+                                <field name="mode"/>
+                                <field name="supplier_id" invisible="mode != 'supplier'"/>
+                                <field name="supplier_notice_ref" invisible="mode != 'supplier'"/>
+                            </group>
+                            <group>
+                                <field name="recalled_on" invisible="state == 'draft'"/>
+                                <field name="recalled_by_id" invisible="state == 'draft'"/>
+                                <field name="unreserved_count" invisible="state == 'draft'"/>
+                                <field name="released_on" invisible="state != 'released'"/>
+                                <field name="released_by_id" invisible="state != 'released'"/>
+                            </group>
+                        </group>
+                        <field name="reason" placeholder="Why is this lot being recalled?"/>
+                        <field name="lot_ids" readonly="state != 'draft'">
+                            <list>
+                                <field name="name"/>
+                                <field name="product_id"/>
+                                <field name="expiration_date"/>
+                                <field name="wms_lot_state"/>
+                            </list>
+                        </field>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_lot_recall_list" model="ir.ui.view">
+            <field name="name">wms.lot.recall.list</field>
+            <field name="model">wms.lot.recall</field>
+            <field name="arch" type="xml">
+                <list string="Lot Recalls"
+                      decoration-danger="state == 'active'" decoration-muted="state == 'released'">
+                    <field name="name"/>
+                    <field name="mode"/>
+                    <field name="supplier_id"/>
+                    <field name="recalled_on"/>
+                    <field name="unreserved_count"/>
+                    <field name="state"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="action_wms_lot_recall" model="ir.actions.act_window">
+            <field name="name">Lot Recalls</field>
+            <field name="res_model">wms.lot.recall</field>
+            <field name="view_mode">list,form</field>
+        </record>
+
+        <menuitem id="menu_wms_lot_recall"
+                  name="Lot Recalls"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_lot_recall"
+                  groups="wms_location.group_wms_manager"
+                  sequence="80"/>
+    </data>
+</odoo>

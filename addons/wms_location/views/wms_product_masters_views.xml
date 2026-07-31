@@ -1,0 +1,211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============ Family ============ -->
+        <record id="view_wms_family_list" model="ir.ui.view">
+            <field name="name">wms.family.list</field>
+            <field name="model">wms.family</field>
+            <field name="arch" type="xml">
+                <list string="Families" editable="bottom">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="code"/>
+                    <field name="active" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_family_form" model="ir.ui.view">
+            <field name="name">wms.family.form</field>
+            <field name="model">wms.family</field>
+            <field name="arch" type="xml">
+                <form string="Family">
+                    <sheet>
+                        <widget name="web_ribbon" title="Archived"
+                                bg_color="text-bg-danger" invisible="active"/>
+                        <group>
+                            <field name="name"/>
+                            <field name="code"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_family" model="ir.actions.act_window">
+            <field name="name">Families</field>
+            <field name="res_model">wms.family</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Add a product family</p>
+                <p>A family is the generic group an item belongs to — Paracetamol,
+                Cow Feed, Liv52, Floor Cleaner. The short code (e.g. PARA) becomes
+                part of the SKU, so set it once and keep it stable.</p>
+            </field>
+        </record>
+
+        <!-- ============ Brand ============ -->
+        <record id="view_wms_brand_list" model="ir.ui.view">
+            <field name="name">wms.brand.list</field>
+            <field name="model">wms.brand</field>
+            <field name="arch" type="xml">
+                <list string="Brands" editable="bottom">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="code"/>
+                    <field name="active" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_brand_form" model="ir.ui.view">
+            <field name="name">wms.brand.form</field>
+            <field name="model">wms.brand</field>
+            <field name="arch" type="xml">
+                <form string="Brand">
+                    <sheet>
+                        <widget name="web_ribbon" title="Archived"
+                                bg_color="text-bg-danger" invisible="active"/>
+                        <group>
+                            <field name="name"/>
+                            <field name="code"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_brand" model="ir.actions.act_window">
+            <field name="name">Brands</field>
+            <field name="res_model">wms.brand</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Add a brand</p>
+                <p>A brand is the manufacturer or label — Himalaya, Cipla, Lizol,
+                Bosch, or "Local". The short code (e.g. CIP) becomes part of the
+                SKU.</p>
+            </field>
+        </record>
+
+        <!-- ============ Form ============ -->
+        <record id="view_wms_form_list" model="ir.ui.view">
+            <field name="name">wms.form.list</field>
+            <field name="model">wms.form</field>
+            <field name="arch" type="xml">
+                <list string="Forms" editable="bottom">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="code"/>
+                    <field name="default_uom_id"/>
+                    <field name="active" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_form_form" model="ir.ui.view">
+            <field name="name">wms.form.form</field>
+            <field name="model">wms.form</field>
+            <field name="arch" type="xml">
+                <form string="Form">
+                    <sheet>
+                        <widget name="web_ribbon" title="Archived"
+                                bg_color="text-bg-danger" invisible="active"/>
+                        <group>
+                            <field name="name"/>
+                            <field name="code"/>
+                            <field name="default_uom_id"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_form" model="ir.actions.act_window">
+            <field name="name">Forms</field>
+            <field name="res_model">wms.form</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Add a form</p>
+                <p>A form is the physical form of the item — Tablet, Syrup, Spray,
+                Powder, Pellet — or the Model for tools / spare parts. The
+                suggested unit pre-fills a new product's unit of measure.</p>
+            </field>
+        </record>
+
+        <!-- ============ product.category: WMS classification ============ -->
+        <record id="view_wms_product_category_form" model="ir.ui.view">
+            <field name="name">product.category.form.wms</field>
+            <field name="model">product.category</field>
+            <field name="inherit_id" ref="product.product_category_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet" position="inside">
+                    <widget name="web_ribbon" title="Archived"
+                            bg_color="text-bg-danger" invisible="active"/>
+                    <group string="WMS classification" name="wms_classification">
+                        <field name="active"/>
+                        <field name="wms_default_kind"/>
+                        <field name="wms_form_is_model"/>
+                        <group string="Required for new products in this category"
+                               name="wms_required_matrix">
+                            <field name="wms_req_brand"/>
+                            <field name="wms_req_form"/>
+                            <field name="wms_req_strength"/>
+                            <field name="wms_req_size"/>
+                            <field name="wms_req_pack"/>
+                        </group>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="action_wms_categories" model="ir.actions.act_window">
+            <field name="name">Categories</field>
+            <field name="res_model">product.category</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Build your category tree</p>
+                <p>Organise products into an editable hierarchy (Animal Care ▸
+                Medicines, Feed ▸ Concentrate, Tools ▸ Power, …). Each category can
+                set a default WMS kind and which identity fields a new product must
+                carry.</p>
+            </field>
+        </record>
+
+        <!-- ============ Menus (WMS / Configuration, manager-gated) ============ -->
+        <menuitem id="menu_wms_product_family"
+                  name="Families"
+                  parent="menu_wms_config"
+                  action="action_wms_family"
+                  groups="wms_location.group_wms_manager"
+                  sequence="63"/>
+
+        <menuitem id="menu_wms_product_brand"
+                  name="Brands"
+                  parent="menu_wms_config"
+                  action="action_wms_brand"
+                  groups="wms_location.group_wms_manager"
+                  sequence="64"/>
+
+        <menuitem id="menu_wms_product_form"
+                  name="Forms"
+                  parent="menu_wms_config"
+                  action="action_wms_form"
+                  groups="wms_location.group_wms_manager"
+                  sequence="65"/>
+
+        <menuitem id="menu_wms_product_categories"
+                  name="Categories"
+                  parent="menu_wms_config"
+                  action="action_wms_categories"
+                  groups="wms_location.group_wms_manager"
+                  sequence="66"/>
+
+    </data>
+</odoo>

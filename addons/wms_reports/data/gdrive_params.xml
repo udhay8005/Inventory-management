@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Google Drive backup configuration (namespace wms_gdrive.*).
+            Read by Odoo with .sudo().get_param() AND by the PowerShell
+            pipeline via psql (Get-WmsConfigParam in scripts/gdrive-lib.ps1,
+            failure-safe hardcoded defaults), so the parameters double as
+            the script's remote config.
+
+            Seeded via set_param (idempotent: a pre-existing key is updated,
+            never duplicated) inside noupdate="1": a module update never
+            overwrites operator-tuned values. Read paths all carry defaults,
+            so a missing key is always safe.
+        -->
+        <!-- Soft kill-switch for the Drive stage (the token file is the hard gate). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.enabled', '1')"/>
+        <!-- Backup Now wizard allowed. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.manual_enabled', '1')"/>
+        <!-- Display + Apply-Schedule target; Task Scheduler is the executor. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.backup_time', '16:30')"/>
+        <!-- Notify managers on successful upload. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.notify_success', '1')"/>
+        <!-- Notify managers on failed upload / staleness. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.notify_failure', '1')"/>
+        <!-- Drive retention tier 1: keep every daily set this many days. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.retention_daily_days', '30')"/>
+        <!-- Drive retention tier 2: newest set per ISO-week this many months. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.retention_weekly_months', '6')"/>
+        <!-- Drive retention tier 3: newest set per month this many years. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.retention_monthly_years', '2')"/>
+        <!-- If '1', manual/emergency sets join Drive retention (default: exempt). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.delete_manual', '0')"/>
+        <!-- Drive root folder name. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.folder_name', 'Inventory_Backups')"/>
+        <!-- JSON cache {used_mb,limit_mb,checked_utc,email} written by test/upload runs. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.last_about', '')"/>
+        <!-- 'login|iso-ts' Backup Now requester handshake (wizard writes, script reads). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.last_manual_requester', '')"/>
+        <!-- v18 offline queue: max upload attempts before a set goes 'abandoned' (caps retry_count). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_retry_max', '8')"/>
+        <!-- v18 offline queue: sweep look-back window (days); aligns with local -Retain 14 so a kept file is never an orphan. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_retry_window_days', '14')"/>
+        <!-- v18 offline queue: max sets retried per sweep run (bounds the 2h task limit). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_retry_max_per_run', '5')"/>
+        <!-- v18 offline queue: exponential-backoff base in minutes (next_retry_at = now + base * 2^(retry-1), capped 24h). -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.offline_backoff_base_min', '15')"/>
+        <!-- v18 optional Drive parent folder id (validated bare id); blank = fall back to .env GDRIVE_PARENT_FOLDER_ID then My Drive root. -->
+        <function model="ir.config_parameter" name="set_param"
+                  eval="('wms_gdrive.parent_folder_id', '')"/>
+    </data>
+</odoo>

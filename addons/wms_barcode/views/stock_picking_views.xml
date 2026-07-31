@@ -13,6 +13,19 @@
             <field name="inherit_id" ref="stock.view_picking_form"/>
             <field name="arch" type="xml">
                 <!--
+                    Undo button (Batch 4). Visible only while this WMS transfer
+                    can still be safely reversed; one click posts a compensating
+                    internal move that puts the stock back. A confirm dialog
+                    guards against an accidental press.
+                -->
+                <xpath expr="//header" position="inside">
+                    <field name="wms_undo_available" invisible="1"/>
+                    <button name="action_wms_undo" type="object"
+                            string="Undo this transfer" class="btn-warning"
+                            invisible="not wms_undo_available"
+                            confirm="Undo this transfer? A new compensating move will put the stock back where it came from. This cannot itself be undone."/>
+                </xpath>
+                <!--
                     Recent-keeper-edit warning banner. Inserted right
                     before the sheet so it sits above all fields and
                     is the first thing the Admin reads when they open
@@ -33,6 +46,31 @@
                         <field name="wms_taken_by"/>
                         <field name="wms_ordered_by"/>
                         <field name="wms_storekeeper_id"/>
+                        <!--
+                            Issue dimensions (F1). Department supersedes the
+                            legacy "Issued for"; show each only when set so
+                            non-issue transfers stay uncluttered. wms_issued_for
+                            stays invisible (derived) but is kept available.
+                        -->
+                        <field name="wms_department_id"
+                               invisible="not wms_department_id"/>
+                        <field name="wms_purpose_id"
+                               invisible="not wms_purpose_id"/>
+                        <field name="wms_animal_id"
+                               invisible="not wms_animal_id"/>
+                        <field name="wms_issued_for" invisible="1"/>
+                        <!--
+                            Returnable items (F3). Show the expected-return
+                            date + Returned flag only on pickings that carry an
+                            expected return (returnable issues); other transfers
+                            stay uncluttered.
+                        -->
+                        <field name="wms_expected_return_date"
+                               invisible="not wms_expected_return_date"/>
+                        <field name="wms_returned" widget="boolean_toggle"
+                               invisible="not wms_expected_return_date"/>
+                        <field name="wms_reversed_by_id" readonly="1"
+                               invisible="not wms_reversed_by_id"/>
                     </group>
                 </xpath>
             </field>

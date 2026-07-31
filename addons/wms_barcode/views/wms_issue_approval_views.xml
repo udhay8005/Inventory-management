@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_issue_approval_list" model="ir.ui.view">
+            <field name="name">wms.issue.approval.list</field>
+            <field name="model">wms.issue.approval</field>
+            <field name="arch" type="xml">
+                <list decoration-warning="state == 'pending'"
+                      decoration-muted="state == 'rejected'"
+                      decoration-success="state == 'approved'">
+                    <field name="name"/>
+                    <field name="create_date"/>
+                    <field name="department_id"/>
+                    <field name="storekeeper_id"/>
+                    <field name="issue_value" sum="Total held value"/>
+                    <field name="reason_high_value" optional="show"/>
+                    <field name="reason_min_life" optional="show"/>
+                    <field name="picking_id" optional="hide"/>
+                    <field name="state" widget="badge"
+                           decoration-warning="state == 'pending'"
+                           decoration-success="state == 'approved'"
+                           decoration-muted="state == 'rejected'"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_issue_approval_form" model="ir.ui.view">
+            <field name="name">wms.issue.approval.form</field>
+            <field name="model">wms.issue.approval</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <!--
+                            Gated on the dedicated approve capability group
+                            (manager-only). The buttons are hidden once the
+                            request leaves 'pending'. action_approve /
+                            action_reject ALSO re-check group_wms_manager
+                            in-method, so a forced RPC by a keeper is refused.
+                        -->
+                        <button name="action_approve" type="object"
+                                string="Approve" class="btn-primary"
+                                invisible="state != 'pending'"
+                                groups="wms_barcode.group_wms_can_approve_issue"/>
+                        <button name="action_reject" type="object"
+                                string="Reject" class="btn-secondary"
+                                invisible="state != 'pending'"
+                                groups="wms_barcode.group_wms_can_approve_issue"/>
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="pending,approved,rejected"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_button_box" name="button_box">
+                            <button name="action_open_picking" type="object"
+                                    class="oe_stat_button" icon="fa-truck"
+                                    invisible="not picking_id">
+                                <div class="o_field_widget o_stat_info">
+                                    <span class="o_stat_text">Delivery</span>
+                                </div>
+                            </button>
+                        </div>
+                        <h1><field name="name" readonly="1"/></h1>
+
+                        <div class="alert alert-warning" role="alert"
+                             invisible="state != 'pending'">
+                            <strong>Awaiting approval.</strong>
+                            Nothing has been issued. Review the request below,
+                            then Approve (issues the stock) or Reject (nothing
+                            moves).
+                        </div>
+
+                        <group>
+                            <group string="Why it was held">
+                                <field name="reason_high_value" readonly="1"/>
+                                <field name="reason_min_life" readonly="1"/>
+                                <field name="issue_value" readonly="1"/>
+                                <field name="min_life_product_id" readonly="1"
+                                       invisible="not reason_min_life"/>
+                                <field name="min_life_last_date" readonly="1"
+                                       invisible="not reason_min_life"/>
+                            </group>
+                            <group string="Decision">
+                                <field name="approver_id" readonly="1"
+                                       invisible="state == 'pending'"/>
+                                <field name="decision_date" readonly="1"
+                                       invisible="state == 'pending'"/>
+                                <field name="picking_id" readonly="1"
+                                       invisible="not picking_id"/>
+                            </group>
+                        </group>
+
+                        <field name="keeper_reason" readonly="1"
+                               string="Keeper's justification"/>
+
+                        <group string="Request">
+                            <group>
+                                <field name="warehouse_id" readonly="1"/>
+                                <field name="destination_id" readonly="1"/>
+                                <field name="department_id" readonly="1"/>
+                                <field name="purpose_id" readonly="1"/>
+                                <field name="animal_id" readonly="1"/>
+                                <field name="expected_return_date" readonly="1"
+                                       invisible="not expected_return_date"/>
+                            </group>
+                            <group>
+                                <field name="taken_by" readonly="1"/>
+                                <field name="ordered_by" readonly="1"/>
+                                <field name="storekeeper_id" readonly="1"/>
+                            </group>
+                        </group>
+                        <field name="usage_note" readonly="1"/>
+
+                        <field name="line_ids" readonly="1">
+                            <list>
+                                <field name="product_id"/>
+                                <field name="location_id"/>
+                                <field name="take"/>
+                                <field name="expiry_date" optional="show"/>
+                            </list>
+                        </field>
+
+                        <field name="photo" widget="image" readonly="1"
+                               class="oe_avatar" options="{'size': [0, 220]}"
+                               invisible="not photo"/>
+                    </sheet>
+                    <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_issue_approval_search" model="ir.ui.view">
+            <field name="name">wms.issue.approval.search</field>
+            <field name="model">wms.issue.approval</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="name"/>
+                    <field name="department_id"/>
+                    <field name="storekeeper_id"/>
+                    <filter name="filter_pending" string="Pending"
+                            domain="[('state', '=', 'pending')]"/>
+                    <filter name="filter_approved" string="Approved"
+                            domain="[('state', '=', 'approved')]"/>
+                    <filter name="filter_rejected" string="Rejected"
+                            domain="[('state', '=', 'rejected')]"/>
+                    <separator/>
+                    <filter name="group_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_department" string="Department"
+                            context="{'group_by': 'department_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_issue_approval" model="ir.actions.act_window">
+            <field name="name">Issue Approvals</field>
+            <field name="res_model">wms.issue.approval</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_wms_issue_approval_search"/>
+            <!-- Default to the pending queue so Managers land on what needs action. -->
+            <field name="context">{'search_default_filter_pending': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No issues waiting &#8212; you're all caught up.</p>
+                <p>
+                    High-value or too-soon stock issues pause here for a manager's
+                    yes/no. When one is waiting, open it, read the keeper's reason,
+                    then <b>Approve</b> or <b>Reject</b>.
+                </p>
+            </field>
+        </record>
+
+        <!--
+            WMS -> Approvals. Manager-gated: a keeper never sees the menu (and
+            could not act on it anyway — read+create-only ACL + in-method
+            group re-check).
+        -->
+        <menuitem id="menu_wms_issue_approval"
+                  name="Approvals"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_issue_approval"
+                  groups="wms_location.group_wms_manager"
+                  sequence="30"/>
+    </data>
+</odoo>

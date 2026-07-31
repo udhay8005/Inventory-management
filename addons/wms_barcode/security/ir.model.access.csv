@@ -1,13 +1,23 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_wms_barcode_alias_user,wms.barcode.alias user,model_wms_barcode_alias,wms_location.group_wms_user,1,0,0,0
 access_wms_barcode_alias_mgr,wms.barcode.alias manager,model_wms_barcode_alias,wms_location.group_wms_manager,1,1,1,0
-access_wms_scan_receipt_user,wms.scan.receipt user,model_wms_scan_receipt,wms_location.group_wms_user,1,1,1,1
-access_wms_scan_receipt_line,wms.scan.receipt.line user,model_wms_scan_receipt_line,wms_location.group_wms_user,1,1,1,1
-access_wms_scan_issue_user,wms.scan.issue user,model_wms_scan_issue,wms_location.group_wms_user,1,1,1,1
-access_wms_scan_issue_plan,wms.scan.issue.plan user,model_wms_scan_issue_plan,wms_location.group_wms_user,1,1,1,1
+access_wms_scan_receipt_user,wms.scan.receipt user,model_wms_scan_receipt,wms_location.group_wms_can_scan_receive,1,1,1,1
+access_wms_scan_receipt_line,wms.scan.receipt.line user,model_wms_scan_receipt_line,wms_location.group_wms_can_scan_receive,1,1,1,1
+access_wms_scan_issue_user,wms.scan.issue user,model_wms_scan_issue,wms_location.group_wms_can_scan_issue,1,1,1,1
+access_wms_scan_issue_plan,wms.scan.issue.plan user,model_wms_scan_issue_plan,wms_location.group_wms_can_scan_issue,1,1,1,1
 access_wms_product_onboard,wms.product.onboard mgr,model_wms_product_onboard,wms_location.group_wms_manager,1,1,1,1
 access_wms_product_onboard_line,wms.product.onboard.line mgr,model_wms_product_onboard_line,wms_location.group_wms_manager,1,1,1,1
+access_wms_product_create,wms.product.create mgr,model_wms_product_create,wms_location.group_wms_manager,1,1,1,1
 access_wms_storekeeper_user,wms.storekeeper user,model_wms_storekeeper,wms_location.group_wms_user,1,0,0,0
 access_wms_storekeeper_mgr,wms.storekeeper mgr,model_wms_storekeeper,wms_location.group_wms_manager,1,1,1,0
 access_wms_label_config_user,wms.label.config user,model_wms_label_config,wms_location.group_wms_user,1,0,0,0
 access_wms_label_config_mgr,wms.label.config mgr,model_wms_label_config,wms_location.group_wms_manager,1,1,1,0
+access_wms_issue_approval_keeper,wms.issue.approval keeper,model_wms_issue_approval,wms_location.group_wms_can_scan_issue,1,0,1,0
+access_wms_issue_approval_mgr,wms.issue.approval mgr,model_wms_issue_approval,wms_location.group_wms_manager,1,1,1,0
+access_wms_issue_approval_line_keeper,wms.issue.approval.line keeper,model_wms_issue_approval_line,wms_location.group_wms_can_scan_issue,1,0,1,0
+access_wms_issue_approval_line_mgr,wms.issue.approval.line mgr,model_wms_issue_approval_line,wms_location.group_wms_manager,1,1,1,0
+access_wms_label_printer_user,wms.label.printer user,model_wms_label_printer,wms_location.group_wms_user,1,0,0,0
+access_wms_label_printer_mgr,wms.label.printer mgr,model_wms_label_printer,wms_location.group_wms_manager,1,1,1,1
+access_wms_label_print_wizard_user,wms.label.print.wizard user,model_wms_label_print_wizard,wms_location.group_wms_user,1,1,1,1
+access_wms_fuel_log_keeper,wms.fuel.log keeper,model_wms_fuel_log,wms_location.group_wms_can_scan_issue,1,1,1,0
+access_wms_fuel_log_mgr,wms.fuel.log mgr,model_wms_fuel_log,wms_location.group_wms_manager,1,1,1,1

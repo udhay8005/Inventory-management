@@ -39,7 +39,7 @@ Open the **WMS** app, then **Reports**. You'll see (Manager view; a read-only vi
 ### D. Expiry alerts (Reports → Expiry alerts)
 1. Open **Reports → Expiry alerts**. Products that have an expiry date set, sorted by soonest expiry. By default the view pre-applies the **Expired**, **Within 30 days**, and **Within 90 days** filters.
 2. Read the columns: **Product**, **Kind**, **Expiry date**, **Days to expiry** (negative = already expired), **On hand**, **Batch**, and **Status** (e.g. "Expires within 90 days").
-3. Rows colour by urgency: red = Expired, amber = within 30 days, blue = within 90 days, grey = more than 90 days left. Use the search filters **Expired / Within 30 days / Within 90 days** and group by Kind or Status. Medicines are issued by expiry first (FEFO).
+3. Rows colour by urgency: red = Expired, amber = within 30 days, blue = within 90 days, grey = more than 90 days left. Use the search filters **Expired / Within 30 days / Within 90 days** and group by Kind or Status. **This report is how you rotate perishables by expiry** — the Scan Issue picker always pulls oldest-arrived (FIFO), so you read this list to spot what's nearing expiry and deliberately issue or rotate it first.
 
 ### E. Forecasts / Reorder (Forecast / Reorder → Forecasts)
 1. Open **WMS → Forecast / Reorder → Forecasts**. By default it shows products that need reordering now.
@@ -74,7 +74,7 @@ A read-only viewer (e.g. a trustee) opens the same Expiry, Oldest stock, and Slo
 
 ## Troubleshooting
 - **Occupancy Pct shows 0 even though there's stock.** Occupancy needs a **Capacity** set on the slot/floor. With no capacity hint, Pct stays 0 (only On Hand is meaningful there).
-- **A product isn't on the Oldest stock report.** That report only includes quants in **rack slots**. Stock sitting directly in a **floor zone** appears on Slot occupancy but not on the rack-only FIFO report. (FIFO/FEFO at issue time still considers floor stock — the report view is just rack-scoped.)
+- **A product isn't on the Oldest stock report.** That report only includes quants in **rack slots**. Stock sitting directly in a **floor zone** appears on Slot occupancy but not on the rack-only FIFO report. (FIFO at issue time still considers floor stock — the report view is just rack-scoped.)
 - **A perishable product isn't on Expiry alerts.** The report only lists products with an **Expiry date** set. Set the expiry on the product (or during onboarding) so it appears.
 - **Movement history seems to show too much/too little.** It's filtered to **Done** moves and grouped by product by default. Clear or change the grouping and add date filters via the search bar to narrow it.
 - **Store Keeper Activity is empty for a period.** It only includes actions that recorded an on-duty Store Keeper. Adjust the date filter (default is last 30 days) and check the keeper was selected on those actions.
@@ -82,7 +82,7 @@ A read-only viewer (e.g. a trustee) opens the same Expiry, Oldest stock, and Slo
 
 ## Best Practices
 - **Make report-reading a routine.** A weekly pass over Expiry, Oldest stock, Slot occupancy, and Forecasts catches spoilage, stagnation, congestion, and shortages early.
-- **Act on Expiry and FIFO together.** Issue the soonest-to-expire (FEFO for medicine/feed/fluid/pooja) and the oldest-arrived (FIFO for everything else) first.
+- **Act on Expiry and FIFO together.** Every product issues oldest-arrived first (FIFO) at the picker. For medicine/feed/fluid/pooja, also work the **Expiry alerts** report: it surfaces what's nearing expiry so you can deliberately rotate or issue the soonest-to-expire stock before it spoils.
 - **Use the right view for the question.** List for a timeline, Pivot for "how much per keeper per day", Graph for a quick visual.
 - **Read-only viewers should rely on reports, not the raw Inventory app.** The reports are the safe, curated window into the data.
 - **Trust the live numbers.** Scans update reports instantly; you don't need to refresh or recompute (except Forecasts, which are a daily AI job).
@@ -107,7 +107,7 @@ A read-only viewer (e.g. a trustee) opens the same Expiry, Oldest stock, and Slo
 - **[0:15]** "Open the WMS app and click Reports. A read-only viewer sees the same screens a Manager sees, minus the two Manager-only audit screens."
 - **[0:32]** "First, Slot occupancy. One row per location — rack slot or floor zone — showing capacity, on-hand, and how full it is as a percentage. Red means over ninety percent full; grey means empty. The Distinct column tells you how many different products share that spot."
 - **[0:58]** "Next, Oldest stock, F-I-F-O. Every quant sorted oldest-first, with its in-date and age in days. Older stock should leave first. Red rows are over a year old — investigate those."
-- **[1:22]** "Expiry alerts shows anything with an expiry date, soonest first. Days to expiry goes negative when something's already expired. Red is expired, amber within thirty days, blue within ninety. For medicine and feed, the system issues the soonest-to-expire first — that's F-E-F-O."
+- **[1:22]** "Expiry alerts shows anything with an expiry date, soonest first. Days to expiry goes negative when something's already expired. Red is expired, amber within thirty days, blue within ninety. This is the report you use to rotate perishables — the issue picker always pulls the oldest-arrived stock, so you check this list to see what's getting close and deliberately issue or move that stock first, before it spoils."
 - **[1:50]** "Movement history lists every completed stock move — source document, product, quantity, and a Done status. It answers 'what moved and when'."
 - **[2:12]** "Now Forecast and Reorder, under its own menu. For each product you get a velocity class — Fast, Normal, Slow, or Dead — a monthly average, current on-hand, a suggested reorder quantity and date, and the AI model details with an error score. These are retrained automatically every day. A Buyer can click Create P-O to draft a purchase order; a read-only viewer just reads the numbers."
 - **[2:45]** "Managers also get Store Keeper Activity — a timeline of who did what. Switch to the Pivot view for a day-by-keeper matrix, or use the Weekly, Monthly, and Yearly shortcuts. It's the answer to 'who was on the desk when this happened'."

@@ -109,3 +109,58 @@ class TestStockLocationDeleteGuard(TransactionCase):
         floor = self._make_floor("WMS-TEST-FLOOR-ARCH")
         floor.active = False
         self.assertFalse(floor.active)
+
+    # --- rack delete cascades to empty sub-locations (the "Delete Rack" fix) ---
+    def _make_rack_tree(self):
+        """A rack -> compartment -> slot chain (satisfies _check_hierarchy)."""
+        rack = self.Location.create(
+            {
+                "name": "WMS-TEST-RACK",
+                "usage": "internal",
+                "location_id": self.stock.id,
+                "wms_location_type": "rack",
+            }
+        )
+        comp = self.Location.create(
+            {
+                "name": "WMS-TEST-COMP",
+                "usage": "internal",
+                "location_id": rack.id,
+                "wms_location_type": "compartment",
+            }
+        )
+        slot = self.Location.create(
+            {
+                "name": "WMS-TEST-SLOT",
+                "usage": "internal",
+                "location_id": comp.id,
+                "wms_location_type": "slot",
+            }
+        )
+        return rack, comp, slot
+
+    def test_delete_rack_cascades_empty_children(self):
+        """Deleting a rack whose sub-locations are empty removes the rack AND
+        its compartments + slots in one action (the brief's 'Delete Rack')."""
+        rack, comp, slot = self._make_rack_tree()
+        rack.unlink()
+        self.assertFalse(rack.exists(), "the rack itself must be gone")
+        self.assertFalse(comp.exists(), "the empty compartment must cascade-delete")
+        self.assertFalse(slot.exists(), "the empty slot must cascade-delete")
+
+    def test_delete_rack_with_stock_in_slot_blocks_atomically(self):
+        """If any slot inside the rack holds stock, the whole rack delete is
+        refused and rolled back — nothing is deleted (archive instead)."""
+        rack, comp, slot = self._make_rack_tree()
+        product = self.env["product.product"].create(
+            {"name": "WMS-TEST-RACK-Q", "type": "consu", "is_storable": True}
+        )
+        self.env["stock.quant"].create(
+            {"product_id": product.id, "location_id": slot.id, "quantity": 3.0}
+        )
+        with self.assertRaises(UserError):
+            rack.unlink()
+        # Atomic: the failed cascade left the whole tree intact.
+        self.assertTrue(rack.exists(), "a blocked delete must not remove the rack")
+        self.assertTrue(comp.exists(), "a blocked delete must not remove the compartment")
+        self.assertTrue(slot.exists(), "a blocked delete must not remove the slot")

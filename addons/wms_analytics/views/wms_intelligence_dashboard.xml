@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+          Wave 2 #1 — Warehouse Intelligence KPI dashboard. Server-rendered (no
+          JS), web.html_container wrapper (same as the Wave-1 dashboard / map).
+          Route /wms/intelligence is manager-gated in the controller.
+        -->
+        <template id="intelligence_dashboard" name="WMS Intelligence Dashboard">
+            <t t-call="web.html_container">
+                <head>
+                    <meta charset="utf-8"/>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <title>Warehouse Intelligence</title>
+                    <style>
+                        * { box-sizing: border-box; }
+                        body { margin: 0; background: #f3f4f6; color: #111827;
+                               font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+                        .wrap { max-width: 1100px; margin: 0 auto; padding: 18px 16px 40px; }
+                        h1 { font-size: 22px; margin: 4px 0 2px; }
+                        .sub { color: #6b7280; font-size: 13px; margin-bottom: 16px; }
+                        .grid { display: grid; gap: 12px;
+                                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+                        .tile { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+                                padding: 14px 16px; }
+                        .tile .v { font-size: 26px; font-weight: 700; }
+                        .tile .l { color: #6b7280; font-size: 12px; text-transform: uppercase;
+                                   letter-spacing: .03em; margin-top: 2px; }
+                        .warn .v { color: #b45309; }
+                        .bad .v { color: #b91c1c; }
+                        .ok .v { color: #15803d; }
+                        .sec { margin: 22px 0 8px; font-size: 13px; font-weight: 700;
+                               text-transform: uppercase; color: #374151; letter-spacing: .04em; }
+                    </style>
+                </head>
+                <body>
+                    <div class="wrap">
+                        <h1>Warehouse Intelligence</h1>
+                        <div class="sub">Real-time KPIs across stock, movement, quality and risk.</div>
+
+                        <div class="sec">Inventory</div>
+                        <div class="grid">
+                            <div class="tile"><div class="v" t-esc="k['total_products']"/><div class="l">Products</div></div>
+                            <div class="tile"><div class="v" t-esc="'%.0f' % k['total_on_hand']"/><div class="l">Total inventory (units)</div></div>
+                            <div class="tile"><div class="v" t-esc="'%.0f' % k['inventory_value']"/><div class="l">Inventory value</div></div>
+                            <div class="tile" t-att-class="'tile ' + ('ok' if k['health_score'] >= 90 else ('warn' if k['health_score'] >= 70 else 'bad'))">
+                                <div class="v"><t t-esc="'%.0f' % k['health_score']"/>%</div><div class="l">Stock health</div>
+                            </div>
+                        </div>
+
+                        <div class="sec">Needs attention</div>
+                        <div class="grid">
+                            <div class="tile warn"><div class="v" t-esc="'%.0f' % k['near_expiry']"/><div class="l">Near expiry</div></div>
+                            <div class="tile bad"><div class="v" t-esc="'%.0f' % k['expired']"/><div class="l">Expired</div></div>
+                            <div class="tile bad"><div class="v" t-esc="'%.0f' % k['recalled']"/><div class="l">Recalled</div></div>
+                            <div class="tile warn"><div class="v" t-esc="'%.0f' % k['quarantined']"/><div class="l">Quarantined</div></div>
+                            <div class="tile warn"><div class="v" t-esc="k['damaged']"/><div class="l">Damaged</div></div>
+                            <div class="tile"><div class="v" t-esc="k['under_repair']"/><div class="l">Under repair</div></div>
+                            <div class="tile bad"><div class="v" t-esc="k['risk_critical']"/><div class="l">Expiry risk: critical</div></div>
+                            <div class="tile warn"><div class="v" t-esc="k['risk_high']"/><div class="l">Expiry risk: high</div></div>
+                        </div>
+
+                        <div class="sec">Movement &amp; replenishment</div>
+                        <div class="grid">
+                            <div class="tile ok"><div class="v" t-esc="k['fast_moving']"/><div class="l">Fast moving</div></div>
+                            <div class="tile"><div class="v" t-esc="k['slow_moving']"/><div class="l">Slow moving</div></div>
+                            <div class="tile"><div class="v" t-esc="k['dead_stock']"/><div class="l">Dead stock</div></div>
+                            <div class="tile warn"><div class="v" t-esc="k['overstock']"/><div class="l">Overstock risk</div></div>
+                            <div class="tile warn"><div class="v" t-esc="k['low_stock']"/><div class="l">Low stock / reorder</div></div>
+                        </div>
+                    </div>
+                </body>
+            </t>
+        </template>
+
+        <record id="action_wms_intelligence_dashboard" model="ir.actions.act_url">
+            <field name="name">KPI Dashboard</field>
+            <field name="url">/wms/intelligence</field>
+            <field name="target">new</field>
+        </record>
+
+        <!--
+            Dashboard consolidation (owner decision, 2026-07): the operations
+            Dashboard (WMS -> Reports -> Dashboard) is the single dashboard, so
+            the overlapping KPI Dashboard MENU is retired to cut clutter. The
+            /wms/intelligence route + action + template are kept as a harmless
+            manager-only direct-URL fallback (and its controller test still
+            passes). Removing the menuitem here lets Odoo's obsolete-data
+            cleanup drop the orphaned menu on upgrade.
+        -->
+    </data>
+</odoo>

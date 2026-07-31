@@ -89,7 +89,7 @@ class WmsStorekeeper(models.Model):
         string="Can Scan Issue",
         compute="_compute_capabilities",
         inverse="_inverse_can_scan_issue",
-        help="Shows the Scan Issue (FIFO) menu and grants create on " "the wizard. Default ON.",
+        help="Shows the Scan Issue menu and grants create on " "the wizard. Default ON.",
     )
     can_file_damage = fields.Boolean(
         string="Can file Damage events",
@@ -296,12 +296,16 @@ class WmsStorekeeper(models.Model):
     # ---------------------------------------------------------------
     def write(self, vals):
         res = super().write(vals)
-        if "active" in vals:
-            # Mirror the archived flag to the linked res.users so
-            # archived keepers can't sneak past the lockdown.
+        if "active" in vals and not self.env.context.get("wms_skip_archive_mirror"):
+            # Mirror the archived flag to the linked res.users so archived
+            # keepers can't sneak past the lockdown. The context guard +
+            # active-differs check stop the res.users reverse mirror (below)
+            # from bouncing back into an infinite write loop.
             for rec in self:
-                if rec.user_id:
-                    rec.user_id.sudo().write({"active": rec.active})
+                if rec.user_id and rec.user_id.active != rec.active:
+                    rec.user_id.sudo().with_context(wms_skip_archive_mirror=True).write(
+                        {"active": rec.active}
+                    )
         return res
 
     @api.constrains("login")
@@ -316,3 +320,35 @@ class WmsStorekeeper(models.Model):
                     )
                     % rec.login
                 )
+
+
+class ResUsers(models.Model):
+    """Mirror res.users archival back to the linked Store Keeper roster entry.
+
+    The roster->login mirror (wms.storekeeper.write, above) only ran one way:
+    archiving a keeper archived their login, but archiving the login directly
+    in Settings -> Users left the roster entry active, so a disabled keeper
+    still showed up in the 'Store Keeper on duty' picker. This closes that gap
+    so the two stay in lockstep in both directions.
+
+    Lives in wms_barcode (which owns wms.storekeeper), NOT in wms_location's
+    res.users extension — wms_location sits below wms_barcode and must not
+    reach up to a model it doesn't define. Guarded by ``wms_skip_archive_mirror``
+    so it can't ping-pong with the roster->login write.
+    """
+
+    _inherit = "res.users"
+
+    def write(self, vals):
+        res = super().write(vals)
+        if "active" in vals and not self.env.context.get("wms_skip_archive_mirror"):
+            new_active = vals["active"]
+            keepers = (
+                self.env["wms.storekeeper"]
+                .sudo()
+                .with_context(active_test=False)
+                .search([("user_id", "in", self.ids), ("active", "!=", new_active)])
+            )
+            if keepers:
+                keepers.with_context(wms_skip_archive_mirror=True).write({"active": new_active})
+        return res

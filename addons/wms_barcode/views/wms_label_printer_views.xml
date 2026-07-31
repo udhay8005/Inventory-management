@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_label_printer_list" model="ir.ui.view">
+            <field name="name">wms.label.printer.list</field>
+            <field name="model">wms.label.printer</field>
+            <field name="arch" type="xml">
+                <list decoration-bf="is_default">
+                    <field name="name"/>
+                    <field name="connection"/>
+                    <field name="system_name"/>
+                    <field name="host" optional="hide"/>
+                    <field name="label_width_mm" string="W (mm)"/>
+                    <field name="label_height_mm" string="H (mm)"/>
+                    <field name="is_default" string="Default"/>
+                    <field name="active" column_invisible="1"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_label_printer_form" model="ir.ui.view">
+            <field name="name">wms.label.printer.form</field>
+            <field name="model">wms.label.printer</field>
+            <field name="arch" type="xml">
+                <form string="Label Printer">
+                    <header>
+                        <button name="action_test_print" type="object"
+                                string="Test print" class="btn-primary"/>
+                        <button name="action_detect_printers" type="object"
+                                string="Detect printers"/>
+                    </header>
+                    <sheet>
+                        <div class="alert alert-info" role="alert">
+                            Labels are sent <b>straight to this printer</b> in its
+                            native TSPL language &#8212; no browser print box, no PDF.
+                            Use <b>Detect printers</b> to see the exact Windows name,
+                            then <b>Test print</b> to check the alignment.
+                        </div>
+                        <div class="oe_title">
+                            <label for="name"/>
+                            <h1><field name="name" placeholder="e.g. Thermal label printer"/></h1>
+                        </div>
+                        <group>
+                            <group string="Connection">
+                                <field name="connection" widget="radio"/>
+                                <field name="system_name"
+                                       invisible="connection != 'spooler'"
+                                       required="connection == 'spooler'"
+                                       placeholder="e.g. TSC TE244"/>
+                                <field name="host"
+                                       invisible="connection != 'network'"
+                                       required="connection == 'network'"
+                                       placeholder="192.168.0.50"/>
+                                <field name="port" invisible="connection != 'network'"/>
+                                <field name="is_default"/>
+                                <field name="active"/>
+                            </group>
+                            <group string="Label media">
+                                <field name="label_width_mm"/>
+                                <field name="label_height_mm"/>
+                                <field name="gap_mm"/>
+                                <field name="dpi"/>
+                            </group>
+                        </group>
+                        <group>
+                            <group string="Print quality">
+                                <field name="density"/>
+                                <field name="speed"/>
+                            </group>
+                            <group string="Alignment (nudge into the sticker)">
+                                <field name="x_offset_mm"/>
+                                <field name="y_offset_mm"/>
+                            </group>
+                        </group>
+                        <group string="Label branding">
+                            <field name="brand_line"/>
+                        </group>
+                        <field name="notes" placeholder="Notes (optional)..."/>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="action_wms_label_printers" model="ir.actions.act_window">
+            <field name="name">Label Printers</field>
+            <field name="res_model">wms.label.printer</field>
+            <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No label printer set up yet.</p>
+                <p>
+                    Add your thermal printer (e.g. the TSC TE244) so staff can print
+                    barcode labels with one click. Click <b>New</b>, use
+                    <b>Detect printers</b> to find its exact name, then
+                    <b>Test print</b>.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_label_printers"
+                  name="Label Printers"
+                  parent="wms_location.menu_wms_config"
+                  action="action_wms_label_printers"
+                  groups="wms_location.group_wms_manager"
+                  sequence="37"/>
+    </data>
+</odoo>

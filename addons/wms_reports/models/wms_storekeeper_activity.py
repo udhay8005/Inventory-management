@@ -1,3 +1,4 @@
+import pytz
 from odoo import api, fields, models, tools
 
 
@@ -89,6 +90,19 @@ class WmsStorekeeperActivity(models.Model):
     @api.model
     def init(self):
         tools.drop_view_if_exists(self.env.cr, self._table)
+        # Bucket each event by the COMPANY-LOCAL calendar day, not the raw UTC
+        # date. Odoo stores datetimes as naive UTC, so casting date_done /
+        # create_date straight to ::date lands a late-evening IST event on the
+        # *next* UTC day — "what did Suresh do Tuesday?" then shows it under
+        # Wednesday. An event's local date is historical and never changes, so
+        # resolving the company tz once and baking it into the view is correct
+        # here (unlike wms_returns_due's live "today", which must join for the
+        # tz). The tz is passed as a query PARAMETER (psycopg2 quotes it — no
+        # injection); pytz still validates it so a malformed value falls back to
+        # UTC instead of erroring the view DDL.
+        tz_local = self.env.company.partner_id.tz or "UTC"
+        if tz_local not in pytz.all_timezones_set:
+            tz_local = "UTC"
         # ROW_NUMBER over the UNION gives a unique, stable-per-snapshot
         # primary key — needed because Odoo's ORM requires `id` even on
         # synthetic views. We can't just (picking_id * 3 + 0) because
@@ -102,7 +116,7 @@ class WmsStorekeeperActivity(models.Model):
                     p.create_uid         AS user_id,
                     CASE pt.code
                         WHEN 'incoming' THEN
-                            CASE WHEN p.name LIKE 'IN/RET%' THEN 'return'
+                            CASE WHEN p.name LIKE 'IN/RET%%' THEN 'return'
                                  ELSE 'receipt' END
                         WHEN 'outgoing' THEN 'issue'
                         WHEN 'internal' THEN 'internal'
@@ -115,7 +129,8 @@ class WmsStorekeeperActivity(models.Model):
                     p.id AS picking_id,
                     NULL::int AS damage_id,
                     NULL::int AS repair_id,
-                    COALESCE(p.date_done, p.scheduled_date)::date AS activity_date,
+                    (COALESCE(p.date_done, p.scheduled_date)
+                        AT TIME ZONE 'UTC' AT TIME ZONE %(tz)s)::date AS activity_date,
                     COALESCE(p.date_done, p.scheduled_date)       AS activity_datetime
                 FROM stock_picking p
                 JOIN stock_picking_type pt ON pt.id = p.picking_type_id
@@ -136,7 +151,8 @@ class WmsStorekeeperActivity(models.Model):
                     NULL::int            AS picking_id,
                     d.id                 AS damage_id,
                     NULL::int            AS repair_id,
-                    d.create_date::date  AS activity_date,
+                    (d.create_date
+                        AT TIME ZONE 'UTC' AT TIME ZONE %(tz)s)::date AS activity_date,
                     d.create_date        AS activity_datetime
                 FROM wms_damage d
                 WHERE d.wms_storekeeper_id IS NOT NULL
@@ -153,7 +169,8 @@ class WmsStorekeeperActivity(models.Model):
                     NULL::int            AS picking_id,
                     NULL::int            AS damage_id,
                     r.id                 AS repair_id,
-                    r.create_date::date  AS activity_date,
+                    (r.create_date
+                        AT TIME ZONE 'UTC' AT TIME ZONE %(tz)s)::date AS activity_date,
                     r.create_date        AS activity_datetime
                 FROM wms_repair_order r
                 WHERE r.wms_storekeeper_id IS NOT NULL
@@ -184,5 +201,6 @@ class WmsStorekeeperActivity(models.Model):
                 activity_date,
                 activity_datetime
             FROM all_events
-        """
+        """,
+            {"tz": tz_local},
         )

@@ -8,6 +8,12 @@ The pipeline runs **native** — Ubuntu runner with a postgres:16 service
 container, Python 3.12, and a clone of Odoo 19.0 source. Mirrors the local
 Windows setup exactly (just on Linux instead of Windows for speed + cost).
 
+> **Note on the PG pin:** CI runs on PostgreSQL 16 only as a single-version
+> smoke. Runtime supports PostgreSQL 15/16/17 (auto-detected; winget installs
+> 17 by default). A matrix-test across all three versions is tracked as
+> future work; current CI remains a single-version gate to keep run time
+> short.
+
 ## Pipeline overview
 
 ```
@@ -186,9 +192,11 @@ duck under it.
 | Security job flagged a CVE | Real or false positive | Read the report; update dep or add an ignore with a `# nosec: B###` comment |
 | Release didn't fire | Manifest version didn't actually increase | Bump the highest version across all addons |
 
-## Migrating from the old Docker CI
+## Migrated from the old Docker CI (historical)
 
-If you have an older clone with the Docker-based `ci.yml`:
+We migrated from Docker-based CI to native PowerShell/Linux CI in v19.0.5;
+this section is kept for historical reference. If you have an older clone
+with the Docker-based `ci.yml`:
 
 ```bash
 git fetch origin

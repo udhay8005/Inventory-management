@@ -15,7 +15,7 @@ a barcode (or a printed test label), a wireless or USB scanner.
   - Receivers, Issuers → **WMS / Store Keeper**
   - Inventory In-charge → **WMS / Manager**
   - Mechanics → **WMS / Repair Tech**
-  - Procurement → **WMS / Buyer**
+  - Procurement (optional) → **WMS / Buyer**
 - [ ] Trainee can log in to `http://<host-IP>:8069` and sees the **WMS** app
   in the home menu.
 
@@ -24,7 +24,7 @@ a barcode (or a printed test label), a wireless or USB scanner.
 ## 1. The big picture — 3 min
 
 > "Three things to learn today:
-> 1. Where things live (Racks → Levels → Dividers → Slots).
+> 1. Where things live (Rack → Compartment → Slot).
 > 2. How to put stock in (Scan Receipt).
 > 3. How to take stock out (Scan Issue).
 >
@@ -34,10 +34,10 @@ a barcode (or a printed test label), a wireless or USB scanner.
 
 ### Show them the rack grid
 
-1. WMS → Configuration → **Racks** → click **R-01** → top of form → **Open visual grid**.
-2. Point out: 6 levels, 4 dividers per level, 3 slots per divider, colour
-   coding (grey = empty, green = OK, red = full).
-3. Walk them to the physical R-01 and show how the slot barcodes match.
+1. WMS → Configuration → **Racks** → click **R01** → top of form → **Open visual grid**.
+2. Point out: the default rack is a **6 shelf × 3 column** grid; each cell is a
+   compartment with 1 slot, colour-coded (grey = empty, green = OK, red = full).
+3. Walk them to the physical R01 and show how the slot barcodes match.
 
 ---
 
@@ -81,8 +81,8 @@ target is **under 30 seconds per item** once the scanner is in their hand.
 > "When stock leaves — for sale, consumption, or transfer — it's the same
 > drill, but reverse. The software picks the **oldest stock first** across
 > every slot holding that product. You don't choose; FIFO does. If the
-> system says take from L-3/D-2/S-1 and you take from L-5/D-1/S-2, the
-> stock counts go wrong."
+> system says take from `R01-SH03-C02-SL01` and you take from
+> `R01-SH05-C01-SL01`, the stock counts go wrong."
 
 ### Demo
 
@@ -123,7 +123,7 @@ off)."
 
 ### Demo
 
-1. WMS → Operations → **Damages** → New.
+1. WMS → Operations → **Damages** → click **New** in the list view.
 2. Product, quantity, source slot, reason.
 3. Optional: photo + note.
 4. Confirm → creates an internal transfer to the **Damage** location.
@@ -133,7 +133,7 @@ off)."
 
 If they're a Repair Tech, also show:
 
-1. WMS → Operations → **Repair Orders** → New.
+1. WMS → Operations → **Repair Orders** → click **New** in the list view.
 2. Product, qty, original slot (the one it came from before damage).
 3. **Start Repair** → moves to Repair-Out location.
 4. **Mark Done** → moves back to the original slot.
@@ -205,8 +205,8 @@ Walk them through:
 | "Why didn't my scan register?" | Make sure the cursor is in the scan field. Tap it once if not. Scanner ENTER suffix should fire automatically. |
 | "What if I scan the wrong product?" | Click the red X on that line in the wizard before Validate. After Validate, ask the Manager to do an inventory adjustment. |
 | "Where do I see what I did today?" | Click your name in the top right → My Activities → Recent. Or any picking has full chatter history. |
-| "The product I want isn't here." | Go to Inventory → Products → New (Manager-only), follow the SKU naming policy, print a label, then receive it. |
-| "The slot label is faded/missing." | Re-print: WMS → Operations → Slots → tick the slot → ☰ → Print > WMS Location Labels. |
+| "The product I want isn't here." | Go to WMS → Configuration → **Onboard Products** (Manager-only), follow the SKU naming policy, print a label, then receive it. |
+| "The slot label is faded/missing." | Re-print: WMS → Operations → Slots → tick the slot → ☰ → Print > WMS Location Label (100×25mm). |
 
 ---
 

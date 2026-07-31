@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Capability sub-group for the Backup Now wizard (design D11).
+
+        House pattern (wms_location/security/wms_security.xml): one extra
+        keeper power = one capability sub-group implying group_wms_user.
+        This group gates ONLY the Backup Now wizard + its menu — the
+        restore browser, the catalog, the audit table and the settings
+        page stay manager-only and invisible to keepers (menu groups +
+        model ACL + group re-check inside the wizard methods).
+
+        The Admin grants it per-keeper from the user form; managers get
+        it automatically via the implied_ids update below (an additive
+        XML record update on the wms_location group — allowed).
+    -->
+    <data noupdate="0">
+
+        <record id="group_wms_backup_now" model="res.groups">
+            <field name="name">WMS / Can Run Backup Now</field>
+            <field name="implied_ids" eval="[(4, ref('wms_location.group_wms_user'))]"/>
+        </record>
+
+        <record id="wms_location.group_wms_manager" model="res.groups">
+            <field name="implied_ids" eval="[(4, ref('group_wms_backup_now'))]"/>
+        </record>
+
+    </data>
+</odoo>

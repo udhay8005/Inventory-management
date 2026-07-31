@@ -49,10 +49,10 @@
                     <li><b>Warehouse structure</b> — Zones, Racks, Compartments, Slots, and the three Generators that create them in seconds.</li>
                     <li><b>Onboard products</b> — paste a list from Excel; each item gets an auto-SKU, barcode, and label.</li>
                     <li><b>Users &amp; permissions</b> — Manager vs Store Keeper, the capability tick-boxes, and the on-duty roster.</li>
-                    <li><b>Stock flow: FIFO / FEFO</b> — how the system decides what leaves first.</li>
+                    <li><b>Stock flow: FIFO &amp; expiry rotation</b> — issue takes the oldest stock first; perishables are rotated using the Expiry Alerts report.</li>
                     <li><b>Audit trail &amp; roster</b> — who did what, and why audits lock.</li>
                     <li><b>Reports</b> — occupancy, movement history, oldest stock, expiry alerts, forecasts.</li>
-                    <li><b>Backups &amp; restore drill</b>, then <b>Observability / health</b> — keeping the data safe and the system green.</li>
+                    <li><b>Backups &amp; restore drill</b> — including the <b>cloud backup to Google Drive</b> and the <b>Back Up Now</b> button — then <b>Observability / health</b> — keeping the data safe and the system green.</li>
                     <li><b>Damage &amp; repair oversight</b> and <b>Troubleshooting</b>.</li>
                 </ol>
 

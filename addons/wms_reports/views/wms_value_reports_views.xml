@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <!-- ============================================================
+             Current stock value (cost x on-hand)
+             ============================================================ -->
+        <record id="view_wms_stock_value_tree" model="ir.ui.view">
+            <field name="name">wms.stock.value.report.list</field>
+            <field name="model">wms.stock.value.report</field>
+            <field name="arch" type="xml">
+                <list create="0" edit="0" delete="0" default_order="stock_value desc">
+                    <field name="product_id"/>
+                    <field name="categ_id" optional="show"/>
+                    <field name="qty_on_hand" sum="On hand"/>
+                    <field name="unit_cost"/>
+                    <field name="stock_value" sum="Total value"/>
+                    <field name="company_id" optional="hide"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_stock_value_pivot" model="ir.ui.view">
+            <field name="name">wms.stock.value.report.pivot</field>
+            <field name="model">wms.stock.value.report</field>
+            <field name="arch" type="xml">
+                <pivot string="Stock value">
+                    <field name="categ_id" type="row"/>
+                    <field name="stock_value" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_stock_value_graph" model="ir.ui.view">
+            <field name="name">wms.stock.value.report.graph</field>
+            <field name="model">wms.stock.value.report</field>
+            <field name="arch" type="xml">
+                <graph string="Stock value" type="bar">
+                    <field name="categ_id"/>
+                    <field name="stock_value" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_stock_value_search" model="ir.ui.view">
+            <field name="name">wms.stock.value.report.search</field>
+            <field name="model">wms.stock.value.report</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="categ_id"/>
+                    <filter name="group_categ" string="Category"
+                            context="{'group_by': 'categ_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_stock_value" model="ir.actions.act_window">
+            <field name="name">Stock Value</field>
+            <field name="res_model">wms.stock.value.report</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_stock_value_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No stock on hand yet.</p>
+                <p>
+                    The capital sitting on your shelves right now: each product's
+                    unit cost times its on-hand quantity. Switch to <b>Pivot</b>
+                    or <b>Graph</b> to see value by category.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_stock_value"
+                  name="Stock Value"
+                  parent="wms_reports.menu_wms_reports_value"
+                  action="action_wms_stock_value"
+                  groups="wms_location.group_wms_manager"
+                  sequence="10"/>
+
+        <!-- ============================================================
+             Consumption value (issued qty x cost), by month
+             ============================================================ -->
+        <record id="view_wms_consumption_value_tree" model="ir.ui.view">
+            <field name="name">wms.consumption.value.report.list</field>
+            <field name="model">wms.consumption.value.report</field>
+            <field name="arch" type="xml">
+                <list create="0" edit="0" delete="0" default_order="period desc">
+                    <field name="period"/>
+                    <field name="product_id"/>
+                    <field name="department_id" optional="show"/>
+                    <field name="issued_for" optional="hide"/>
+                    <field name="categ_id" optional="show"/>
+                    <field name="qty_out" sum="Issued"/>
+                    <field name="unit_cost"/>
+                    <field name="consumption_value" sum="Total consumed value"/>
+                    <field name="company_id" optional="hide"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_consumption_value_pivot" model="ir.ui.view">
+            <field name="name">wms.consumption.value.report.pivot</field>
+            <field name="model">wms.consumption.value.report</field>
+            <field name="arch" type="xml">
+                <pivot string="Consumption value">
+                    <field name="department_id" type="row"/>
+                    <field name="period" type="col" interval="month"/>
+                    <field name="consumption_value" type="measure"/>
+                </pivot>
+            </field>
+        </record>
+
+        <record id="view_wms_consumption_value_graph" model="ir.ui.view">
+            <field name="name">wms.consumption.value.report.graph</field>
+            <field name="model">wms.consumption.value.report</field>
+            <field name="arch" type="xml">
+                <graph string="Consumption value" type="line">
+                    <field name="period" interval="month"/>
+                    <field name="consumption_value" type="measure"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="view_wms_consumption_value_search" model="ir.ui.view">
+            <field name="name">wms.consumption.value.report.search</field>
+            <field name="model">wms.consumption.value.report</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="categ_id"/>
+                    <field name="department_id"/>
+                    <field name="issued_for"/>
+                    <filter name="group_department" string="Department"
+                            context="{'group_by': 'department_id'}"/>
+                    <filter name="group_issued_for" string="Issued for (legacy)"
+                            context="{'group_by': 'issued_for'}"/>
+                    <filter name="group_month" string="Month"
+                            context="{'group_by': 'period:month'}"/>
+                    <filter name="group_categ" string="Category"
+                            context="{'group_by': 'categ_id'}"/>
+                    <filter name="group_product" string="Product"
+                            context="{'group_by': 'product_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_consumption_value" model="ir.actions.act_window">
+            <field name="name">Consumption Value</field>
+            <field name="res_model">wms.consumption.value.report</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_consumption_value_search"/>
+            <field name="context">{'search_default_group_month': 1}</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Nothing issued yet.</p>
+                <p>
+                    What you consumed, by value, per month: each Scan Issue's
+                    quantity times the product's unit cost. Reconcile against the
+                    monthly cow-care budget and spot rising costs early.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_consumption_value"
+                  name="Consumption Value"
+                  parent="wms_reports.menu_wms_reports_value"
+                  action="action_wms_consumption_value"
+                  groups="wms_location.group_wms_manager"
+                  sequence="15"/>
+
+        <!-- ============================================================
+             Product Lifecycle — reuse the activity log, grouped by product
+             so one screen tells a single product's whole story (received,
+             issued, returned, damaged, repaired).
+             ============================================================ -->
+        <record id="action_wms_product_lifecycle" model="ir.actions.act_window">
+            <field name="name">Product Lifecycle</field>
+            <field name="res_model">wms.storekeeper.activity</field>
+            <field name="view_mode">list,pivot,graph</field>
+            <field name="search_view_id" ref="view_wms_storekeeper_activity_search"/>
+            <field name="context">{
+                'search_default_group_product': 1,
+            }</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No movements yet.</p>
+                <p>
+                    Every event in a product's life — received, issued, returned,
+                    damaged, repaired — in one place. Expand a product to see its
+                    full timeline, newest first.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_product_lifecycle"
+                  name="Product Lifecycle"
+                  parent="wms_reports.menu_wms_reports_value"
+                  action="action_wms_product_lifecycle"
+                  groups="wms_location.group_wms_manager"
+                  sequence="20"/>
+
+    </data>
+</odoo>

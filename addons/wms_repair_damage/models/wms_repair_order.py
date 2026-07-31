@@ -1,6 +1,12 @@
+import logging
+
 from markupsafe import Markup
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+
+from .reservation import validate_reserved_or_abort
+
+_logger = logging.getLogger(__name__)
 
 
 class WmsRepairOrder(models.Model):
@@ -37,6 +43,10 @@ class WmsRepairOrder(models.Model):
     damage_id = fields.Many2one("wms.damage")
     product_id = fields.Many2one("product.product", required=True)
     quantity = fields.Float(required=True, default=1.0)
+    _quantity_positive = models.Constraint(
+        "CHECK(quantity > 0)",
+        "Repair quantity must be greater than zero.",
+    )
     original_slot_id = fields.Many2one(
         "stock.location",
         # Same widened domain as wms.damage.source_slot_id — stock can
@@ -195,12 +205,7 @@ class WmsRepairOrder(models.Model):
                     "location_dest_id": repair_loc.id,
                 }
             )
-            picking.action_confirm()
-            picking.action_assign()
-            for ml in picking.move_ids.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-            picking.button_validate()
+            validate_reserved_or_abort(picking, rec.product_id, "send to Repair")
             rec.write({"state": "in_repair", "start_picking_id": picking.id})
             rec._post_state_audit(
                 "Repair started",
@@ -234,17 +239,35 @@ class WmsRepairOrder(models.Model):
                     "location_dest_id": dest.id,
                 }
             )
-            picking.action_confirm()
-            picking.action_assign()
-            for ml in picking.move_ids.move_line_ids:
-                if not ml.quantity:
-                    ml.quantity = ml.quantity_product_uom or picking.move_ids[:1].product_uom_qty
-            picking.button_validate()
+            validate_reserved_or_abort(picking, rec.product_id, "return from Repair")
             rec.write({"state": "done", "finish_picking_id": picking.id})
             rec._post_state_audit(
                 "Repair done",
                 "Item returned to slot %s and is available for issue again." % dest.display_name,
             )
+            rec._notify_managers_repair_done(dest)
+
+    def _notify_managers_repair_done(self, dest):
+        """Best-effort in-app notice (Batch 6): tell WMS managers a repair
+        finished so they know the item is back in stock. Never raises."""
+        self.ensure_one()
+        try:
+            managers = self.env.ref("wms_location.group_wms_manager", raise_if_not_found=False)
+            if not managers or not managers.all_user_ids:
+                return
+            body = Markup(
+                "<p>&#128295; <b>Repair finished: %s</b></p>"
+                "<p><b>%s</b> is back in slot %s and available to issue again.</p>"
+            ) % (self.name or "", self.product_id.display_name, dest.display_name)
+            # message_notify -> lands in each manager's Inbox + systray (a plain
+            # message_post on a partner only reaches followers).
+            self.env["mail.thread"].message_notify(
+                partner_ids=managers.all_user_ids.partner_id.ids,
+                body=body,
+                subject="WMS — Repair finished",
+            )
+        except Exception:  # noqa: BLE001 - a notice must never break the repair
+            _logger.exception("wms.repair.order: repair-done notify failed")
 
     def action_scrap(self):
         for rec in self:
@@ -259,6 +282,12 @@ class WmsRepairOrder(models.Model):
                     "product_uom_id": rec.product_id.uom_id.id,
                     "origin": rec.name,
                 }
+            )
+            # Serialise against a concurrent Scan Issue / repair-finish on the
+            # same product so the write-off can't race the reservation.
+            self.env.cr.execute(
+                "SELECT id FROM product_product WHERE id = %s FOR UPDATE",
+                (rec.product_id.id,),
             )
             scrap.action_validate()
             rec.state = "scrapped"

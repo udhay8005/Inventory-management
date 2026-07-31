@@ -326,12 +326,21 @@ class TestWmsLocation(TransactionCase):
         ``child_of lot_stock_id`` lookup misses the stock. The planner
         must fall back to internal locations of the same company so
         Scan Issue doesn't wrongly report STOCK OUT.
+
+        Since UAT R4 this shape can no longer be BUILT — the
+        ``_check_inside_warehouse_tree`` constraint refuses it, and the
+        19.0.3.29.0 migration re-homes any that already exist. The planner
+        fallback stays, and stays tested, because a database restored from an
+        older backup can still arrive in this state; the test therefore uses
+        the documented ``wms_skip_tree_check`` bypass to reproduce it
+        deliberately.
         """
         # Build a parent location that's a sibling of WH/Stock, not a
         # descendant — mimics the Trust's "Dakshin Vrindavan" branded
         # top-level location. company_id stays the same so the company
         # guard in the fallback still matches.
-        outside_parent = self.env["stock.location"].create(
+        bypass = self.env["stock.location"].with_context(wms_skip_tree_check=True)
+        outside_parent = bypass.create(
             {
                 "name": "Dakshin Vrindavan (test)",
                 "usage": "internal",
@@ -339,14 +348,18 @@ class TestWmsLocation(TransactionCase):
                 "company_id": self.env.company.id,
             }
         )
-        gen = self.env["wms.rack.generator"].create(
-            {
-                "rack_code": "R-OUT",
-                "parent_location_id": outside_parent.id,
-                "shelf_count": 1,
-                "column_count": 1,
-                "default_slot_count": 1,
-            }
+        gen = (
+            self.env["wms.rack.generator"]
+            .with_context(wms_skip_tree_check=True)
+            .create(
+                {
+                    "rack_code": "R-OUT",
+                    "parent_location_id": outside_parent.id,
+                    "shelf_count": 1,
+                    "column_count": 1,
+                    "default_slot_count": 1,
+                }
+            )
         )
         gen.action_generate()
         slot = self.env["stock.location"].search(
@@ -393,13 +406,12 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(len(plan), 1)
         self.assertEqual(plan[0][1], 2.0)
 
-    def test_fefo_for_medicine_picks_earliest_expiry(self):
-        """For expiry-sensitive kinds (medicine / feed / fluid / pooja)
-        the planner uses FEFO, not FIFO. Even if the OLDER batch was
-        received first, the planner picks the batch with the EARLIEST
-        expiry. And it crosses sibling SKUs with the same product name
-        so the storekeeper can scan any batch's barcode and the system
-        still routes them to the soon-to-expire one."""
+    def test_planner_pools_only_scanned_product(self):
+        """Critical #1/#5: the planner pools STRICTLY within the scanned
+        product's own template. It never crosses to a same-named SIBLING
+        product (which previously could issue a different SKU and unit of
+        measure - the wrong-medicine danger). Different physical batches are
+        different products; the keeper scans the specific batch to issue."""
         self._gen_rack("R-MED", shelves=1, columns=2, slots=1)
         slots = self.env["stock.location"].search(
             [
@@ -457,9 +469,9 @@ class TestWmsLocation(TransactionCase):
             }
         )
 
-        # Storekeeper scans Batch A's barcode (earliest in_date).
-        # Pure FIFO would have picked A first. FEFO must pick B because
-        # B expires June 2026, A expires Dec 2027.
+        # Scanning batch A plans ONLY batch A's stock - never the same-named
+        # sibling B, even though B expires sooner. Cross-product FEFO was the
+        # wrong-medicine danger removed in Critical #1.
         plan, missing = self.env["stock.location"].find_oldest_quants_for_product(
             batch_a.id,
             3,
@@ -467,24 +479,17 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(missing, 0)
         self.assertEqual(len(plan), 1)
         self.assertEqual(
-            plan[0][0].product_id.id, batch_b.id, "Should pick the earlier-expiring sibling batch"
+            plan[0][0].product_id.id, batch_a.id, "Must stay within the scanned product"
         )
         self.assertEqual(plan[0][1], 3.0)
 
-        # If we ask for MORE than batch B holds, the planner should
-        # finish on batch A.
-        plan2, missing2 = self.env["stock.location"].find_oldest_quants_for_product(
-            batch_a.id,
-            15,
+        # Scanning batch B plans only B.
+        plan_b, missing_b = self.env["stock.location"].find_oldest_quants_for_product(
+            batch_b.id,
+            3,
         )
-        self.assertEqual(missing2, 0)
-        self.assertEqual(len(plan2), 2)
-        # First line: all of batch B (10 units)
-        self.assertEqual(plan2[0][0].product_id.id, batch_b.id)
-        self.assertEqual(plan2[0][1], 10.0)
-        # Second line: 5 from batch A
-        self.assertEqual(plan2[1][0].product_id.id, batch_a.id)
-        self.assertEqual(plan2[1][1], 5.0)
+        self.assertEqual(missing_b, 0)
+        self.assertEqual({q.product_id.id for q, _take in plan_b}, {batch_b.id})
 
     def test_overuse_cap_fields_default_to_zero(self):
         """``wms_max_per_issue`` and ``wms_daily_cap`` exist on
@@ -572,3 +577,83 @@ class TestWmsLocation(TransactionCase):
         self.assertEqual(missing, 0)
         self.assertEqual(len(plan), 1)
         self.assertEqual(plan[0][0].product_id.id, tool_new.id, "Tools must not cross batches")
+
+
+@tagged("post_install", "-at_install", "wms")
+class TestCapabilityBackfill(TransactionCase):
+    """3C: the upgrade backfill grants legacy keepers the four daily-work
+    capabilities, but must NOT re-grant Manage Catalog (an Admin task) - so an
+    upgrade never silently re-widens a keeper's power."""
+
+    def test_backfill_grants_four_caps_not_manage_catalog(self):
+        keeper = self.env["res.users"].create(
+            {
+                "name": "BF Keeper",
+                "login": "bf_keeper",
+                "group_ids": [(6, 0, [self.env.ref("wms_location.group_wms_user").id])],
+            }
+        )
+        self.env["res.users"]._wms_backfill_capabilities()
+        keeper.invalidate_recordset()
+        granted = set(keeper.all_group_ids.ids)
+        for cap in (
+            "group_wms_can_scan_receive",
+            "group_wms_can_scan_issue",
+            "group_wms_can_file_damage",
+            "group_wms_can_submit_audit",
+        ):
+            self.assertIn(
+                self.env.ref("wms_location.%s" % cap).id,
+                granted,
+                "backfill must grant %s" % cap,
+            )
+        self.assertNotIn(
+            self.env.ref("wms_location.group_wms_can_manage_catalog").id,
+            granted,
+            "backfill must NOT re-grant Manage Catalog to a keeper",
+        )
+
+
+@tagged("post_install", "-at_install", "wms")
+class TestFloorZoneBarcodeCollision(TransactionCase):
+    """2.5: two parent areas whose names compress to the same 4-char prefix
+    must not mint colliding floor-zone barcodes - that would hit the global
+    stock.location barcode-unique constraint and roll back the whole batch with
+    a cryptic error."""
+
+    def _generate_one_zone(self, parent_name):
+        wh = self.env["stock.warehouse"].search([], limit=1)
+        # The wrapper area hangs off WH/Stock, not off the WH *view* location:
+        # since UAT R4, storage must live inside the warehouse stock tree or the
+        # weekly audit cannot see it (_check_inside_warehouse_tree). This also
+        # matches where the floor-zone generator parents zones by default.
+        parent = self.env["stock.location"].create(
+            {
+                "name": parent_name,
+                "usage": "view",
+                "location_id": wh.lot_stock_id.id,
+                "company_id": wh.company_id.id,
+            }
+        )
+        wiz = self.env["wms.floor.zone.generator"].create(
+            {
+                "warehouse_id": wh.id,
+                "parent_location_id": parent.id,
+                "zone_prefix": "F",
+                "count": 1,
+                "start_number": 1,
+            }
+        )
+        wiz.action_generate()
+        return self.env["stock.location"].search(
+            [("location_id", "=", parent.id), ("wms_location_type", "=", "floor")]
+        )
+
+    def test_similar_parent_names_do_not_collide(self):
+        z1 = self._generate_one_zone("Pharmacy Building")  # -> "PHAR"
+        z2 = self._generate_one_zone("Pharma Store")  # also -> "PHAR"
+        self.assertTrue(z1 and z2, "both floor zones must be created without a crash")
+        self.assertTrue(z1.barcode and z2.barcode)
+        self.assertNotEqual(
+            z1.barcode, z2.barcode, "floor-zone barcodes must not collide across parents"
+        )

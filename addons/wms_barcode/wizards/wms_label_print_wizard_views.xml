@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_wms_label_print_wizard_form" model="ir.ui.view">
+            <field name="name">wms.label.print.wizard.form</field>
+            <field name="model">wms.label.print.wizard</field>
+            <field name="arch" type="xml">
+                <form string="Print labels">
+                    <div class="alert alert-info" role="alert">
+                        <i class="fa fa-print me-1"/>
+                        <field name="summary" readonly="1" nolabel="1" class="d-inline"/>
+                        &#8212; the labels print straight to the thermal printer
+                        (no browser print box).
+                    </div>
+                    <group>
+                        <field name="printer_id"
+                               options="{'no_create': True, 'no_open': True}"/>
+                        <field name="copies"/>
+                        <field name="record_count" invisible="1"/>
+                    </group>
+                    <footer>
+                        <button name="action_print" type="object"
+                                string="Print" class="btn-primary"/>
+                        <button special="cancel" string="Cancel"/>
+                    </footer>
+                </form>
+            </field>
+        </record>
+
+        <!--
+            Bindings: these put "Print labels (direct)" in the Action (cog) menu
+            of the Products list/form and the Slots / Racks / Compartments
+            list/form. Selecting one or many records and choosing it opens the
+            wizard with those records as active_ids.
+        -->
+        <record id="action_wms_print_labels_product" model="ir.actions.act_window">
+            <field name="name">Print labels (direct)</field>
+            <field name="res_model">wms.label.print.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="binding_model_id" ref="product.model_product_product"/>
+            <field name="binding_view_types">list,form</field>
+        </record>
+
+        <!--
+            The WMS "Products" list is product.TEMPLATE (F1 fix), so bind the
+            direct-print action there too, otherwise printing from that list
+            (a v30 feature) would disappear. The product.product binding stays
+            for the Inventory app's variant list.
+        -->
+        <record id="action_wms_print_labels_template" model="ir.actions.act_window">
+            <field name="name">Print labels (direct)</field>
+            <field name="res_model">wms.label.print.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="binding_model_id" ref="product.model_product_template"/>
+            <field name="binding_view_types">list,form</field>
+        </record>
+
+        <record id="action_wms_print_labels_location" model="ir.actions.act_window">
+            <field name="name">Print labels (direct)</field>
+            <field name="res_model">wms.label.print.wizard</field>
+            <field name="view_mode">form</field>
+            <field name="target">new</field>
+            <field name="binding_model_id" ref="stock.model_stock_location"/>
+            <field name="binding_view_types">list,form</field>
+        </record>
+    </data>
+</odoo>

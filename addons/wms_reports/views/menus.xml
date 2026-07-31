@@ -6,115 +6,150 @@
                   parent="wms_location.menu_wms_root"
                   sequence="70"/>
 
+        <!--
+            Reports are grouped into three plain-language folders so the
+            list is not a wall of 20+ same-weight entries:
+              * Find stock      - where things are / how full slots are
+              * Alerts & to-dos - what needs action (low, expiring, due back)
+              * Value & money   - money figures (manager only)
+            Maintenance screens (Self-Diagnostics, Backup & DR Audit) live
+            under Configuration, not here. Each folder hides itself when a
+            given user can see none of its children.
+        -->
+        <menuitem id="menu_wms_reports_find"
+                  name="Find stock"
+                  parent="menu_wms_reports_root"
+                  sequence="10"/>
+
+        <menuitem id="menu_wms_reports_alerts"
+                  name="Alerts &amp; to-dos"
+                  parent="menu_wms_reports_root"
+                  sequence="20"/>
+
+        <menuitem id="menu_wms_reports_value"
+                  name="Value &amp; money"
+                  parent="menu_wms_reports_root"
+                  groups="wms_location.group_wms_manager"
+                  sequence="30"/>
+
+        <!-- ===================== Find stock ===================== -->
         <menuitem id="menu_wms_warehouse_map"
                   name="Warehouse Map"
-                  parent="menu_wms_reports_root"
+                  parent="menu_wms_reports_find"
                   action="action_warehouse_map"
-                  sequence="1"/>
+                  sequence="5"/>
 
         <menuitem id="menu_wms_product_stock"
                   name="Where is product X?"
-                  parent="menu_wms_reports_root"
+                  parent="menu_wms_reports_find"
                   action="action_wms_product_stock"
-                  sequence="5"/>
-
-        <menuitem id="menu_wms_oldest_stock"
-                  name="Oldest stock (FIFO)"
-                  parent="menu_wms_reports_root"
-                  action="action_wms_oldest_stock"
                   sequence="10"/>
 
         <menuitem id="menu_wms_occupancy"
                   name="Slot occupancy"
-                  parent="menu_wms_reports_root"
+                  parent="menu_wms_reports_find"
                   action="action_wms_occupancy"
+                  sequence="15"/>
+
+        <menuitem id="menu_wms_oldest_stock"
+                  name="Oldest stock (FIFO)"
+                  parent="menu_wms_reports_find"
+                  action="action_wms_oldest_stock"
                   sequence="20"/>
 
-        <menuitem id="menu_wms_cycle_count_due"
-                  name="Cycle Count Due"
-                  parent="menu_wms_reports_root"
-                  action="action_wms_cycle_count_due"
+        <menuitem id="menu_wms_tool_fleet_summary"
+                  name="Tool / Spare fleet"
+                  parent="menu_wms_reports_find"
+                  action="action_wms_tool_fleet_summary"
                   sequence="25"/>
 
         <menuitem id="menu_wms_movement_history"
                   name="Movement history"
-                  parent="menu_wms_reports_root"
+                  parent="menu_wms_reports_find"
                   action="action_wms_movement_history"
                   sequence="30"/>
 
+        <!-- ===================== Alerts & to-dos ===================== -->
         <menuitem id="menu_wms_low_stock"
                   name="Low stock alerts"
-                  parent="menu_wms_reports_root"
+                  parent="menu_wms_reports_alerts"
                   action="action_wms_low_stock_alerts"
-                  sequence="40"/>
+                  sequence="5"/>
+
+        <menuitem id="menu_wms_expiry_alert"
+                  name="Expiry alerts"
+                  parent="menu_wms_reports_alerts"
+                  action="action_wms_expiry_alert"
+                  sequence="10"/>
+
+        <!--
+            Returns due / overdue is parented to menu_wms_reports_alerts
+            from views/wms_returns_due_views.xml (loaded after this file).
+        -->
+
+        <menuitem id="menu_wms_cycle_count_due"
+                  name="Cycle Count Due"
+                  parent="menu_wms_reports_alerts"
+                  action="action_wms_cycle_count_due"
+                  sequence="20"/>
 
         <menuitem id="menu_wms_dead_stock"
                   name="Dead stock"
-                  parent="menu_wms_reports_root"
+                  parent="menu_wms_reports_alerts"
                   action="action_wms_dead_stock"
-                  sequence="50"/>
+                  sequence="25"/>
 
         <menuitem id="menu_wms_reorder_summary"
                   name="Reorder summary"
-                  parent="menu_wms_reports_root"
+                  parent="menu_wms_reports_alerts"
                   action="action_wms_reorder_summary"
-                  sequence="60"/>
-
-        <menuitem id="menu_wms_tool_fleet_summary"
-                  name="Tool / Spare fleet"
-                  parent="menu_wms_reports_root"
-                  action="action_wms_tool_fleet_summary"
-                  sequence="65"/>
+                  sequence="30"/>
 
         <!--
-            Store Keeper Activity is an Admin-only audit screen. The
-            ACL row in ir.model.access.csv grants read to
-            group_wms_manager only, so this menu doesn't show up at all
-            for Store Keepers (the only other group in the WMS module).
+            Value & money (manager only): Stock Value, Consumption Value and
+            Product Lifecycle are parented to menu_wms_reports_value from
+            views/wms_value_reports_views.xml (loaded after this file).
+        -->
+
+        <!-- ===================== Store Keeper Activity (manager) ===================== -->
+        <!--
+            Store Keeper Activity is an Admin-only audit screen. The ACL row
+            in ir.model.access.csv grants read to group_wms_manager only.
+            Clicking it opens the full activity report; the period summaries
+            below are nested children (real sub-menus, not the old dash-prefix
+            indentation hack).
         -->
         <menuitem id="menu_wms_storekeeper_activity"
                   name="Store Keeper Activity"
                   parent="menu_wms_reports_root"
                   action="action_wms_storekeeper_activity"
                   groups="wms_location.group_wms_manager"
-                  sequence="70"/>
+                  sequence="40"/>
 
-        <!--
-            Period-specific shortcuts. Each is the same underlying
-            activity report but pre-filtered + pre-grouped so the
-            Admin lands directly on the right view.
-        -->
         <menuitem id="menu_wms_storekeeper_activity_weekly"
-                  name="-- Weekly summary"
-                  parent="menu_wms_reports_root"
+                  name="Weekly summary"
+                  parent="menu_wms_storekeeper_activity"
                   action="action_wms_storekeeper_activity_weekly"
                   groups="wms_location.group_wms_manager"
-                  sequence="71"/>
+                  sequence="10"/>
 
         <menuitem id="menu_wms_storekeeper_activity_monthly"
-                  name="-- Monthly summary"
-                  parent="menu_wms_reports_root"
+                  name="Monthly summary"
+                  parent="menu_wms_storekeeper_activity"
                   action="action_wms_storekeeper_activity_monthly"
                   groups="wms_location.group_wms_manager"
-                  sequence="72"/>
+                  sequence="20"/>
 
         <menuitem id="menu_wms_storekeeper_activity_yearly"
-                  name="-- Yearly summary"
-                  parent="menu_wms_reports_root"
+                  name="Yearly summary"
+                  parent="menu_wms_storekeeper_activity"
                   action="action_wms_storekeeper_activity_yearly"
                   groups="wms_location.group_wms_manager"
-                  sequence="73"/>
-
-        <menuitem id="menu_wms_expiry_alert"
-                  name="Expiry alerts"
-                  parent="menu_wms_reports_root"
-                  action="action_wms_expiry_alert"
-                  sequence="32"/>
+                  sequence="30"/>
 
         <!--
-            Inventory audits live under Operations (not Reports)
-            because Store Keepers DO them. Reports submenu only
-            shows read-only outputs.
+            Inventory audits live under Operations (not Reports) because
+            Store Keepers DO them. Reports only shows read-only outputs.
         -->
         <menuitem id="menu_wms_audit"
                   name="Inventory audits"

@@ -47,7 +47,9 @@
     scripts\restore-drill.ps1 -BackupPath D:\offsite\wms-20260520-152106.dump.gpg
 
 .NOTES
-    Requires: gpg.exe on PATH (or Gpg4win), psql + pg_restore on PATH,
+    Requires: gpg.exe on PATH (or Gpg4win); PostgreSQL client tools
+              (psql + pg_restore) — auto-detected from the postgresql-x64
+              service / registry / standard install dirs, no PATH setup needed;
               BACKUP_PASSPHRASE set in .env (not the placeholder).
     Never touches: the production database. Refuses to act if drill DB
                    name does not match the wms_drill_<ts> pattern.
@@ -72,6 +74,11 @@ $ConfPath    = Join-Path $ProjectRoot 'config\odoo.native.conf'
 $LogDir      = Join-Path $ProjectRoot '.runtime\logs'
 $DrillLog    = Join-Path $LogDir 'restore-drill.log'
 
+# Track whether WE set PGPASSWORD (from the conf) so the finally only wipes the
+# value we introduced - never a PGPASSWORD the caller already had in their
+# environment before invoking the drill.
+$script:WeSetPgPassword = $false
+
 # Exit codes (used both by Task Scheduler and by humans grepping logs).
 $EXIT_OK              = 0
 $EXIT_BACKUP_MISSING  = 1
@@ -79,6 +86,7 @@ $EXIT_DECRYPT_FAILED  = 2
 $EXIT_TOC_FAILED      = 3
 $EXIT_RESTORE_FAILED  = 4
 $EXIT_PROD_COLLISION  = 5
+$EXIT_TOOLS_MISSING   = 6
 
 # --- Logging: dual sink - file + Windows Event Log (best-effort) ----------
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -216,12 +224,31 @@ if (Test-Path $ConfPath) {
     }
     if (-not $env:PGPASSWORD) {
         $m = Select-String -Path $ConfPath -Pattern '^db_password\s*=\s*(.+)$' | Select-Object -First 1
-        if ($m) { $env:PGPASSWORD = $m.Matches.Groups[1].Value.Trim() }
+        if ($m) {
+            $env:PGPASSWORD = $m.Matches.Groups[1].Value.Trim()
+            $script:WeSetPgPassword = $true
+        }
     }
 }
 if (-not $DbHost) { $DbHost = 'localhost' }
 if (-not $DbPort) { $DbPort = 5432 }
 if (-not $DbUser) { $DbUser = 'odoo' }
+
+# --- Ensure psql.exe + pg_restore.exe are callable ------------------------
+# The drill shells out to pg_restore/psql by bare name. On a clean host their
+# bin\ is usually not on PATH, so auto-detect it (service / registry / standard
+# install dirs, newest version first) and prepend it. No version is hard-coded.
+. (Join-Path $PSScriptRoot 'pg-bin-lib.ps1')
+try {
+    $null = Use-PgBin
+} catch {
+    Write-Drill 'ERROR' $_.Exception.Message
+    Write-DrillEvent -EventId 307 -EntryType Error -Message "PostgreSQL client tools missing"
+    # This exit is BEFORE the main try/finally, so wipe a PGPASSWORD we set
+    # (never a caller-supplied one) here too, mirroring the finally below.
+    if ($script:WeSetPgPassword) { Remove-Item env:PGPASSWORD -ErrorAction SilentlyContinue }
+    exit $EXIT_TOOLS_MISSING
+}
 
 # --- Resolve passphrase ---------------------------------------------------
 if (-not $Passphrase) {
@@ -284,25 +311,27 @@ $exitCode = $EXIT_OK
 
 try {
     # --- Decrypt via cmd /c echo | gpg (matches backup-native.ps1) --------
-    # IMPORTANT: this MUST match the encryption-time stdin byte stream
-    # exactly. backup-native.ps1 uses 'cmd /c "echo $plain| gpg ..."' on
-    # Windows, where cmd's echo writes in the console's OEM codepage and
-    # appends CRLF. Reproducing those same bytes via
-    # Process.StandardInput.Write loses fidelity (StreamWriter encoding
-    # quirks → "Bad session key" on decrypt). Using the same cmd pattern
-    # guarantees byte-for-byte parity.
-    #
-    # Security note: the passphrase appears briefly on cmd.exe's
-    # command-line argv during the echo (visible to Process Explorer
-    # under SeDebugPrivilege for ~50ms). This is the same exposure
-    # profile as backup-native.ps1 and restore-native.ps1 — accepted
-    # trade-off for a single-host trust install where the alternative
-    # (writing to a temp passphrase file) has its own exposure window.
+    # FPAT High: switched away from `cmd /c echo|gpg --passphrase-fd 0` to a
+    # passphrase FILE. The old pattern silently TRUNCATED any passphrase
+    # containing a cmd metacharacter (& | < > ^ %), making the encrypted
+    # backup unrecoverable. backup-native.ps1 changed in lock-step, so the
+    # byte stream that encrypted the .gpg matches the bytes we read here.
     Write-Drill 'INFO' "Decrypting backup to temp file..."
     $errFile = [System.IO.Path]::GetTempFileName()
+    $pwFile = [System.IO.Path]::GetTempFileName()
     $plain = [System.Net.NetworkCredential]::new('', $Passphrase).Password
     try {
-        $cmd = "echo $plain| `"$gpg`" --batch --yes --passphrase-fd 0 --decrypt -o `"$decrypted`" `"$BackupPath`" 2> `"$errFile`""
+        [System.IO.File]::WriteAllBytes(
+            $pwFile, [System.Text.Encoding]::UTF8.GetBytes($plain)
+        )
+        # Closure-sprint: invoke via cmd /c so PowerShell never sees the
+        # gpg-agent start-up text on stderr (PS 5.1 wraps that as a fatal
+        # NativeCommandError under $ErrorActionPreference='Stop'). Same fix
+        # as backup-native.ps1 / restore-native.ps1.
+        $cmd = '"' + $gpg + '" --batch --yes --pinentry-mode loopback ' +
+               '--passphrase-file "' + $pwFile + '" ' +
+               '--decrypt -o "' + $decrypted + '" "' + $BackupPath + '" ' +
+               '2> "' + $errFile + '"'
         & cmd /c $cmd
         $rc = $LASTEXITCODE
         if ($rc -ne 0) {
@@ -314,6 +343,10 @@ try {
         # binding so a subsequent memory snapshot cannot recover it.
         if ($plain) { $plain = ' ' * $plain.Length }
         $plain = $null
+        if (Test-Path -LiteralPath $pwFile) {
+            try { [System.IO.File]::WriteAllBytes($pwFile, (New-Object byte[] 64)) } catch {}
+            Remove-Item -LiteralPath $pwFile -Force -ErrorAction SilentlyContinue
+        }
         Remove-Item $errFile -Force -ErrorAction SilentlyContinue
     }
     if (-not (Test-Path -LiteralPath $decrypted)) {
@@ -409,7 +442,11 @@ finally {
     if (Test-Path -LiteralPath $decrypted) {
         Remove-Item -LiteralPath $decrypted -Force -ErrorAction SilentlyContinue
     }
-    Remove-Item env:PGPASSWORD -ErrorAction SilentlyContinue
+    # Only wipe PGPASSWORD if WE set it from the conf; never clobber a value the
+    # caller had in their own environment before invoking the drill.
+    if ($script:WeSetPgPassword) {
+        Remove-Item env:PGPASSWORD -ErrorAction SilentlyContinue
+    }
 }
 
 exit $exitCode

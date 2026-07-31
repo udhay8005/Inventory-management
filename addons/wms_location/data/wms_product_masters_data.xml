@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!--
+            Starter Family / Brand / Form registers. noupdate="1" so an
+            upgrade never clobbers the admin's edits or re-creates archived
+            rows. The admin adds the rest; these just seed the universal
+            forms (with their suggested unit) plus a few obvious brands and
+            example families so the dropdowns are not empty and the code
+            convention is clear. Codes are UPPERCASE, unique, alphanumeric
+            (Family/Brand ≤6, Form ≤4) and become SKU segments later (P2).
+        -->
+
+        <!-- ===== Forms (physical form / model) — universal, with a suggested unit ===== -->
+        <record id="form_tablet" model="wms.form">
+            <field name="name">Tablet</field>
+            <field name="code">TAB</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">10</field>
+        </record>
+        <record id="form_capsule" model="wms.form">
+            <field name="name">Capsule</field>
+            <field name="code">CAP</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">20</field>
+        </record>
+        <record id="form_syrup" model="wms.form">
+            <field name="name">Syrup</field>
+            <field name="code">SYR</field>
+            <field name="default_uom_id" ref="uom.product_uom_litre"/>
+            <field name="sequence">30</field>
+        </record>
+        <record id="form_injection" model="wms.form">
+            <field name="name">Injection / Vial</field>
+            <field name="code">INJ</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">40</field>
+        </record>
+        <record id="form_bolus" model="wms.form">
+            <field name="name">Bolus</field>
+            <field name="code">BOL</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">50</field>
+        </record>
+        <record id="form_drops" model="wms.form">
+            <field name="name">Drops</field>
+            <field name="code">DRP</field>
+            <field name="default_uom_id" ref="uom.product_uom_litre"/>
+            <field name="sequence">60</field>
+        </record>
+        <record id="form_powder" model="wms.form">
+            <field name="name">Powder</field>
+            <field name="code">POW</field>
+            <field name="default_uom_id" ref="uom.product_uom_kgm"/>
+            <field name="sequence">70</field>
+        </record>
+        <record id="form_granules" model="wms.form">
+            <field name="name">Granules</field>
+            <field name="code">GRAN</field>
+            <field name="default_uom_id" ref="uom.product_uom_kgm"/>
+            <field name="sequence">80</field>
+        </record>
+        <record id="form_pellet" model="wms.form">
+            <field name="name">Pellet</field>
+            <field name="code">PEL</field>
+            <field name="default_uom_id" ref="uom.product_uom_kgm"/>
+            <field name="sequence">90</field>
+        </record>
+        <record id="form_liquid" model="wms.form">
+            <field name="name">Liquid</field>
+            <field name="code">LIQ</field>
+            <field name="default_uom_id" ref="uom.product_uom_litre"/>
+            <field name="sequence">100</field>
+        </record>
+        <record id="form_spray" model="wms.form">
+            <field name="name">Spray</field>
+            <field name="code">SPR</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">110</field>
+        </record>
+        <record id="form_gel" model="wms.form">
+            <field name="name">Gel</field>
+            <field name="code">GEL</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">120</field>
+        </record>
+        <record id="form_ointment" model="wms.form">
+            <field name="name">Ointment / Cream</field>
+            <field name="code">OINT</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">130</field>
+        </record>
+        <record id="form_sachet" model="wms.form">
+            <field name="name">Sachet</field>
+            <field name="code">SAC</field>
+            <field name="default_uom_id" ref="uom.product_uom_unit"/>
+            <field name="sequence">140</field>
+        </record>
+
+        <!-- ===== Brands ===== -->
+        <record id="brand_local" model="wms.brand">
+            <field name="name">Local / Unbranded</field>
+            <field name="code">LOCAL</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="brand_generic" model="wms.brand">
+            <field name="name">Generic</field>
+            <field name="code">GEN</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="brand_himalaya" model="wms.brand">
+            <field name="name">Himalaya</field>
+            <field name="code">HIM</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="brand_cipla" model="wms.brand">
+            <field name="name">Cipla</field>
+            <field name="code">CIP</field>
+            <field name="sequence">40</field>
+        </record>
+        <record id="brand_amul" model="wms.brand">
+            <field name="name">Amul</field>
+            <field name="code">AMUL</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <!-- ===== Families (examples; admin adds the rest) ===== -->
+        <record id="family_paracetamol" model="wms.family">
+            <field name="name">Paracetamol</field>
+            <field name="code">PARA</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="family_calcium" model="wms.family">
+            <field name="name">Calcium</field>
+            <field name="code">CAL</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="family_cow_feed" model="wms.family">
+            <field name="name">Cow Feed</field>
+            <field name="code">COWFD</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="family_phenyl" model="wms.family">
+            <field name="name">Phenyl</field>
+            <field name="code">PHEN</field>
+            <field name="sequence">40</field>
+        </record>
+    </data>
+</odoo>

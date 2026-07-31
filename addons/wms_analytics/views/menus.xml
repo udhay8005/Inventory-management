@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 Warehouse Intelligence root menu, under the WMS app root. -->
+        <menuitem id="menu_wms_analytics_root"
+                  name="Intelligence"
+                  parent="wms_location.menu_wms_root"
+                  groups="wms_location.group_wms_user"
+                  sequence="60"/>
+    </data>
+</odoo>

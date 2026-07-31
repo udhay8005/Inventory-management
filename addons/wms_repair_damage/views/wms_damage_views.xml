@@ -7,8 +7,13 @@
             <field name="arch" type="xml">
                 <form>
                     <header>
-                        <button name="action_confirm" type="object" string="Confirm"
-                                class="btn-primary" invisible="state != 'draft'"/>
+                        <button name="action_confirm_and_repair" type="object"
+                                string="Confirm &amp; Send to Repair"
+                                class="btn-primary" invisible="state != 'draft'"
+                                help="One click: confirm the damage, move the item to the Damage location, and open its repair order (started immediately when you have repair rights)."/>
+                        <button name="action_confirm" type="object" string="Confirm Only"
+                                invisible="state != 'draft'"
+                                help="Just record the damage (e.g. a write-off with no repair). You can still create a repair order afterwards."/>
                         <button name="action_create_repair_order" type="object"
                                 string="Create Repair Order"
                                 class="btn-warning"
@@ -111,7 +116,10 @@
                                    decoration-muted="recommended_action == 'note_only'"/>
                         </group>
 
-                        <field name="note" placeholder="Describe what happened..."/>
+                        <field name="note" placeholder="Describe what happened..."
+                               required="reason == 'other'"/>
+                        <field name="damage_photo" widget="image"
+                               class="oe_avatar" options="{'size': [0, 220]}"/>
                     </sheet>
                     <chatter/>
                 </form>
@@ -127,6 +135,7 @@
                     <field name="name"/>
                     <field name="product_id"/>
                     <field name="quantity"/>
+                    <field name="damage_value" sum="Total loss value" optional="show"/>
                     <field name="source_slot_id"/>
                     <field name="remaining_on_hand" optional="show"/>
                     <field name="recommended_action" widget="badge"
@@ -145,6 +154,14 @@
             <field name="name">Damages</field>
             <field name="res_model">wms.damage</field>
             <field name="view_mode">list,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No damage reported.</p>
+                <p>
+                    Click <b>New</b> the moment something breaks, spoils, or expires.
+                    Add a photo and a short note &#8212; the system suggests whether to
+                    repair it or write it off.
+                </p>
+            </field>
         </record>
     </data>
 </odoo>

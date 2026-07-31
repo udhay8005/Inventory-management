@@ -44,6 +44,8 @@
                             <field name="wms_product_kind"
                                    options="{'no_create': True, 'no_create_edit': True}"/>
                             <field name="wms_is_returnable" widget="boolean_toggle"/>
+                            <field name="expected_return_days"
+                                   invisible="not wms_is_returnable"/>
                         </group>
                         <div class="alert alert-info">
                             <b>WMS Kind</b> drives the default returnability and is shown in
@@ -57,6 +59,37 @@
                             </ul>
                             Tick Returnable manually if you want to override the kind-derived
                             default (e.g. a partially-used sealed paint can the supplier accepts back).
+                        </div>
+
+                        <!--
+                            Enterprise product identity (P2). Universal on every
+                            product; the category decides which are required (P3).
+                            The SKU (Internal Reference) is composed from these +
+                            the kind; the Internal product code (PRD-) is permanent.
+                        -->
+                        <group string="Product identity" name="wms_identity">
+                            <field name="wms_family_id"/>
+                            <field name="wms_brand_id"/>
+                            <field name="wms_form_id"/>
+                            <field name="wms_variant"/>
+                            <field name="wms_dosage" string="Strength / dosage / concentration"/>
+                            <field name="wms_pack_size"/>
+                            <field name="wms_product_code"/>
+                            <field name="wms_sku_frozen"/>
+                            <button name="action_wms_regenerate_sku" type="object"
+                                    string="Regenerate SKU from identity"
+                                    class="btn-secondary" icon="fa-refresh"
+                                    invisible="wms_sku_frozen"
+                                    confirm="Rebuild the Internal Reference (SKU) from the current Family / Brand / Form / Variant / Strength / Pack? This replaces the current SKU and is only allowed before the product has stock."/>
+                        </group>
+                        <div class="alert alert-info" role="alert"
+                             invisible="not wms_family_id">
+                            The <b>SKU</b> (Internal Reference) is built from Kind + Family + Brand
+                            + Variant + Form + Strength + Pack — e.g.
+                            <code>MED-PARA-CIP-TAB-500-10</code>. The
+                            <b>Internal product code</b> (PRD-…) is permanent. Once the product has
+                            stock or movement it <b>freezes</b>: the SKU and barcode can no longer
+                            be changed (archive + recreate instead).
                         </div>
 
                         <!--
@@ -82,7 +115,6 @@
                                invisible="wms_product_kind != 'medicine'">
                             <field name="wms_expiry_date" required="wms_product_kind == 'medicine'"/>
                             <field name="wms_batch_number"/>
-                            <field name="wms_dosage"/>
                         </group>
 
                         <group string="Feed details"
@@ -143,6 +175,7 @@
                         <group string="Usage limits (0 = no cap)">
                             <field name="wms_max_per_issue"/>
                             <field name="wms_daily_cap"/>
+                            <field name="wms_min_life_days"/>
                         </group>
                         <div class="alert alert-info" role="alert"
                              invisible="not wms_product_kind">

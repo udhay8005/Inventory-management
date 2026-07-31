@@ -13,6 +13,7 @@
                     <field name="velocity_class"/>
                     <field name="monthly_avg"/>
                     <field name="on_hand"/>
+                    <field name="stock_value" sum="Capital tied up" optional="show"/>
                     <field name="reorder_qty" sum="Total to order"/>
                     <field name="reorder_date"/>
                     <field name="model_name"/>

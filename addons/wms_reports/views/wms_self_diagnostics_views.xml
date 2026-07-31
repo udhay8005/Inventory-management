@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_wms_self_diagnostics_form" model="ir.ui.view">
+        <field name="name">wms.self.diagnostics.form</field>
+        <field name="model">wms.self.diagnostics</field>
+        <field name="arch" type="xml">
+            <form string="WMS Self-Diagnostics">
+                <header>
+                    <button name="action_run" string="Re-run checks" type="object" class="btn-primary"/>
+                    <field name="overall" widget="badge"
+                           decoration-success="overall == 'pass'"
+                           decoration-warning="overall == 'warn'"
+                           decoration-danger="overall == 'fail'"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-info" role="status">
+                        Read-only health &amp; data-integrity checks. Nothing here changes any data.
+                    </div>
+                    <field name="result_html"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_wms_self_diagnostics" model="ir.actions.act_window">
+        <field name="name">Self-Diagnostics</field>
+        <field name="res_model">wms.self.diagnostics</field>
+        <field name="view_mode">form</field>
+        <field name="target">current</field>
+        <field name="view_id" ref="view_wms_self_diagnostics_form"/>
+    </record>
+
+    <!--
+        Self-Diagnostics is a maintenance screen, not a report, so it lives
+        under Configuration (manager-gated) rather than in Reports.
+    -->
+    <menuitem id="menu_wms_self_diagnostics"
+              name="Self-Diagnostics"
+              parent="wms_location.menu_wms_config"
+              action="action_wms_self_diagnostics"
+              groups="wms_location.group_wms_manager"
+              sequence="90"/>
+</odoo>

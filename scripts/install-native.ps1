@@ -55,6 +55,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Closure-sprint: catch typos like the historical $RepoRoot/$ProjectRoot bug
+# (Join-Path silently returned just '.env' when the first arg was undefined,
+# so the placeholder deny-list block at the bottom became a no-op). StrictMode
+# raises on read of undefined variables now, so the same class of bug fails
+# loudly at install time.
+Set-StrictMode -Version Latest
 $ProjectRoot   = Split-Path -Parent $PSScriptRoot
 $OdooSrc       = Join-Path $ProjectRoot '.odoo'
 $VenvDir       = Join-Path $ProjectRoot '.venv'
@@ -259,10 +265,11 @@ if (-not $SkipWinget) {
     }
 
     # PostgreSQL: accept any 15/16/17 (script auto-detects the service later).
-    # Python: prefer 3.12 (Odoo's tested version), accept 3.13 if installed.
+    # Python: 3.12 preferred, 3.11 accepted. 3.13 is NOT accepted - see the
+    # venv step below for why (rl-renderPM has no cp313 wheel).
     $packages = @(
         @{ Id='PostgreSQL.PostgreSQL.17'; Probe={ Get-Command psql -ErrorAction SilentlyContinue } },
-        @{ Id='Python.Python.3.12';      Probe={ (Get-Command py -ErrorAction SilentlyContinue) -and ( (py -3.12 --version 2>$null) -or (py -3.13 --version 2>$null) ) } },
+        @{ Id='Python.Python.3.12';      Probe={ (Get-Command py -ErrorAction SilentlyContinue) -and ( (py -3.12 --version 2>$null) -or (py -3.11 --version 2>$null) ) } },
         @{ Id='wkhtmltopdf.wkhtmltox';   Probe={ Get-Command wkhtmltopdf -ErrorAction SilentlyContinue } },
         @{ Id='Git.Git';                 Probe={ Get-Command git -ErrorAction SilentlyContinue } }
     )
@@ -279,6 +286,19 @@ if (-not $SkipWinget) {
 
     # Refresh PATH for this session so subsequent commands see the new binaries.
     $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')
+
+    # winget sometimes installs wkhtmltopdf without updating the Machine PATH
+    # (happens when the package was already present in the registry but its bin
+    # directory wasn't on PATH). Ensure wkhtmltopdf is reachable for Odoo PDF
+    # printing and for the CI-equivalent test_wkhtmltopdf_available_for_conversion.
+    $wkBin = 'C:\Program Files\wkhtmltopdf\bin'
+    if ((Test-Path "$wkBin\wkhtmltopdf.exe") -and ($env:Path -notlike "*wkhtmltopdf*")) {
+        [System.Environment]::SetEnvironmentVariable('Path',
+            [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ";$wkBin",
+            'Machine')
+        $env:Path += ";$wkBin"
+        Write-OK "Added wkhtmltopdf to system PATH: $wkBin"
+    }
 }
 
 # === 2. PostgreSQL - service + role + DB ===================================
@@ -348,9 +368,32 @@ Write-Step "Cloning Odoo 19.0 source"
 if (Test-Path (Join-Path $OdooSrc 'odoo-bin')) {
     Write-Skip "Odoo source already at $OdooSrc"
 } else {
-    & git clone --depth 1 -b 19.0 https://github.com/odoo/odoo.git $OdooSrc
-    if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
-    Write-OK "Cloned Odoo 19.0 to $OdooSrc"
+    # Pinned, not "latest 19.0". The 19.0 branch head MOVES: cloning it gives
+    # every install a different Odoo, so the addons end up built against a
+    # revision nobody tested. ODOO_REV holds the SHA this WMS is verified
+    # against. --filter=blob:none keeps the clone fast while still allowing a
+    # checkout of an older commit (--depth 1 would not).
+    $RevFile = Join-Path $ProjectRoot 'ODOO_REV'
+    $OdooRev = $null
+    if (Test-Path $RevFile) {
+        $OdooRev = (Get-Content -LiteralPath $RevFile |
+                    Where-Object { $_ -notmatch '^\s*#' -and $_.Trim() } |
+                    Select-Object -First 1).Trim()
+    }
+    if ($OdooRev) {
+        & git clone --filter=blob:none -b 19.0 https://github.com/odoo/odoo.git $OdooSrc
+        if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
+        & git -C $OdooSrc checkout --quiet $OdooRev
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not check out the pinned Odoo revision $OdooRev (see ODOO_REV). Refusing to build against an untested Odoo."
+        }
+        Write-OK "Cloned Odoo 19.0 at pinned revision $($OdooRev.Substring(0,8))"
+    } else {
+        & git clone --depth 1 -b 19.0 https://github.com/odoo/odoo.git $OdooSrc
+        if ($LASTEXITCODE -ne 0) { throw "git clone failed" }
+        Write-Host "    [!] ODOO_REV not found - using the moving 19.0 branch head." -ForegroundColor Yellow
+        Write-OK "Cloned Odoo 19.0 to $OdooSrc"
+    }
 }
 
 # === 4. Python venv + dependencies =========================================
@@ -370,7 +413,14 @@ if (-not (Test-Path (Join-Path $VenvDir 'Scripts\python.exe'))) {
     # work cleanly with the published wheels.
     if ($pyList -match '(?m)^\s*-V:?3\.12') { $pyVer = '3.12' }
     elseif ($pyList -match '(?m)^\s*-V:?3\.11') { $pyVer = '3.11' }
-    elseif ($pyList -match '(?m)^\s*-V:?3\.13') { $pyVer = '3.13' }
+    elseif ($pyList -match '(?m)^\s*-V:?3\.13') {
+        # Deliberately NOT a fallback. rl-renderPM (an Odoo 19 requirement)
+        # publishes no cp313 wheel, and its sdist calls wheel.bdist_wheel
+        # .get_abi_tag, removed in modern wheel - so the install dies deep in a
+        # C build with an unreadable error. Fail here instead, where the
+        # message can actually tell you what to do.
+        throw "Only Python 3.13 was found. Odoo 19 (rl-renderPM) needs Python 3.11 or 3.12 - the 3.13 build fails with an obscure wheel error. Install it with: winget install Python.Python.3.12   then re-run this script."
+    }
     else {
         Write-Host "py -0 output:" -ForegroundColor Yellow
         Write-Host $pyList
@@ -472,7 +522,9 @@ limit_time_cpu = 600
 limit_time_real = 1200
 
 proxy_mode = False
-without_demo = False
+; Closure-sprint: a fresh `-i` install of any module on prod must NEVER load
+; demo data into the live DB. The trust runs internal stock - no demo.
+without_demo = True
 
 log_level = info
 log_handler = :INFO
@@ -500,6 +552,81 @@ if (Test-Path $initMarker) {
     New-Item -ItemType File -Path $initMarker | Out-Null
     Write-OK "Database '$DbName' initialised"
 }
+
+# === 7.4 Refuse to proceed if any placeholder credential is still in .env =
+# FPAT High: an install that leaves ODOO_USER=admin / DB_PASSWORD=odoo_local_dev_pw
+# / BACKUP_PASSPHRASE=changeme_backup_passphrase is begging to be hacked. Fail
+# the install with a clear instruction rather than silently going to prod.
+# Step 8 / closure-sprint: the placeholder deny-list was a no-op because
+# $RepoRoot was undefined in PowerShell's default (non-Strict) mode - the
+# Join-Path returned just '.env', which on a fresh install + non-repo CWD
+# silently failed Test-Path and skipped the gate. Use the already-resolved
+# $EnvPath built at the top of the script.
+if (Test-Path -LiteralPath $EnvPath) {
+    $denylist = @(
+        'admin',
+        'odoo_local_dev_pw',
+        'changeme_backup_passphrase',
+        'changeme_health_token',
+        'CHANGE_ME',
+        'placeholder',
+        'YOUR_PASSPHRASE_HERE'
+    )
+    $offenders = @()
+    Get-Content -LiteralPath $EnvPath | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith('#') -and $line.Contains('=')) {
+            $kv = $line.Split('=', 2)
+            $k = $kv[0].Trim()
+            $v = ($kv[1].Trim().Trim("'").Trim('"'))
+            foreach ($bad in $denylist) {
+                if ($v -eq $bad) { $offenders += "${k}=${bad}" }
+            }
+        }
+    }
+    if ($offenders.Count -gt 0) {
+        Write-Host "[FAIL] .env still has placeholder credentials:" -ForegroundColor Red
+        $offenders | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        Write-Host "Replace each with a real strong secret, then re-run." -ForegroundColor Yellow
+        throw "Install aborted: placeholder credentials in .env"
+    }
+}
+
+# === 7.5 Auto-generate /wms/health shared-secret token =====================
+# FPAT High: the /wms/health endpoint was unauthenticated by default and
+# leaked backup-age / drill-age / DR posture to anyone who could reach the
+# port. The controller already supports a shared-secret token gate via the
+# `wms_reports.health_token` System Parameter; this block sets one
+# automatically at install time (32 hex chars from .NET RNG), printed once
+# below for the monitor configuration. Re-running the installer skips this
+# step if a token already exists.
+Write-Host "    Setting up /wms/health shared-secret token..."
+# Must match the role created in step 2 and db_user in odoo.native.conf.
+$DbUser = 'odoo'
+$env:PGPASSWORD = $DbPassword
+$existing = & psql -h localhost -p $DbPort -U $DbUser -d $DbName -tAc `
+    "SELECT value FROM ir_config_parameter WHERE key='wms_reports.health_token'" 2>$null
+$existing = ($existing | Out-String).Trim()
+if ([string]::IsNullOrWhiteSpace($existing)) {
+    # RandomNumberGenerator::Fill is .NET Core-only and fails on Windows
+    # PowerShell 5.1; New-SecurePassword uses Create()/GetBytes instead.
+    $token = New-SecurePassword
+    $sql = @"
+INSERT INTO ir_config_parameter (key, value, create_uid, create_date, write_uid, write_date)
+VALUES ('wms_reports.health_token', '$token', 1, NOW(), 1, NOW())
+ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, write_date=NOW()
+"@
+    & psql -h localhost -p $DbPort -U $DbUser -d $DbName -c $sql 2>$null | Out-Null
+    Write-OK "/wms/health protected by shared-secret token"
+    Write-Host "    Token (record this for your monitor):" -ForegroundColor Yellow
+    Write-Host "      $token" -ForegroundColor Cyan
+    Write-Host "    Monitors must pass it as either:"
+    Write-Host "      curl 'http://<host>:8069/wms/health?token=<token>'"
+    Write-Host "      curl -H 'X-Health-Token: <token>' 'http://<host>:8069/wms/health'"
+} else {
+    Write-Skip "/wms/health token already set (delete the System Parameter to regenerate)"
+}
+$env:PGPASSWORD = $null
 
 # === 8. Done ===============================================================
 Write-Host "`n=== Install complete ===" -ForegroundColor Green

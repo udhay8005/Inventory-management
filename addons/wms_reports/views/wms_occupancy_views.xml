@@ -5,18 +5,39 @@
             <field name="name">wms.occupancy.list</field>
             <field name="model">wms.occupancy.report</field>
             <field name="arch" type="xml">
-                <list decoration-danger="occupancy_pct &gt; 90"
+                <list default_order="occupancy_pct desc"
+                      decoration-danger="occupancy_pct &gt; 90"
                       decoration-warning="occupancy_pct &gt; 75"
                       decoration-muted="on_hand == 0">
-                    <field name="location_id"/>
-                    <field name="location_kind"/>
+                    <field name="location_id" string="Slot"/>
+                    <field name="location_kind" string="Slot type"/>
                     <field name="compartment_id" optional="show"/>
                     <field name="rack_id" optional="show"/>
-                    <field name="capacity"/>
-                    <field name="on_hand"/>
-                    <field name="occupancy_pct" widget="percentage"/>
-                    <field name="distinct_products"/>
+                    <field name="capacity" string="Max capacity"/>
+                    <field name="on_hand" string="Units in slot"/>
+                    <field name="occupancy_pct" string="% full" widget="percentage"/>
+                    <field name="distinct_products" string="Different products"/>
                 </list>
+            </field>
+        </record>
+
+        <record id="view_wms_occupancy_search" model="ir.ui.view">
+            <field name="name">wms.occupancy.search</field>
+            <field name="model">wms.occupancy.report</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="location_id" string="Slot"/>
+                    <field name="rack_id"/>
+                    <filter name="almost_full" string="Almost full (over 75%)"
+                            domain="[('occupancy_pct', '&gt;', 75)]"/>
+                    <filter name="empty" string="Empty"
+                            domain="[('on_hand', '=', 0)]"/>
+                    <separator/>
+                    <filter name="group_rack" string="Group by Rack"
+                            context="{'group_by': 'rack_id'}"/>
+                    <filter name="group_kind" string="Group by Slot type"
+                            context="{'group_by': 'location_kind'}"/>
+                </search>
             </field>
         </record>
 
@@ -24,6 +45,15 @@
             <field name="name">Slot occupancy</field>
             <field name="res_model">wms.occupancy.report</field>
             <field name="view_mode">list</field>
+            <field name="search_view_id" ref="view_wms_occupancy_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">No slots configured yet.</p>
+                <p>
+                    How full each slot is. <b>Red</b> = over 90% full,
+                    <b>amber</b> = over 75% full, grey = empty. Use the filters to
+                    find slots that are almost full or completely empty.
+                </p>
+            </field>
         </record>
     </data>
 </odoo>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!-- Wave 2 #3 — surface weekly demand + overstock/understock risk on
+             the forecast list. -->
+        <record id="view_wms_forecast_list_risk" model="ir.ui.view">
+            <field name="name">wms.forecast.list.wms.risk</field>
+            <field name="model">wms.forecast</field>
+            <field name="inherit_id" ref="wms_ai_forecast.view_wms_forecast_list"/>
+            <field name="arch" type="xml">
+                <field name="monthly_avg" position="after">
+                    <field name="weekly_avg" optional="show"/>
+                    <field name="overstock_risk" widget="badge"
+                           decoration-danger="overstock_risk == 'high'"
+                           decoration-warning="overstock_risk == 'medium'"
+                           decoration-info="overstock_risk == 'low'"
+                           optional="show"/>
+                    <field name="understock_risk" widget="badge"
+                           decoration-danger="understock_risk == 'high'"
+                           decoration-warning="understock_risk == 'medium'"
+                           decoration-info="understock_risk == 'low'"
+                           optional="show"/>
+                </field>
+            </field>
+        </record>
+
+        <!-- Same three fields on the forecast form, in the AI output group. -->
+        <record id="view_wms_forecast_form_risk" model="ir.ui.view">
+            <field name="name">wms.forecast.form.wms.risk</field>
+            <field name="model">wms.forecast</field>
+            <field name="inherit_id" ref="wms_ai_forecast.view_wms_forecast_form"/>
+            <field name="arch" type="xml">
+                <field name="monthly_avg" position="after">
+                    <field name="weekly_avg"/>
+                    <field name="overstock_risk" widget="badge"
+                           decoration-danger="overstock_risk == 'high'"
+                           decoration-warning="overstock_risk == 'medium'"
+                           decoration-info="overstock_risk == 'low'"/>
+                    <field name="understock_risk" widget="badge"
+                           decoration-danger="understock_risk == 'high'"
+                           decoration-warning="understock_risk == 'medium'"
+                           decoration-info="understock_risk == 'low'"/>
+                </field>
+            </field>
+        </record>
+
+        <!-- Filters + group-by for the two risk flags on the forecast search. -->
+        <record id="view_wms_forecast_search_risk" model="ir.ui.view">
+            <field name="name">wms.forecast.search.wms.risk</field>
+            <field name="model">wms.forecast</field>
+            <field name="inherit_id" ref="wms_ai_forecast.view_wms_forecast_search"/>
+            <field name="arch" type="xml">
+                <filter name="dead" position="after">
+                    <separator/>
+                    <filter name="overstock_high" string="Overstock (high)"
+                            domain="[('overstock_risk', '=', 'high')]"/>
+                    <filter name="understock_high" string="Understock (high)"
+                            domain="[('understock_risk', '=', 'high')]"/>
+                    <separator/>
+                    <filter name="group_overstock" string="Group by Overstock risk"
+                            context="{'group_by': 'overstock_risk'}"/>
+                    <filter name="group_understock" string="Group by Understock risk"
+                            context="{'group_by': 'understock_risk'}"/>
+                </filter>
+            </field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            V20-017 — surface the per-lot movement timeline + the V20-007
+            lifecycle/traceability metadata on the lot form. The timeline stat
+            button opens the lot's immutable done move lines (newest first).
+        -->
+        <record id="view_wms_stock_lot_form_perishable" model="ir.ui.view">
+            <field name="name">stock.lot.form.perishable</field>
+            <field name="model">stock.lot</field>
+            <field name="inherit_id" ref="stock.view_production_lot_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//div[@name='button_box']" position="inside">
+                    <button class="oe_stat_button" name="action_wms_lot_timeline"
+                            type="object" icon="fa-history"
+                            invisible="wms_movement_count == 0">
+                        <field name="wms_movement_count" widget="statinfo" string="Timeline"/>
+                    </button>
+                    <!-- V20-016 — print this lot's label (product/batch/expiry/supplier,
+                         barcode = lot name so the print scans back to the lot). -->
+                    <button class="oe_stat_button" name="action_wms_print_lot_label"
+                            type="object" icon="fa-print">
+                        <div class="o_stat_info">
+                            <span class="o_stat_text">Print label</span>
+                        </div>
+                    </button>
+                </xpath>
+                <xpath expr="//field[@name='product_id']" position="after">
+                    <field name="wms_lot_state"/>
+                    <field name="wms_is_expired"/>
+                    <field name="wms_supplier_id"/>
+                    <field name="wms_supplier_batch"/>
+                    <field name="wms_supplier_invoice"/>
+                    <field name="wms_manufacture_date"/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

@@ -64,7 +64,9 @@
                 <filter name="failures" string="Failures only"
                         domain="[('success', '=', False)]"/>
                 <filter name="backups" string="Backups"
-                        domain="[('audit_type', 'in', ['backup_db', 'backup_filestore'])]"/>
+                        domain="[('audit_type', 'in', ['backup_db', 'backup_filestore', 'backup_gdrive'])]"/>
+                <filter name="gdrive" string="Drive uploads"
+                        domain="[('audit_type', 'in', ['backup_gdrive', 'restore_gdrive'])]"/>
                 <filter name="drills" string="Restore drills"
                         domain="[('audit_type', '=', 'restore_drill')]"/>
                 <filter name="warnings" string="Staleness warnings"
@@ -91,9 +93,13 @@
         </field>
     </record>
 
+    <!--
+        Backup & DR Audit is a maintenance screen, not a report, so it lives
+        under Configuration (manager-gated) rather than in Reports.
+    -->
     <menuitem id="menu_wms_backup_audit"
               name="Backup &amp; DR Audit"
-              parent="menu_wms_reports_root"
+              parent="wms_location.menu_wms_config"
               action="action_wms_backup_audit"
               sequence="95"
               groups="wms_location.group_wms_manager"/>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <!--
+            V20-004 — batch / expiry / supplier columns on the Scan Receipt
+            line list, so an operator can capture per-batch detail at receipt.
+            Inherits the frozen v19 receipt form; adds columns after lot_id.
+        -->
+        <record id="view_wms_scan_receipt_form_perishable" model="ir.ui.view">
+            <field name="name">wms.scan.receipt.form.perishable</field>
+            <field name="model">wms.scan.receipt</field>
+            <field name="inherit_id" ref="wms_barcode.view_wms_scan_receipt_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//field[@name='line_ids']/list/field[@name='lot_id']" position="after">
+                    <field name="wms_batch" optional="show"/>
+                    <field name="wms_expiry" optional="show"/>
+                    <field name="wms_supplier_id" optional="hide"/>
+                </xpath>
+                <!-- V20-018 — Manager override for short-dated stock. The normal
+                     Validate blocks short-dated lines; a Manager accepts them here. -->
+                <xpath expr="//footer" position="inside">
+                    <button name="action_receive_short_dated_override" type="object"
+                            string="Accept short-dated (Manager)" class="btn-warning"
+                            groups="wms_location.group_wms_manager"
+                            confirm="Accept stock below the minimum receiving shelf life? Only do this if you, as Manager, take responsibility for the short-dated batch."/>
+                </xpath>
+            </field>
+        </record>
+    </data>
+</odoo>

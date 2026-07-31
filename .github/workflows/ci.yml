@@ -1,10 +1,15 @@
 name: CI
 
 # Triggers
-#   - Push to main or test branches.
-#   - Any PR targeting main or test.
+#   - Push to main, test, or v20 branches.
+#   - Any PR targeting main, test, or v20.
 #   - Manual via `workflow_dispatch`.
 # Workflow: push code to `test` → CI runs → if green, PR to `main` → merge.
+# v20 is the next-major development line; the module-tests job installs ALL
+# addons including the v20 Wave 1/2/3 ones (wms_perishable, wms_analytics,
+# wms_pharmacy). PREV_TAG=v19.0.46.0.0 is the upgrade baseline; the v20 addons
+# are absent there and so are fresh-install-verified, not upgrade-tested.
+# A PR from a v20 feature branch into v20 or main runs this full CI.
 # Concurrency: cancel an in-flight run if a newer commit lands on the same ref.
 #
 # Native (no Docker) build — mirrors the local Windows setup: PostgreSQL +
@@ -14,9 +19,9 @@ name: CI
 
 on:
   push:
-    branches: [main, test]
+    branches: [main, test, v20]
   pull_request:
-    branches: [main, test]
+    branches: [main, test, v20]
   workflow_dispatch:
 
 concurrency:
@@ -36,9 +41,9 @@ jobs:
     name: Lint & static checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.12
           cache: pip
@@ -77,15 +82,26 @@ jobs:
         # config drive, so local lint matches CI exactly.
         run: flake8 addons/
 
-      - name: Pylint-Odoo (manifest + Odoo conventions)
+      - name: Pylint-Odoo (security + deprecated-API gates)
+        # Hard gate. Replaces the old blanket `odoolint` group (too noisy to
+        # gate on) with a curated set, all confirmed 0-findings on a baseline
+        # run before this `|| true`-free version was armed. Two buckets:
+        #   security/integrity : sql-injection, invalid-commit,
+        #                        external-request-timeout, no-raise-unlink,
+        #                        manifest-behind-migrations
+        #   deprecated Odoo API: deprecated-name-get, odoo-exception-warning,
+        #                        attribute-deprecated, renamed-field-parameter,
+        #                        deprecated-odoo-model-method, bad-builtin-groupby
+        # Tighten by ADDING symbols here as the codebase is cleaned — never by
+        # switching back to the whole group. (The one intentional no-raise-unlink
+        # case carries an inline `# pylint: disable` with a documented reason.)
         run: |
-          # Pylint-Odoo only validates files inside addons/; skip if no addons.
           pylint --load-plugins=pylint_odoo \
                  --disable=all \
-                 --enable=odoolint \
+                 --enable=sql-injection,invalid-commit,external-request-timeout,no-raise-unlink,manifest-behind-migrations,deprecated-name-get,odoo-exception-warning,attribute-deprecated,renamed-field-parameter,deprecated-odoo-model-method,bad-builtin-groupby \
+                 --score=n \
                  --output-format=colorized \
-                 addons/ \
-                 || true   # treat as warnings for now; tighten later
+                 addons/
 
       - name: XML well-formedness
         run: |
@@ -98,6 +114,19 @@ jobs:
           done
           echo "✔ All XML files parse cleanly."
 
+      - name: PowerShell syntax check (scripts/*.ps1)
+        # PowerShell 7 (pwsh, preinstalled on ubuntu runners) parses the
+        # PS 5.1-compatible scripts fine for syntax purposes.
+        shell: pwsh
+        run: |
+          $bad = @()
+          Get-ChildItem scripts -Filter *.ps1 | ForEach-Object {
+            $t=$null;$e=$null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName,[ref]$t,[ref]$e)|Out-Null
+            if ($e) { $bad += "$($_.Name): $($e[0].Message)" } }
+          if ($bad) { $bad | ForEach-Object { Write-Host "::error::$_" }; exit 1 }
+          Write-Host "All PowerShell scripts in scripts/ parse cleanly."
+
   # -------------------------------------------------------------------------
   # 2) Security scan — bandit (Python) + pip-audit (deps).
   # -------------------------------------------------------------------------
@@ -106,9 +135,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: lint
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.12
           cache: pip
@@ -125,7 +154,7 @@ jobs:
       - name: pip-audit (dependency CVEs)
         run: pip-audit -r requirements.txt --strict
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: security-reports
@@ -160,9 +189,9 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.12
           cache: pip
@@ -210,10 +239,10 @@ jobs:
               --db_host=localhost --db_port=5432 \
               --db_user=odoo --db_password=odoo_ci_password \
               --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
-              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training \
+              -i wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable,wms_analytics,wms_pharmacy \
               --without-demo=all \
               --test-enable \
-              --test-tags wms,wms_audit,wms_delete,wms_health \
+              --test-tags wms,wms_audit,wms_delete,wms_health,wms_ui_cert \
               --log-level=info \
               --logfile=/dev/stdout \
               2>&1 | tee odoo_test.log
@@ -243,13 +272,219 @@ jobs:
             echo "::error::No WMS tests ran — check @tagged('wms') decorators."
             exit 1
           fi
-          echo "✔ WMS test suite passed."
 
-      - uses: actions/upload-artifact@v4
+          # --- WMS fail-on-skip guard ----------------------------------------
+          # A silently skipped wms_* test is lost coverage. The full-install CI
+          # run installs every addon + base UoM data, so the environment-
+          # conditional skips (test_min_life_days when wms_barcode is absent;
+          # test_issue_approval litre/kg defensive skips) MUST NOT trigger here
+          # — a baseline run confirmed 0. Odoo logs a skip via the *test's own
+          # module* logger as "...<test_module>: skipped <desc> : <reason>", so
+          # scoping the grep to `odoo.addons.wms_*` keeps this to wms_* tests.
+          WMS_SKIPS=$(grep -cE "odoo\.addons\.wms_[A-Za-z0-9_.]+: skipped " odoo_test.log || true)
+          echo "=== wms_* skipped tests: ${WMS_SKIPS:-0} ==="
+          {
+            echo "### WMS skip guard"
+            echo "wms_* skipped tests: ${WMS_SKIPS:-0} (gate: must be 0)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${WMS_SKIPS:-0}" -ne 0 ]; then
+            echo "::error::${WMS_SKIPS} wms_* test(s) were skipped — CI requires 0. Offending lines:"
+            grep -nE "odoo\.addons\.wms_[A-Za-z0-9_.]+: skipped " odoo_test.log
+            exit 1
+          fi
+
+          echo "✔ WMS test suite passed (0 skipped)."
+
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: odoo-test-log-19.0
           path: odoo_test.log
+          retention-days: 14
+
+  # -------------------------------------------------------------------------
+  # 3b) Odoo upgrade path — the way the live box is ACTUALLY updated.
+  #     The fresh `-i` install above never runs migration scripts. Here we
+  #     install the addons at the PREVIOUS release tag, then `git checkout`
+  #     the current commit's addons/ and `-u all` over the top — exercising
+  #     the per-module upgrade + migration path. Catches a migration that
+  #     breaks the live upgrade before it ships.
+  # -------------------------------------------------------------------------
+  odoo_upgrade:
+    name: Odoo 19.0 upgrade path (prev tag → HEAD)
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo_ci_password
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    env:
+      # The last green release tag whose addons we install BEFORE upgrading to
+      # HEAD. Bump this every release to the previous tag so the upgrade job
+      # exercises the migration hop the live box will actually run. v20 baseline
+      # is v19.0.46.0.0 (the last frozen v19 release). NOTE: ADDONS below stays
+      # the v19-7 — wms_perishable (Wave 1) and the Wave 2/3 addons
+      # wms_analytics + wms_pharmacy do not exist at PREV_TAG, so they are
+      # verified by a fresh install in the module-tests job, not by the upgrade job.
+      PREV_TAG: v19.0.46.0.0
+      # Same module list + order as the `-i` install in odoo_tests.
+      ADDONS: wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history + tags so we can check out the previous release's
+          # addons/ tree; the default shallow checkout has neither.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: 3.12
+          cache: pip
+
+      - name: System packages required by Odoo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              postgresql-client wkhtmltopdf libldap2-dev libsasl2-dev fonts-dejavu-core
+
+      - name: Grant odoo role CREATEDB
+        run: |
+          PGPASSWORD=odoo_ci_password psql -h localhost -U odoo -d postgres \
+              -c "ALTER ROLE odoo WITH CREATEDB;"
+
+      - name: Clone Odoo 19.0 source
+        run: |
+          git clone --depth 1 -b 19.0 https://github.com/odoo/odoo.git $HOME/odoo
+
+      - name: Install Odoo + project Python deps
+        run: |
+          python -m venv $HOME/venv
+          $HOME/venv/bin/pip install --upgrade pip setuptools wheel
+          $HOME/venv/bin/pip install -r $HOME/odoo/requirements.txt
+          $HOME/venv/bin/pip install -r requirements.txt
+
+      - name: Create upgrade database
+        run: |
+          PGPASSWORD=odoo_ci_password createdb -h localhost -U odoo wms_upgrade
+
+      - name: Verify the previous release tag is present
+        run: |
+          if ! git rev-parse -q --verify "refs/tags/${PREV_TAG}" >/dev/null; then
+            echo "::error::Previous release tag ${PREV_TAG} not found — set PREV_TAG to the last green release."
+            exit 1
+          fi
+          echo "Upgrading FROM ${PREV_TAG} ($(git rev-parse --short ${PREV_TAG}))"
+          echo "            TO HEAD ($(git rev-parse --short HEAD))"
+
+      - name: Install addons at the PREVIOUS release tag
+        shell: bash
+        run: |
+          set -e
+          # Snapshot addons/ EXACTLY as of the previous tag (rm first so an
+          # addon added since the tag can't leak into the old install).
+          rm -rf addons
+          git checkout "${PREV_TAG}" -- addons
+          echo "=== addon versions being installed (from ${PREV_TAG}) ==="
+          for m in ${ADDONS//,/ }; do
+            printf '  %s: ' "$m"
+            grep -hoE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "addons/$m/__manifest__.py" | head -1 || true
+          done
+          $HOME/venv/bin/python $HOME/odoo/odoo-bin \
+              --stop-after-init \
+              -d wms_upgrade \
+              --db_host=localhost --db_port=5432 \
+              --db_user=odoo --db_password=odoo_ci_password \
+              --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
+              -i "$ADDONS" \
+              --without-demo=all \
+              --log-level=info \
+              --logfile=/dev/stdout \
+              2>&1 | tee odoo_install_prev.log
+          rc=${PIPESTATUS[0]}
+          echo "=== prev-tag install exit code: $rc ==="
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::Install at ${PREV_TAG} failed (rc=$rc) — cannot test the upgrade path."
+            exit "$rc"
+          fi
+
+      - name: Upgrade to HEAD addons (-u all)
+        shell: bash
+        run: |
+          set -e
+          # Restore addons/ to the current commit, then upgrade EVERYTHING the
+          # way a live `-u` does. HEAD is unchanged by the pathspec checkout
+          # above, so this pulls back the current tree.
+          rm -rf addons
+          git checkout HEAD -- addons
+          echo "=== addon versions after restore (HEAD) ==="
+          for m in ${ADDONS//,/ }; do
+            printf '  %s: ' "$m"
+            grep -hoE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' "addons/$m/__manifest__.py" | head -1 || true
+          done
+          set +e
+          $HOME/venv/bin/python $HOME/odoo/odoo-bin \
+              --stop-after-init \
+              -d wms_upgrade \
+              --db_host=localhost --db_port=5432 \
+              --db_user=odoo --db_password=odoo_ci_password \
+              --addons-path=$HOME/odoo/addons,$GITHUB_WORKSPACE/addons \
+              -u all \
+              --without-demo=all \
+              --log-level=info \
+              --logfile=/dev/stdout \
+              2>&1 | tee odoo_upgrade.log
+          rc=${PIPESTATUS[0]}
+          echo "=== upgrade (-u all) exit code: $rc ==="
+
+          {
+            echo "## odoo_upgrade step output (tail)"
+            echo ''
+            echo '```'
+            tail -c 60000 odoo_upgrade.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::odoo-bin -u all exited with $rc"
+            exit "$rc"
+          fi
+          # A failed migration normally aborts with rc!=0, but belt-and-braces:
+          # fail on CRITICAL, or on an ERROR from the migration/loading/registry
+          # paths against the upgrade DB (a Postgres/psycopg2 error during the
+          # upgrade surfaces as an `ERROR wms_upgrade odoo.sql_db` line, already
+          # matched below). A bare unanchored `psycopg2.*Error` clause was
+          # dropped — it false-failed on benign/rolled-back lines.
+          if grep -nE "CRITICAL wms_upgrade |ERROR wms_upgrade odoo\.(modules|sql_db|tools\.convert|addons\.base\.models\.ir_(model|module))" odoo_upgrade.log; then
+            echo "::error::Migration/upgrade error detected in the -u all log (see matched lines above)."
+            exit 1
+          fi
+          # Positive signal: the registry must finish loading after the upgrade.
+          if ! grep -q "Modules loaded\." odoo_upgrade.log; then
+            echo "::error::Registry did not finish loading after -u all (no 'Modules loaded.' marker)."
+            exit 1
+          fi
+          echo "✔ Upgrade path ${PREV_TAG} -> HEAD completed cleanly."
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: odoo-upgrade-logs-19.0
+          path: |
+            odoo_install_prev.log
+            odoo_upgrade.log
           retention-days: 14
 
   # -------------------------------------------------------------------------
@@ -276,9 +511,9 @@ jobs:
           - 5432:5432
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.12
           cache: pip
@@ -343,7 +578,7 @@ jobs:
   ci_status:
     name: CI status
     runs-on: ubuntu-latest
-    needs: [lint, security, odoo_tests, native_smoke]
+    needs: [lint, security, odoo_tests, odoo_upgrade, native_smoke]
     if: always()
     steps:
       - name: Aggregate status
@@ -351,6 +586,7 @@ jobs:
           if [[ "${{ needs.lint.result }}" != "success" \
              || "${{ needs.security.result }}" != "success" \
              || "${{ needs.odoo_tests.result }}" != "success" \
+             || "${{ needs.odoo_upgrade.result }}" != "success" \
              || "${{ needs.native_smoke.result }}" != "success" ]]; then
             echo "❌ One or more required jobs failed."
             exit 1

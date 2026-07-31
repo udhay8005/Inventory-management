@@ -11,7 +11,8 @@
                             <strong>Scanner ready.</strong>
                             Cursor stays in the scan field — each barcode is
                             processed automatically. Carton barcodes auto-fill
-                            their unit count.
+                            their unit count. Each scan adds <b>1</b> by default —
+                            tap the <b>Qty</b> cell to change it for loose or bulk items.
                         </div>
                         <div class="alert alert-warning" role="alert" invisible="not is_return">
                             <strong>Return entry mode.</strong>
@@ -26,6 +27,9 @@
                             </div>
                             <div class="col-12 col-md-4">
                                 <field name="is_return" widget="boolean_toggle"/>
+                            </div>
+                            <div class="col-12 col-md-4" invisible="not is_return">
+                                <field name="return_condition"/>
                             </div>
                         </div>
                         <div class="row mt-2">
@@ -52,9 +56,16 @@
                             <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">
                                     Quality check
+                                    <span class="text-danger ms-1">* required</span>
                                 </h6>
                                 <field name="qc_passed"/>
+                                <div class="text-muted" style="font-size:11px;">
+                                    Tick this once you've eyeballed the goods — you
+                                    can't validate until it's ticked.
+                                </div>
                                 <field name="qc_notes" placeholder="Anything unusual? (optional)"/>
+                                <field name="photo" widget="image"
+                                       class="oe_avatar" options="{'size': [0, 180]}"/>
                             </div>
                             <div class="col-12 col-md-6">
                                 <h6 class="text-uppercase text-muted" style="font-size:11px;">
@@ -74,7 +85,11 @@
                         <button name="action_process_scan" type="object"
                                 string="Process scan"/>
                         <button name="action_validate" type="object"
-                                string="Validate &amp; Print" class="btn-primary"/>
+                                string="Validate &amp; Print" class="btn-primary"
+                                invisible="is_return"/>
+                        <button name="action_validate" type="object"
+                                string="Validate Return" class="btn-primary"
+                                invisible="not is_return"/>
                         <button special="cancel" string="Cancel"/>
                     </footer>
                 </form>

@@ -1,6 +1,6 @@
 {
     "name": "WMS — Global FIFO",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.1.0",
     "summary": "FIFO removal across all slots under the warehouse stock location.",
     "description": """
 Overrides `stock.quant._gather` ordering so that pick lines automatically pull

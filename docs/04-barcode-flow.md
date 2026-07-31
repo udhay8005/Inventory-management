@@ -77,6 +77,6 @@ print the "Enable Enter Suffix" config barcode from the scanner's manual.
 
 ### Thermal label printer
 
-Any printer the **host OS** can see. The container generates a PDF via the
+Any printer the **host OS** can see. Odoo generates a PDF via the
 report engine; the browser prints to the user's local printer through the
 standard browser print dialog. Tested with Zebra GK420t and TSC TE244.

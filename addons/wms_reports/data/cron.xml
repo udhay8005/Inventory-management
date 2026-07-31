@@ -42,6 +42,43 @@
             staleness_warning row + a Discuss notice to WMS Managers.
             Quiet when healthy; at most one warning row per ~day.
         -->
+        <!--
+            Daily 08:10 low-stock alert. Notifies every WMS Manager (Discuss
+            inbox; email too when wms_reports.alert_email = 1) of products at
+            or below their reorder level. Silent when nothing needs ordering.
+        -->
+        <record id="cron_wms_low_stock_alert" model="ir.cron">
+            <field name="name">WMS — Daily low-stock alert</field>
+            <field name="model_id" ref="model_wms_stock_alert"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_low_stock()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=10, second=0)"/>
+        </record>
+
+        <!--
+            Daily 08:20 "needs attention" alert. One consolidated Discuss
+            message to WMS Managers for duplicate barcodes, dead stock, and
+            repair orders left open — conditions previously visible only by
+            opening Self-Diagnostics. Silent when everything is clean.
+        -->
+        <record id="cron_wms_attention_alert" model="ir.cron">
+            <field name="name">WMS — Daily needs-attention alert</field>
+            <field name="model_id" ref="model_wms_stock_alert"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_attention()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=20, second=0)"/>
+        </record>
+
         <record id="cron_wms_backup_freshness" model="ir.cron">
             <field name="name">WMS — Daily backup freshness check</field>
             <field name="model_id" ref="model_wms_backup_audit"/>
@@ -53,6 +90,132 @@
             <field name="active">True</field>
             <field name="nextcall"
                    eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=0, second=0)"/>
+        </record>
+
+        <!--
+            Hourly restore-drill failure detector (maturity C). The drill
+            script writes success=False rows directly; this cron pings WMS
+            managers (in-app + optional email) so a failure can no longer
+            sit silently in the audit table until someone opens the report.
+        -->
+        <record id="cron_wms_restore_drill_check" model="ir.cron">
+            <field name="name">WMS — Restore-drill failure alert</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_restore_drill()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=1)).replace(minute=15, second=0)"/>
+        </record>
+
+        <!--
+            Every 4h health-CRITICAL escalation (maturity C). The daily
+            freshness check fires at 08:00 only; CRITICAL is too important
+            to wait that long. Idempotent (one alert per ~20h).
+        -->
+        <record id="cron_wms_health_critical_escalate" model="ir.cron">
+            <field name="name">WMS — Health CRITICAL escalation</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_escalate_health_critical()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">4</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=4)).replace(minute=20, second=0)"/>
+        </record>
+
+        <!--
+            Daily 08:05 Google Drive upload freshness check (right after
+            the 08:00 local check). A stale Drive upload (> 26h) becomes
+            one staleness_warning row (name=gdrive-freshness-check) + a
+            Discuss notice to WMS Managers, deduped to one per ~20h.
+            DEGRADED tier only — a cloud problem must never page like
+            local-backup loss. Quiet while the Drive stage is disabled
+            or was never set up.
+        -->
+        <record id="cron_wms_gdrive_freshness" model="ir.cron">
+            <field name="name">WMS — Google Drive freshness check</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_gdrive_freshness()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=5, second=0)"/>
+        </record>
+
+        <!--
+            Hourly :25 Google Drive event notifier (P5/P14). The backup /
+            restore scripts write backup_gdrive / restore_gdrive rows via
+            psql (they never speak HTTP); this cron turns un-notified rows
+            from the last 24h into manager Discuss notices, honoring the
+            wms_gdrive.notify_success / notify_failure switches, then sets
+            notified=True (dedupe).
+        -->
+        <record id="cron_wms_gdrive_events" model="ir.cron">
+            <field name="name">WMS — Google Drive event notifications</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_notify_gdrive_events()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=1)).replace(minute=25, second=0)"/>
+        </record>
+
+        <!--
+            Hourly :45 Google Drive pending-upload retry (P3 reconnect /
+            warm-loop). When the Drive tier is live AND offline-queued sets
+            exist (queue_state in created/waiting/uploading/failed), this
+            /Runs the trigger-less "WMS Pending Upload Sweep" SYSTEM task,
+            which probes connectivity itself and no-ops when still offline.
+            Heavy upload work runs as SYSTEM, never in the cron worker; the
+            sweep writes backup_gdrive rows so the :25 event notifier
+            delivers the manager notice. :45 staggers the three gdrive crons
+            across the hour (events :25, this :45). Quiet when the stage is
+            kill-switched or the queue is empty.
+        -->
+        <record id="cron_wms_gdrive_retry" model="ir.cron">
+            <field name="name">WMS — Google Drive pending-upload retry</field>
+            <field name="model_id" ref="model_wms_backup_audit"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_retry_gdrive_uploads()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(hours=1)).replace(minute=45, second=0)"/>
+        </record>
+
+        <!--
+            Daily 08:30 overdue-returns alert (F3). Notifies every WMS Manager
+            (Discuss inbox; email too when wms_reports.alert_email = 1) of
+            returnable items whose expected return date has passed and that
+            have not yet come back via Scan Return. Silent when nothing is
+            overdue. :30 staggers it clear of the 08:00/08:05/08:10 backup +
+            low-stock crons.
+        -->
+        <record id="cron_wms_returns_overdue" model="ir.cron">
+            <field name="name">WMS — Daily overdue-returns alert</field>
+            <field name="model_id" ref="model_wms_returns_cron"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_check_overdue_returns()</field>
+            <field name="user_id" ref="base.user_root"/>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">True</field>
+            <field name="nextcall"
+                   eval="(DateTime.now() + timedelta(days=1)).replace(hour=8, minute=30, second=0)"/>
         </record>
     </data>
 </odoo>
