@@ -1,6 +1,10 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+# The types that make up physical storage (excludes the untyped WMS service
+# locations: the consumed-goods sink, Damage and Repair-Out).
+_STRUCTURAL_TYPES = ("zone", "rack", "shelf", "compartment", "slot", "floor")
+
 LOCATION_TYPES = [
     ("warehouse_view", "Warehouse view"),
     ("zone", "Zone (building / floor / area)"),
@@ -45,6 +49,13 @@ class StockLocation(models.Model):
         help="Marks this location as part of the rack → compartment → slot hierarchy.",
     )
     wms_rack_code = fields.Char(string="Rack code", help="e.g. R01, PHARM01")
+    wms_is_trust_use = fields.Boolean(
+        string="Consumed-goods sink",
+        index=True,
+        help="The 'Trust internal use' location that issued goods are moved "
+        "INTO. Stock here has already been handed out and consumed — it is a "
+        "ledger of what left the shelf, not stock that can be issued again.",
+    )
 
     # ---- Rack-level layout ------------------------------------------------
     wms_shelf_count = fields.Integer(
@@ -260,6 +271,79 @@ class StockLocation(models.Model):
                         % (parent.wms_location_type if parent else "<none>")
                     )
 
+    @api.constrains("wms_location_type", "location_id")
+    def _check_inside_warehouse_tree(self):
+        """Storage must live INSIDE the warehouse stock tree.
+
+        Found in UAT R4: the trust's whole structure (234 locations) had been
+        built under a branded top-level location instead of under WH/Stock.
+        Stock kept there was real and issuable, but the weekly audit builds its
+        count list from ``child_of warehouse.lot_stock_id`` — so it produced no
+        line for any of those slots and a floor of stock went physically
+        unverified, with nothing on screen to say so. The stock-value report
+        under-reported for the same reason.
+
+        A counting system must never silently omit stock, so a zone/rack/shelf/
+        compartment/slot/floor that would land outside every warehouse tree is
+        refused at the source. Set ``wms_skip_tree_check`` in the context to
+        bypass (used by the repair migration while it is mid-move).
+        """
+        if self.env.context.get("wms_skip_tree_check"):
+            return
+        # ACTIVE warehouses only — deliberately the same set the weekly audit
+        # uses (stock.warehouse.search([]).lot_stock_id). An earlier draft here
+        # accepted archived warehouses too, reasoning that archiving one should
+        # not lock its racks. That quietly broke the guard's whole promise:
+        # storage under an ARCHIVED warehouse's tree is exactly as invisible to
+        # the audit as storage outside it, so the very blind spot this
+        # constraint exists to prevent would have sailed through. The guard has
+        # to mean what the audit means.
+        warehouses = self.env["stock.warehouse"].sudo().search([])
+        stock_locs = warehouses.lot_stock_id
+        if not stock_locs:
+            return  # nothing to anchor to (e.g. very early in an install)
+        # Check the written records AND their typed descendants. Moving an
+        # UNTYPED parent — a plain area with racks under it — drags the whole
+        # subtree out of the warehouse, and checking only the written record
+        # waves that through: the area carries no WMS type, so it is not
+        # "structural", so nothing gets validated and the racks below it leave
+        # the audit's view in silence. That is the original defect arriving by
+        # a side door, so the subtree has to be part of the check.
+        candidates = (
+            self.sudo()
+            .with_context(active_test=False)
+            .search(
+                [
+                    ("id", "child_of", self.ids),
+                    ("wms_location_type", "in", _STRUCTURAL_TYPES),
+                ]
+            )
+        )
+        if not candidates:
+            return
+        # active_test=False on the LOCATION side only: an archived rack that
+        # sits inside the tree is still inside it.
+        inside = set(
+            self.sudo()
+            .with_context(active_test=False)
+            .search([("id", "child_of", stock_locs.ids)])
+            .ids
+        )
+        for loc in candidates:
+            if loc.id not in inside:
+                raise ValidationError(
+                    "%(name)s would sit OUTSIDE the warehouse storage tree "
+                    "(%(stock)s). Stock kept there is invisible to the weekly "
+                    "audit and to the stock-value report, so it would never be "
+                    "counted. Put this %(kind)s under %(stock)s — or under a "
+                    "zone that already lives there."
+                    % {
+                        "name": loc.display_name or "This location",
+                        "kind": loc.wms_location_type,
+                        "stock": ", ".join(stock_locs.mapped("complete_name")),
+                    }
+                )
+
     @api.constrains("barcode")
     def _check_barcode_globally_unique(self):
         """Critical #4: a location barcode must be globally unique.
@@ -332,12 +416,21 @@ class StockLocation(models.Model):
         # location.usage, so the fallback widened across damage + repair
         # locations and could silently issue contaminated medicine. We
         # exclude wms_is_damage / wms_is_repair on the joined location.
+        # UAT R4: the sink must be excluded too. "Trust internal use" is where
+        # ISSUED goods are moved to — already handed out and consumed. It is
+        # usage='internal' like a shelf, so nothing distinguished it here, and
+        # with an empty shelf the fallback planned issues STRAIGHT OUT OF THE
+        # SINK: the keeper scanned, got a plan, validated, and the system
+        # re-issued goods that were already gone, while the sink balance never
+        # drained. Reproduced on a copy of the live database — 0 on the shelf,
+        # 7 in the sink, and the planner offered 5 from the sink.
         base_domain = [
             ("product_id", "in", product_ids),
             ("quantity", ">", 0),
             ("location_id.usage", "=", "internal"),
             ("location_id.wms_is_damage", "=", False),
             ("location_id.wms_is_repair", "=", False),
+            ("location_id.wms_is_trust_use", "=", False),
         ]
         strict = list(base_domain)
         if parent_location_id:
@@ -431,6 +524,39 @@ class StockLocation(models.Model):
                     )
                     % {"name": loc.complete_name or loc.display_name}
                 )
+
+    def unlink(self):
+        """Delete a whole rack / compartment / zone in one action by cascading
+        the delete down to its EMPTY sub-locations, deepest first.
+
+        The brief's "Delete Rack" was otherwise a chore — delete every slot,
+        then every compartment, then the rack. Here, deleting a container first
+        removes its descendants (deepest level first, so a restrict FK on
+        location_id never dangles), then itself. The per-location guard
+        (_wms_block_delete_when_used) still runs on EVERY one of them, so the
+        whole delete is refused — and rolled back as one transaction — the moment
+        any slot holds stock or has move history (those must be archived, not
+        deleted). Leaf locations (slot / floor) and non-WMS locations keep the
+        plain behaviour.
+        """
+        containers = self.filtered(
+            lambda loc: loc.wms_location_type in ("zone", "rack", "compartment")
+        )
+        if not containers:
+            return super().unlink()
+        # child_of includes the containers themselves, so this is the full
+        # subtree of everything being removed.
+        subtree = self | self.search([("id", "child_of", containers.ids)])
+        # Deepest first: parent_path ('1/5/12/') grows with depth, so a child is
+        # always unlinked before its parent — no dangling location_id, and by the
+        # time a parent is reached its children are already gone (so the guard's
+        # "has sub-locations" check passes naturally). Delete one level/record at
+        # a time so the ondelete stock/history guard runs on each.
+        ordered = subtree.sorted(key=lambda loc: len(loc.parent_path or ""), reverse=True)
+        result = True
+        for loc in ordered:
+            result = super(StockLocation, loc).unlink()
+        return result
 
 
 def _shelf_label(top, bottom):

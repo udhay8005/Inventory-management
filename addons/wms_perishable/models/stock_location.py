@@ -58,6 +58,9 @@ class StockLocation(models.Model):
             ("location_id.usage", "=", "internal"),
             ("location_id.wms_is_damage", "=", False),
             ("location_id.wms_is_repair", "=", False),
+            # Same sink exclusion as the v19 planner (UAT R4): consumed goods
+            # in "Trust internal use" must never be planned for re-issue.
+            ("location_id.wms_is_trust_use", "=", False),
             "|",
             ("removal_date", "=", False),
             ("removal_date", ">=", now),

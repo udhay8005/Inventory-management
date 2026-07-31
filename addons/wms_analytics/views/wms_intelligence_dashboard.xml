@@ -79,11 +79,14 @@
             <field name="target">new</field>
         </record>
 
-        <menuitem id="menu_wms_intelligence_dashboard"
-                  name="KPI Dashboard"
-                  parent="menu_wms_analytics_root"
-                  action="action_wms_intelligence_dashboard"
-                  groups="wms_location.group_wms_manager"
-                  sequence="5"/>
+        <!--
+            Dashboard consolidation (owner decision, 2026-07): the operations
+            Dashboard (WMS -> Reports -> Dashboard) is the single dashboard, so
+            the overlapping KPI Dashboard MENU is retired to cut clutter. The
+            /wms/intelligence route + action + template are kept as a harmless
+            manager-only direct-URL fallback (and its controller test still
+            passes). Removing the menuitem here lets Odoo's obsolete-data
+            cleanup drop the orphaned menu on upgrade.
+        -->
     </data>
 </odoo>

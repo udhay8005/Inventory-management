@@ -1,7 +1,7 @@
 {
     "name": "WMS — Warehouse Intelligence (Wave 2)",
     # Wave 2 analytics layer. Odoo 19.0 series; "v20" is the project major.
-    "version": "19.0.2.0.0",
+    "version": "19.0.2.2.0",
     "summary": (
         "Wave 2 Warehouse Intelligence: expiry-risk engine, supplier/disposal "
         "analytics, stock-health score, advanced ledgers, recall dashboard, lot "

@@ -153,6 +153,12 @@ class WmsStockHealth(models.Model):
                  WHERE sl.usage = 'internal'
                    AND COALESCE(sl.wms_is_damage, FALSE) = FALSE
                    AND COALESCE(sl.wms_is_repair, FALSE) = FALSE
+                   -- UAT R4: and NOT the consumed-goods sink. "Trust internal
+                   -- use" is usage='internal' like a shelf, so every unit ever
+                   -- issued was still being counted as stock on hand here. The
+                   -- sink only grows, so the health percentage drifted further
+                   -- from the truth the longer the trust used the system.
+                   AND COALESCE(sl.wms_is_trust_use, FALSE) = FALSE
                    AND sq.quantity > 0
                    AND sq.company_id IS NOT NULL
             )

@@ -558,6 +558,29 @@ class WmsDamage(models.Model):
             subject="WMS - URGENT BUY: %s" % self.product_id.display_name,
         )
 
+    def action_confirm_and_repair(self):
+        """One-flow (UAT R3): the operator found Confirm -> Create Repair ->
+        Start Repair too many separate screens for the everyday case of "this
+        broke, send it for repair". One click now: confirms the damage (stock
+        moves to the Damage location), creates the linked repair order, and —
+        when the user has repair-tech / manager rights — starts it. A Store
+        Keeper without those rights gets the repair created in draft for the
+        Manager, which is exactly the approval boundary the ACL enforces.
+        """
+        self.ensure_one()
+        if self.state == "draft":
+            self.action_confirm()
+        action = self.action_create_repair_order()
+        repair = self.repair_order_id
+        if repair and repair.state == "draft":
+            # Gate on the ACL that actually governs the transition (Store
+            # Keepers have no write access to repair orders) rather than on
+            # group membership — the ACL is the real boundary, and checking it
+            # keeps this correct for any future role that gets repair rights.
+            if repair.check_access_rights("write", raise_exception=False):
+                repair.action_start_repair()
+        return action
+
     def action_create_repair_order(self):
         """Open a new wms.repair.order pre-filled from this damage event.
         Used by the Create Repair Order button on the damage form."""

@@ -1,6 +1,6 @@
 {
     "name": "WMS — Location (Rack / Compartment / Slot)",
-    "version": "19.0.3.25.0",
+    "version": "19.0.3.29.0",
     "summary": "Model warehouse storage as Rack → Compartment (multi-shelf-spannable) → Slot on top of stock.location",
     "description": """
 WMS Location
@@ -67,4 +67,7 @@ Key features:
     },
     "application": True,
     "installable": True,
+    # Enforce ₹-only currency + visible Unit of Measure on fresh installs;
+    # existing DBs get the same via migrations/19.0.3.27.0/post-migration.py.
+    "post_init_hook": "post_init_hook",
 }

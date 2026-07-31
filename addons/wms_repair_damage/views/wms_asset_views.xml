@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="seq_wms_asset" model="ir.sequence">
+            <field name="name">WMS Asset</field>
+            <field name="code">wms.asset</field>
+            <field name="prefix">ASSET/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+        <record id="view_wms_asset_list" model="ir.ui.view">
+            <field name="name">wms.asset.list</field>
+            <field name="model">wms.asset</field>
+            <field name="arch" type="xml">
+                <list decoration-danger="service_due" decoration-muted="state in ('removed','scrapped')"
+                      decoration-warning="state == 'under_repair'">
+                    <field name="name"/>
+                    <field name="product_id"/>
+                    <field name="serial_no" optional="show"/>
+                    <field name="location_id"/>
+                    <field name="installed_on"/>
+                    <field name="last_service_date" optional="hide"/>
+                    <field name="next_service_date"/>
+                    <field name="service_due" optional="hide"/>
+                    <field name="state"/>
+                </list>
+            </field>
+        </record>
+
+        <record id="view_wms_asset_form" model="ir.ui.view">
+            <field name="name">wms.asset.form</field>
+            <field name="model">wms.asset</field>
+            <field name="arch" type="xml">
+                <form>
+                    <header>
+                        <button name="action_service_done" type="object"
+                                string="Record Service Done" class="btn-primary"
+                                invisible="state in ('removed','scrapped') or service_interval_days == 0"
+                                help="Stamps today as the last service and restarts the countdown."/>
+                        <button name="action_mark_under_repair" type="object"
+                                string="Send for Repair"
+                                invisible="state != 'in_service'"/>
+                        <button name="action_back_in_service" type="object"
+                                string="Back in Service" class="btn-primary"
+                                invisible="state not in ('under_repair','removed')"/>
+                        <button name="action_remove" type="object" string="Removed"
+                                invisible="state in ('removed','scrapped')"
+                                help="Taken down / no longer installed, but not written off."/>
+                        <button name="action_scrap" type="object" string="Scrap"
+                                invisible="state in ('scrapped',)"
+                                confirm="Write this asset off for good?"/>
+                        <field name="state" widget="statusbar"
+                               statusbar_visible="in_service,under_repair,removed"/>
+                    </header>
+                    <sheet>
+                        <div class="oe_title">
+                            <h1><field name="name" readonly="1"/></h1>
+                        </div>
+                        <div class="alert alert-warning" role="alert" invisible="not service_due">
+                            <b>Service is due.</b> This item reached its service date — arrange
+                            the refill / service, then press <b>Record Service Done</b>.
+                        </div>
+                        <group>
+                            <group string="What &amp; where">
+                                <field name="product_id"
+                                       options="{'no_create': True}"/>
+                                <field name="serial_no"/>
+                                <field name="location_id"
+                                       options="{'no_create': True}"/>
+                                <field name="installed_on"/>
+                            </group>
+                            <group string="Servicing">
+                                <field name="service_interval_days"/>
+                                <field name="last_service_date"/>
+                                <field name="next_service_date" readonly="1"/>
+                                <field name="service_due" readonly="1"/>
+                                <field name="repair_order_id" readonly="1"
+                                       invisible="not repair_order_id"/>
+                            </group>
+                        </group>
+                        <group string="Who">
+                            <field name="installed_by" placeholder="Who fitted it"/>
+                            <field name="wms_storekeeper_id"/>
+                        </group>
+                        <div class="alert alert-info" role="alert">
+                            <b>What this register is for.</b> Once a fan, light, pump or fire
+                            extinguisher is issued out and fitted, it leaves the shelf and the
+                            stock count. This is where it lives afterwards: what it is, where
+                            it hangs, since when, and when it next needs attention. Set
+                            <i>Service every (days)</i> — e.g. <b>365</b> for a fire
+                            extinguisher refill — and the daily alert will remind you.
+                        </div>
+                        <field name="note" placeholder="Notes (optional)..."/>
+                    </sheet>
+                    <chatter/>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_wms_asset_search" model="ir.ui.view">
+            <field name="name">wms.asset.search</field>
+            <field name="model">wms.asset</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="product_id"/>
+                    <field name="serial_no"/>
+                    <field name="location_id"/>
+                    <filter name="due" string="Service due" domain="[('service_due','=',True)]"/>
+                    <filter name="in_service" string="In service"
+                            domain="[('state','=','in_service')]"/>
+                    <filter name="under_repair" string="Under repair"
+                            domain="[('state','=','under_repair')]"/>
+                    <separator/>
+                    <filter name="gone" string="Removed / scrapped"
+                            domain="[('state','in',('removed','scrapped'))]"/>
+                    <separator/>
+                    <filter name="g_loc" string="Installed at"
+                            context="{'group_by': 'location_id'}"/>
+                    <filter name="g_state" string="Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="g_product" string="Item"
+                            context="{'group_by': 'product_id'}"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="action_wms_asset" model="ir.actions.act_window">
+            <field name="name">Assets in service</field>
+            <field name="res_model">wms.asset</field>
+            <field name="view_mode">list,form</field>
+            <field name="search_view_id" ref="view_wms_asset_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Register the equipment that is in use.</p>
+                <p>
+                    Fans, lights, pumps, motors, fire extinguishers — anything issued out and
+                    <b>fitted somewhere</b>. Record where it is and how often it needs a
+                    service, and the system reminds you before it is overdue.
+                </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_wms_asset"
+                  name="Assets in service"
+                  parent="wms_location.menu_wms_operations"
+                  action="action_wms_asset"
+                  groups="wms_location.group_wms_can_file_damage"
+                  sequence="47"/>
+
+    </data>
+</odoo>

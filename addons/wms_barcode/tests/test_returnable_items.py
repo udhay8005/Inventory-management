@@ -19,6 +19,7 @@ Returns-due report are tested in wms_reports):
 
 from datetime import date, timedelta
 
+from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -184,19 +185,44 @@ class TestReturnableItems(TransactionCase):
     # ------------------------------------------------------------------
     # Scan Return marking (wms_barcode)
     # ------------------------------------------------------------------
-    def _return(self, barcode, qty=1.0):
+    def _return(self, barcode, qty=1.0, condition="good"):
         wiz = self.env["wms.scan.receipt"].create(
             {
                 "warehouse_id": self.wh.id,
                 "is_return": True,
                 "qc_passed": True,
                 "storekeeper_id": self.keeper.id,
+                "return_condition": condition,
             }
         )
         wiz.last_scan = barcode
         wiz.action_process_scan()
         wiz.action_validate()
         return wiz.picking_id
+
+    def test_scan_return_records_condition_and_date(self):
+        """Scan Return records HOW the item came back (condition) and WHEN
+        (actual return date) on the original issue, not just a boolean."""
+        issue = self._issue("RETTOOL001")
+        self._return("RETTOOL001", condition="good")
+        issue.invalidate_recordset(
+            ["wms_returned", "wms_return_condition", "wms_actual_return_date"]
+        )
+        self.assertTrue(issue.wms_returned)
+        self.assertEqual(issue.wms_return_condition, "good")
+        self.assertEqual(issue.wms_actual_return_date, date.today())
+
+    def test_damaged_return_records_condition(self):
+        """A damaged / needs-repair return records the condition on the issue
+        (and routes to managers — best-effort, must not raise)."""
+        issue = self._issue("RETTOOL001")
+        self._return("RETTOOL001", condition="damaged")
+        issue.invalidate_recordset(["wms_return_condition"])
+        self.assertEqual(
+            issue.wms_return_condition,
+            "damaged",
+            "a damaged return must record the condition on the issue picking",
+        )
 
     def test_scan_return_marks_matched_picking(self):
         issue = self._issue("RETTOOL001")
@@ -223,8 +249,13 @@ class TestReturnableItems(TransactionCase):
         self.assertFalse(newer.wms_returned, "a single return must not clear two issues")
 
     def test_reversed_issue_excluded_from_match(self):
-        """A reversed (undone) issue must not be matched by Scan Return —
-        the same wms_reversed_by_id IS NULL guard the overdue cron uses."""
+        """A reversed (undone) issue must not be matched by Scan Return.
+
+        UAT R3 tightened the contract: the undo already put the stock back,
+        so a return on top of it would COUNT THE SAME UNITS TWICE. With the
+        reversed issue excluded the outstanding ledger is zero and the
+        return must now be refused outright (previously it validated as a
+        silent no-op — fabricating stock)."""
         issue = self._issue("RETTOOL001")
         # Simulate the undo having pointed wms_reversed_by_id at a transfer.
         reverse = self.env["stock.picking"].create(
@@ -237,7 +268,8 @@ class TestReturnableItems(TransactionCase):
             }
         )
         issue.wms_reversed_by_id = reverse.id
-        self._return("RETTOOL001")
+        with self.assertRaises(UserError, msg="return after undo must be refused"):
+            self._return("RETTOOL001")
         issue.invalidate_recordset(["wms_returned"])
         self.assertFalse(
             issue.wms_returned,
@@ -245,16 +277,21 @@ class TestReturnableItems(TransactionCase):
         )
 
     def test_no_match_leaves_nothing_changed(self):
-        """A return for a product with no outstanding returnable issue does
-        nothing (the item just stays absent from the report)."""
+        """A return with no outstanding returnable issue is refused and
+        changes nothing.
+
+        UAT R3 tightened the contract: previously the second return
+        validated as a lenient no-op — which physically RECEIVED the goods
+        again and inflated stock (the 23-drill phantom-stock bug). Now the
+        issued-minus-returned ledger is zero, so it must raise and leave
+        the already-returned picking untouched."""
         # Issue + immediately return the tool so its issue is already cleared.
         issue = self._issue("RETTOOL001")
         self._return("RETTOOL001")
         issue.invalidate_recordset(["wms_returned"])
         self.assertTrue(issue.wms_returned)
-        # A second return finds no open issue — must not raise, must not
-        # re-flag the already-returned picking (idempotent / safe no-op).
         before = issue.wms_returned
-        self._return("RETTOOL001")
+        with self.assertRaises(UserError, msg="second return must be refused"):
+            self._return("RETTOOL001")
         issue.invalidate_recordset(["wms_returned"])
         self.assertEqual(issue.wms_returned, before)

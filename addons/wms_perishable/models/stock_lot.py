@@ -8,6 +8,8 @@ product_expiry dependency; this adds the lifecycle state, supplier traceability,
 manufacture date, and a computed expired flag.
 """
 
+from datetime import timedelta
+
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
@@ -161,3 +163,34 @@ class StockLot(models.Model):
                 "sticky": False,
             },
         }
+
+
+class StockLotExpiryDefault(models.Model):
+    """UAT R3 — never stamp a batch as 'expired the moment it is created'.
+
+    Odoo's product_expiry computes ``expiration_date = now + expiration_time
+    days`` for every lot of an expiry-tracked product. The trust does not
+    configure a per-product shelf life (``expiration_time`` stays 0), so that
+    formula produced **now** — every new batch was born already expired:
+
+      * its ``removal_date`` was in the past, so the batch could not be
+        reserved for ANY move (a fuel draw failed with a misleading "the tank
+        level changed" error — the finding that opened this ticket), and
+      * medicine received without typing an expiry was silently unusable too.
+
+    An unknown expiry must be EMPTY, not "now". Operators enter the real
+    expiry per batch at Scan Receipt (the trust's actual workflow), and
+    products that do carry a configured shelf life are unaffected.
+    """
+
+    _inherit = "stock.lot"
+
+    @api.depends("product_id")
+    def _compute_expiration_date(self):
+        # Mirrors product_expiry's compute, minus the zero-duration stamp.
+        self.expiration_date = False
+        for lot in self:
+            if lot.product_id.use_expiration_date and not lot.expiration_date:
+                duration = lot.product_id.product_tmpl_id.expiration_time
+                if duration:
+                    lot.expiration_date = fields.Datetime.now() + timedelta(days=duration)

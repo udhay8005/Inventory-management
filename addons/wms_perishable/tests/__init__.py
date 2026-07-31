@@ -2,6 +2,7 @@ from . import (
     test_disposal_carveout,
     test_effective_expiry,
     test_expired_block,
+    test_expired_sweep,
     test_fefo_removal,
     test_hooks,
     test_issue_preview,

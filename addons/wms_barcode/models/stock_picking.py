@@ -132,6 +132,32 @@ class StockPicking(models.Model):
         "picking shows on the Returns-due report and triggers the overdue "
         "alert.",
     )
+    # F3+ — how the returnable came back + when. Set by Scan Return alongside
+    # wms_returned. 'damaged' / 'needs_repair' route the item to a Manager to
+    # file a Damage / Repair record (best-effort notify — see
+    # scan_receipt._mark_outstanding_returns).
+    wms_return_condition = fields.Selection(
+        [
+            ("good", "Good"),
+            ("damaged", "Damaged"),
+            ("needs_repair", "Needs repair"),
+            ("lost", "Lost"),
+            ("fully_used", "Fully used"),
+        ],
+        string="Return condition",
+        index=True,
+        tracking=True,
+        help="How the returnable item came back, captured by Scan Return. "
+        "Damaged / Needs-repair returns are flagged to a Manager to raise a "
+        "Damage or Repair record.",
+    )
+    wms_actual_return_date = fields.Date(
+        string="Actual return",
+        index=True,
+        tracking=True,
+        help="Date the issued returnable actually came back (set by Scan "
+        "Return). Compare with Expected return to see whether it was on time.",
+    )
     wms_is_scan_issue = fields.Boolean(
         string="Scan Issue picking",
         default=False,
@@ -142,6 +168,17 @@ class StockPicking(models.Model):
         "creates. The 24h daily-cap counter filters on this immutable flag "
         "instead of matching the free-text origin string ('Barcode FIFO%'), "
         "which any edit or collision could silently break.",
+    )
+    wms_is_scan_return = fields.Boolean(
+        string="Scan Return receipt",
+        default=False,
+        copy=False,
+        readonly=True,
+        index=True,
+        help="Internal: set True by the Scan Return wizard on the receipt it "
+        "creates. Together with wms_is_scan_issue this forms the per-product "
+        "issued-minus-returned ledger that caps how much stock a return may "
+        "bring back (you can never return more than went out).",
     )
     wms_audit_legacy = fields.Boolean(
         default=False,

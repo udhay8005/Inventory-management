@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from markupsafe import Markup
 from odoo import _, api, fields, models
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessError, UserError, ValidationError
 
 
 class WmsAudit(models.Model):
@@ -78,6 +78,35 @@ class WmsAudit(models.Model):
     note = fields.Text(string="Notes")
 
     line_count = fields.Integer(compute="_compute_counts")
+    scope = fields.Selection(
+        [
+            ("recorded", "Stock on record"),
+            ("full", "Full walk — every slot, empty ones included"),
+        ],
+        default="recorded",
+        required=True,
+        tracking=True,
+        help="Stock on record: count what the books say is there (including "
+        "any slot showing NEGATIVE stock, which needs looking at). "
+        "Full walk: also list every empty slot in range, so goods that were "
+        "never recorded — put away in the wrong slot, returned without a scan "
+        "— can actually be found. A full walk takes longer; use the Area "
+        "filter to do one zone at a time.",
+    )
+    zone_id = fields.Many2one(
+        "stock.location",
+        string="Area to count",
+        domain="[('usage', '=', 'internal')]",
+        help="Optional: count only this zone or rack. Leave empty for the "
+        "whole warehouse. Counting one area a week is how a full walk stays "
+        "practical.",
+    )
+    found_count = fields.Integer(
+        string="Unrecorded finds",
+        compute="_compute_counts",
+        store=False,
+        help="Lines for stock the books did not know about at all.",
+    )
     variance_count = fields.Integer(
         string="Variances",
         compute="_compute_counts",
@@ -90,11 +119,25 @@ class WmsAudit(models.Model):
     # filters correctly.
     group_wms_user_id = fields.Integer(compute="_compute_group_id")
 
-    @api.depends("line_ids", "line_ids.counted_qty", "line_ids.expected_qty")
+    @api.depends(
+        "line_ids",
+        "line_ids.counted_qty",
+        "line_ids.expected_qty",
+        "line_ids.is_found_line",
+    )
     def _compute_counts(self):
         for rec in self:
             rec.line_count = len(rec.line_ids)
             rec.variance_count = sum(1 for ln in rec.line_ids if ln.counted_qty != ln.expected_qty)
+            # Stock nobody had on the books: either a line the keeper added for
+            # a surprise find, or an empty slot on a full walk that turned out
+            # to hold something. Worth its own number — it is the one figure a
+            # count sheet built from the books could never produce.
+            rec.found_count = sum(
+                1
+                for ln in rec.line_ids
+                if ln.counted_qty > 0 and not ln.expected_qty and ln.product_id
+            )
 
     @api.depends()
     def _compute_group_id(self):
@@ -140,8 +183,7 @@ class WmsAudit(models.Model):
             )
 
     def _populate_from_quants(self):
-        """Snapshot warehouse STORAGE quants > 0 into audit lines so the
-        keeper has the expected value to compare against.
+        """Build the count sheet the keeper walks with.
 
         Counts only the warehouse storage tree (each warehouse's lot-stock and
         its children: zones / racks / compartments / slots / floor). Excludes
@@ -151,29 +193,70 @@ class WmsAudit(models.Model):
         guard the Stock-Value report applies. Without this, every batch ever
         issued to the sink showed up as an expected line to find, generating
         bogus negative variances and bloating the count list over months.
+
+        UAT R4 — what this used to MISS, and why it mattered:
+
+        * ``quantity > 0`` hid NEGATIVE stock. A slot driven to -2 by an
+          over-issue never appeared on any count sheet, so the keeper was
+          never asked to look at it and the error sat in the books forever.
+          The filter is now ``!= 0``: a negative line shows expected -2, the
+          keeper counts what is really there, and accepting the audit corrects
+          it.
+        * a slot the books call EMPTY was never walked, so stock that was
+          never recorded — put away in the wrong slot, returned without a
+          scan, delivered straight to a shelf — could not be discovered by
+          counting. It is invisible to the books BECAUSE it is unrecorded, and
+          the count sheet was built from the books. Choosing the "Full walk"
+          scope now lists every slot in range, empty ones included, so the
+          keeper can write down what is actually there.
         """
         self.ensure_one()
         Quant = self.env["stock.quant"].sudo()
-        storage = self.env["stock.warehouse"].search([]).lot_stock_id.ids
+        Loc = self.env["stock.location"].sudo()
+        storage = self.env["stock.warehouse"].search([]).lot_stock_id
         if not storage:
             return
-        quants = Quant.search(
-            [
-                ("location_id", "child_of", storage),
-                ("quantity", ">", 0),
-            ]
-        )
+        # A zone/rack filter keeps a full walk practical: "Main Store this
+        # week, Godown next week" instead of one impossible 200-slot sweep.
+        roots = self.zone_id or storage
         Line = self.env["wms.audit.line"].sudo()
-        for q in quants:
-            Line.create(
+        vals_list = []
+        covered = set()
+        for q in Quant.search([("location_id", "child_of", roots.ids), ("quantity", "!=", 0)]):
+            vals_list.append(
                 {
                     "audit_id": self.id,
                     "location_id": q.location_id.id,
                     "product_id": q.product_id.id,
                     "expected_qty": q.quantity,
                     "counted_qty": 0.0,
+                    "is_found_line": False,
                 }
             )
+            covered.add(q.location_id.id)
+        if self.scope == "full":
+            empty_slots = Loc.search(
+                [
+                    ("id", "child_of", roots.ids),
+                    ("usage", "=", "internal"),
+                    ("wms_location_type", "in", ("slot", "floor")),
+                    ("id", "not in", list(covered)),
+                ]
+            )
+            for loc in empty_slots:
+                # No product: the books say nothing is here. The keeper fills
+                # in what they find, or leaves it at zero to record "walked,
+                # confirmed empty" — which is itself worth having.
+                vals_list.append(
+                    {
+                        "audit_id": self.id,
+                        "location_id": loc.id,
+                        "expected_qty": 0.0,
+                        "counted_qty": 0.0,
+                        "is_found_line": False,
+                    }
+                )
+        Line.create(vals_list)
 
     def action_submit(self):
         """Store keeper hands the audit in. Lock the lines and post a
@@ -348,7 +431,11 @@ class WmsAudit(models.Model):
             # quantity - NOT a blind overwrite to counted_qty. A blind
             # overwrite would silently erase any issue/receipt that legitimately
             # happened during the (possibly multi-day) audit window.
-            variance_lines = rec.line_ids.filtered(lambda ln: ln.counted_qty != ln.expected_qty)
+            # A product-less line is a full-walk slot the keeper confirmed
+            # empty: there is nothing to book, and no product to lock.
+            variance_lines = rec.line_ids.filtered(
+                lambda ln: ln.product_id and ln.counted_qty != ln.expected_qty
+            )
             prod_ids = sorted(set(variance_lines.mapped("product_id").ids))
             if prod_ids:
                 self.env.cr.execute(
@@ -428,7 +515,19 @@ class WmsAuditLine(models.Model):
     )
     product_id = fields.Many2one(
         "product.product",
-        required=True,
+        # Optional on purpose. A full walk lists EMPTY slots, where the whole
+        # point is that the books do not know what (if anything) is there —
+        # the keeper names it if they find something. A required field here is
+        # what made unrecorded stock impossible to write down.
+        help="What is in this slot. Left empty on a full-walk line until the "
+        "keeper finds something there.",
+    )
+    is_found_line = fields.Boolean(
+        string="Added by keeper",
+        default=True,
+        help="True for a line the keeper added while walking — stock the books "
+        "did not list. Generated lines are False and keep their slot and "
+        "product locked so a count cannot be pointed at the wrong shelf.",
     )
     expected_qty = fields.Float(
         string="Expected",
@@ -454,15 +553,76 @@ class WmsAuditLine(models.Model):
         help="Optional comment: 'wrong slot', 'damaged units left "
         "in place', 'expired - moved to trash', etc.",
     )
+    scan_confirm = fields.Char(
+        string="Scan to confirm",
+        help="Optional: scan the product's barcode while counting this line. "
+        "The Scan column turns green when it matches this line's product — a "
+        "cheap guard against counting the wrong look-alike item.",
+    )
+    scan_status = fields.Selection(
+        [
+            ("blank", "Not scanned"),
+            ("match", "Confirmed"),
+            ("mismatch", "Wrong item!"),
+        ],
+        string="Scan",
+        compute="_compute_scan_status",
+        help="Confirmed = the scanned barcode matches this line's product; "
+        "Wrong item = it doesn't (or is unknown). Advisory — never blocks.",
+    )
     state = fields.Selection(
         related="audit_id.state",
         store=False,
     )
 
+    @api.constrains("product_id", "counted_qty")
+    def _check_counted_line_names_a_product(self):
+        """You cannot count "3 of something". A full-walk line may sit at zero
+        with no product (walked, confirmed empty), but the moment a quantity
+        is entered the keeper has to say WHAT it is, or the accept step has
+        nothing to book the stock against."""
+        for line in self:
+            if line.counted_qty and not line.product_id:
+                raise ValidationError(
+                    _(
+                        "You recorded %(qty)g in %(loc)s but did not say what it "
+                        "is. Pick the product on that line — a count needs to "
+                        "name the item, or it cannot be booked into stock."
+                    )
+                    % {"qty": line.counted_qty, "loc": line.location_id.display_name}
+                )
+
     @api.depends("counted_qty", "expected_qty")
     def _compute_variance(self):
         for line in self:
             line.variance = line.counted_qty - line.expected_qty
+
+    @api.depends("scan_confirm", "product_id")
+    def _compute_scan_status(self):
+        """Resolve the scanned code against THIS line's product. Matches the
+        product barcode / SKU directly, and (when wms_barcode is installed —
+        no hard dependency) a carton/alias code via its resolver. Never raises:
+        an error resolving a stray scan must not break the count."""
+        for line in self:
+            code = (line.scan_confirm or "").strip()
+            if not code:
+                line.scan_status = "blank"
+                continue
+            prod = line.product_id
+            if not prod:
+                # A full-walk line with nothing named yet: a scan here is
+                # the keeper telling us what they just found, not a
+                # confirmation of something already on the sheet.
+                line.scan_status = "blank"
+                continue
+            hit = code in (prod.barcode or "", prod.default_code or "")
+            if not hit and "wms.barcode.alias" in line.env:
+                try:
+                    info = line.env["wms.barcode.alias"].resolve(code)
+                    hit = bool(info.get("product")) and info["product"].id == prod.id
+                except Exception:  # noqa: BLE001
+                    hit = False
+            line.scan_status = "match" if hit else "mismatch"
 
     def write(self, vals):
         """Freeze line counts once the parent audit is finalised.

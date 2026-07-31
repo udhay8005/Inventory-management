@@ -15,7 +15,7 @@ wms.expiry.alert); this fills the remaining gap — proactive reorder warnings.
 import logging
 
 from markupsafe import Markup, escape
-from odoo import api, models
+from odoo import api, fields, models
 
 from .wms_notify import notify_wms_managers
 
@@ -65,3 +65,87 @@ class WmsStockAlert(models.AbstractModel):
             Markup(extra),
         )  # nosec B704
         notify_wms_managers(self.env, body, "WMS — %d product(s) need reordering" % len(low))
+
+    @api.model
+    def _cron_check_attention(self):
+        """Daily proactive push of data-integrity / workflow items that used to
+        be visible ONLY by opening Self-Diagnostics: duplicate barcodes, dead
+        stock, and repair orders stuck open. One consolidated Discuss message to
+        managers (best-effort; silent when everything is clean), so a duplicate
+        barcode from a raw import or a repair left in draft can't sit unnoticed."""
+        lines = []
+
+        # 1. Duplicate barcodes (same probe the Self-Diagnostics screen runs).
+        self.env.cr.execute(
+            "SELECT count(*) FROM (SELECT barcode FROM product_product "
+            "WHERE barcode IS NOT NULL GROUP BY barcode HAVING count(*) > 1) d"
+        )
+        dup = (self.env.cr.fetchone() or [0])[0] or 0
+        if dup:
+            lines.append(
+                "<li><b>%d duplicate barcode(s)</b> — two products share a code; "
+                "scans will be ambiguous.</li>" % dup
+            )
+
+        # 2. Dead stock — products the forecast flagged as not moving.
+        if "wms.forecast" in self.env:
+            dead = self.env["wms.forecast"].sudo().search_count([("velocity_class", "=", "dead")])
+            if dead:
+                lines.append(
+                    "<li><b>%d dead-stock product(s)</b> — no recent movement.</li>" % dead
+                )
+
+        # 3. Repair orders left open (draft / in-repair).
+        if "wms.repair.order" in self.env:
+            pending = (
+                self.env["wms.repair.order"]
+                .sudo()
+                .search_count([("state", "in", ("draft", "in_repair"))])
+            )
+            if pending:
+                lines.append(
+                    "<li><b>%d repair(s) pending</b> — open repair orders awaiting "
+                    "action.</li>" % pending
+                )
+
+        # 4. In-service assets due a service (fire extinguisher refills,
+        #    generator / pump servicing). The trust used to rely on memory.
+        if "wms.asset" in self.env:
+            due = self.env["wms.asset"].sudo().search_count([("service_due", "=", True)])
+            if due:
+                lines.append(
+                    "<li><b>%d asset(s) due a service</b> — fans / pumps / fire "
+                    "extinguishers past their service date (WMS &#8594; Operations "
+                    "&#8594; Assets in service).</li>" % due
+                )
+
+        # 5. Expired batches still sitting on a shelf — the medicine-room risk.
+        if "stock.lot" in self.env and "wms_lot_state" in self.env["stock.lot"]._fields:
+            quants = (
+                self.env["stock.quant"]
+                .sudo()
+                .search([("quantity", ">", 0), ("location_id.usage", "=", "internal")])
+            )
+            now = fields.Datetime.now()
+            expired = quants.mapped("lot_id").filtered(
+                lambda lot: lot.expiration_date
+                and lot.expiration_date <= now
+                and lot.wms_lot_state == "available"
+            )
+            if expired:
+                lines.append(
+                    "<li><b>%d expired batch(es) still on the shelf</b> — run "
+                    "<i>Operations &#8594; Sweep expired stock</i> to quarantine "
+                    "them.</li>" % len(expired)
+                )
+
+        if not lines:
+            return
+
+        body = Markup(  # nosec B704 — literal template; the only values are ints
+            "<p>&#128296; <b>Items needing attention</b> (daily WMS check):</p>"
+            "<ul>%s</ul>"
+            "<p>Open <i>WMS &#8594; Configuration &#8594; Self-Diagnostics</i> for the "
+            "full integrity report.</p>"
+        ) % Markup("".join(lines))
+        notify_wms_managers(self.env, body, "WMS — items need attention")

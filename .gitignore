@@ -1,4 +1,27 @@
+# ---------------------------------------------------------------------------
+# Secrets. This repository is PUBLIC — everything here is a one-mistake-away
+# guard, so the patterns are deliberately wider than the exact filenames.
+#
+# The reason for the wildcards: scripts/install-native.ps1 and
+# scripts/setup-gdrive-auth.ps1 keep a safety copy of the file they are about
+# to rewrite, as "<name>.bak-<timestamp>", INSIDE the repo. A rule matching the
+# literal name only (".env") does not match ".env.bak-20260731-120000", so
+# those copies were untracked-but-not-ignored: a routine `git add -A` would
+# have staged them, and with them DB_PASSWORD, ODOO_ADMIN_PASSWD,
+# BACKUP_PASSPHRASE, GDRIVE_CLIENT_SECRET and CLOUDFLARE_TUNNEL_TOKEN — to a
+# public repo. Nothing ever leaked (the whole history is clean); this closes
+# the trap before it fires.
+# ---------------------------------------------------------------------------
 .env
+.env.*
+!.env.example
+config/odoo.native.conf*
+# Google Drive OAuth token blob (created by scripts/setup-gdrive-auth.ps1)
+config/gdrive-token.json.dpapi*
+# Catch-all for any other rescue copy a script leaves behind.
+*.bak
+*.bak-*
+
 *.pyc
 __pycache__/
 *.log
@@ -10,13 +33,26 @@ __pycache__/
 !.vscode/extensions.json
 backups/
 *.dump
+*.gpg
+
+#agent
 .claude/
+CLAUDE.md
 
 # Native-install artifacts (created by scripts/install-native.ps1)
 .odoo/
 .venv/
 .runtime/
-config/odoo.native.conf
 
-# Google Drive OAuth token blob (created by scripts/setup-gdrive-auth.ps1)
-config/gdrive-token.json.dpapi
+# docs/ is ignored by owner decision (internal working notes stay local). The
+# docs that WERE committed before this rule are still tracked and still ship in
+# a clone — git keeps tracking a file once it is in the index. So the published
+# doc set is frozen at what was committed: new local docs are not published,
+# and edits to the already-tracked ones still are. Left as-is deliberately;
+# publishing the local-only notes to a PUBLIC repo is the owner's call, not a
+# side effect of a .gitignore tidy-up.
+docs/
+# Local duplicate of docs/ (1.4 MB, ~97 files). Untracked AND unignored is the
+# dangerous combination: `git add -A` would publish a second copy of the whole
+# documentation set to a public repo without anyone deciding to.
+documents/
