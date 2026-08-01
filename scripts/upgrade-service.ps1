@@ -47,7 +47,11 @@ param(
     [string]$ServiceName = 'Odoo-WMS',
     [string]$DbName = 'wms',
     [int]$Port = 8069,
-    [string]$Modules = 'wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training',
+    # All TEN addons. The default used to stop at wms_training, so anyone
+    # running the documented command upgraded 7 of 10 and silently left
+    # wms_perishable / wms_analytics / wms_pharmacy on their old versions -
+    # including, at one point, a pending data migration.
+    [string]$Modules = 'wms_location,wms_fifo,wms_barcode,wms_repair_damage,wms_ai_forecast,wms_reports,wms_training,wms_perishable,wms_analytics,wms_pharmacy',
     [switch]$Install,
     [switch]$SkipBackup,
     [string]$HealthToken = ''

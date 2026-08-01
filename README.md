@@ -35,6 +35,17 @@ Runs **natively on Windows** — no Docker required.
 - ☁️ **Google Drive cloud backup** (optional) — every encrypted backup set uploaded to an `Inventory_Backups` Drive folder (`drive.file` minimal scope, `sha256Checksum`-verified, tiered retention), plus an in-app **Backup Now** button
 - 🧬 **Universal Perishable Engine** (v20 — `wms_perishable`) — per-lot FEFO (earliest-expiry-first), expired-stock block + manager override + disposal carve-out, lot-aware receipt (batch / expiry / supplier capture), lot recall, quarantine, per-lot expiry report (180/90/60/30/15/7/expired bands), lot barcode labels + scan-back, near-expiry receiving guard, one-click lot timeline, and a stable extension hook API (v20 Hook API 1.0). Additive over v19 — no existing behaviour changes; install optionally after the v19 base modules
 
+## Install / update / rebuild
+
+Three commands, and two of them keep your data. See
+**[INSTALL-UPDATE.md](INSTALL-UPDATE.md)** for the full runbook.
+
+| I want to... | Command | Data |
+|---|---|---|
+| New machine | `scripts\install-native.ps1` | n/a |
+| Latest code, keep everything | `scripts\upgrade-service.ps1` | **kept** |
+| Start clean | `scripts\reset-database.ps1` | **destroyed** |
+
 ## Quickstart (Windows)
 
 One-shot installer — installs PostgreSQL 15/16/17 (auto-detected; winget installs 17 by default), Python 3.12, wkhtmltopdf, Git
