@@ -33,7 +33,7 @@ Runs **natively on Windows** — no Docker required.
 - 🤖 **Offline AI demand forecasting** — statsmodels-based, runs locally, no external API
 - 🛡️ **Off-site encrypted backup copy** — `BACKUP_OFFSITE_DIR` (USB, network share, OneDrive sync folder — all just paths), SHA-256 verified after copy
 - ☁️ **Google Drive cloud backup** (optional) — every encrypted backup set uploaded to an `Inventory_Backups` Drive folder (`drive.file` minimal scope, `sha256Checksum`-verified, tiered retention), plus an in-app **Backup Now** button
-- 🧬 **Universal Perishable Engine** (v20 — `wms_perishable`) — per-lot FEFO (earliest-expiry-first), expired-stock block + manager override + disposal carve-out, lot-aware receipt (batch / expiry / supplier capture), lot recall, quarantine, per-lot expiry report (180/90/60/30/15/7/expired bands), lot barcode labels + scan-back, near-expiry receiving guard, one-click lot timeline, and a stable extension hook API (v20 Hook API 1.0). Additive over v19 — no existing behaviour changes; install optionally after the v19 base modules
+- 🧬 **Universal Perishable Engine** (v20 — `wms_perishable`) — per-lot FEFO (earliest-expiry-first), expired-stock block + manager override + disposal carve-out, lot-aware receipt (batch / expiry / supplier capture), lot recall, quarantine, per-lot expiry report (180/90/60/30/15/7/expired bands), lot barcode labels + scan-back, near-expiry receiving guard, one-click lot timeline, and a stable extension hook API (v20 Hook API 1.0). Additive over v19 — no existing behaviour changes; part of the standard ten-addon install
 
 ## Install / update / rebuild
 
@@ -46,11 +46,28 @@ Three commands, and two of them keep your data. See
 | Latest code, keep everything | `scripts\upgrade-service.ps1` | **kept** |
 | Start clean | `scripts\reset-database.ps1` | **destroyed** |
 
-## Quickstart (Windows)
+## Quickstart (Windows) — fresh machine
 
-One-shot installer — installs PostgreSQL 15/16/17 (auto-detected; winget installs 17 by default), Python 3.12, wkhtmltopdf, Git
-via `winget`, clones Odoo 19 source, sets up a Python venv, and initialises
-the database. Takes ~10 minutes the first time.
+Four commands, about ten minutes. Updating an existing machine, or rebuilding
+its database, is in **[INSTALL-UPDATE.md](INSTALL-UPDATE.md)** — start there if
+this machine already runs the WMS.
+
+```powershell
+# From an Administrator PowerShell:
+git clone https://github.com/udhay8005/Inventory-management.git
+cd Inventory-management
+copy .env.example .env    # then edit it: set DB_PASSWORD, ODOO_ADMIN_PASSWD, BACKUP_PASSPHRASE
+powershell -ExecutionPolicy Bypass -File .\scripts\install-native.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\install-odoo-service.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\reset-database.ps1 -Force
+```
+
+That installs PostgreSQL / Python / wkhtmltopdf, clones Odoo at the pinned
+revision, builds the venv, registers the auto-starting `Odoo-WMS` service, and
+installs **all ten addons** on a clean database.
+
+Then open <http://localhost:8069> and sign in as `admin` / `admin` —
+**change that password immediately** under your user profile.
 
 **Python 3.11 or 3.12 — not 3.13.** Odoo 19 pulls in `rl-renderPM`, which has no
 3.13 wheel and whose source build fails on a removed `wheel` API. The installer
@@ -60,22 +77,13 @@ stops with that message rather than dying halfway through a C compile.
 this WMS is tested and deployed against. The `19.0` branch head moves, so
 cloning it unpinned builds the addons against an Odoo nobody verified.
 
-```powershell
-# From an Administrator PowerShell:
-git clone https://github.com/udhay8005/Inventory-management.git
-cd Inventory-management
-copy .env.example .env       # edit and change DB_PASSWORD
-scripts\install-native.ps1
-```
+**Setting up a second device?** [NEW-DEVICE-PROMPT.md](NEW-DEVICE-PROMPT.md) is a
+self-contained prompt for it — clean system, or a copy of the live warehouse.
 
-Then start the server:
+### The ten addons
 
-```powershell
-scripts\start-native.ps1
-```
-
-Open <http://localhost:8069>. Sign in as `admin` / `admin` (change the password
-immediately under your user profile). In **Apps** install in this order:
+`reset-database.ps1` installs all of them. To do it by hand from the **Apps**
+screen instead, use this order — each depends on the ones above it:
 
 1. `wms_location` — racks, slots, floor zones, role groups
 2. `wms_fifo` — FIFO removal across slots
@@ -84,13 +92,11 @@ immediately under your user profile). In **Apps** install in this order:
 5. `wms_ai_forecast` — offline statsmodels forecasting + reorder
 6. `wms_reports` — SQL-view dashboards
 7. `wms_training` — Help Center, guided tours, visual academy, SOPs
-8. `wms_perishable` — Universal Perishable Engine: per-lot FEFO, expiry tracking, recall, quarantine, lot labels, near-expiry guard, extension hooks. See [`docs/v20-perishable-engine/`](docs/v20-perishable-engine/)
-9. `wms_analytics` — Warehouse Intelligence: KPI dashboard, Stock Health Score, expiry-risk engine, supplier and disposal analytics, heat map, cold chain
-10. `wms_pharmacy` — Pharmacy packaging engine: Box → Strip → Tablet, open-strip-first dispensing, nested packaging barcodes
+8. `wms_perishable` — per-lot FEFO, expiry tracking, recall, quarantine, lot labels, near-expiry guard. See [`docs/v20-perishable-engine/`](docs/v20-perishable-engine/)
+9. `wms_analytics` — KPI dashboard, Stock Health Score, expiry-risk engine, supplier and disposal analytics, heat map, cold chain
+10. `wms_pharmacy` — Box → Strip → Tablet packaging, open-strip-first dispensing, nested packaging barcodes
 
-All ten are on `main` and installed on the trust's production system. Modules
-8–10 were once a `v20` pilot; that branch has since been merged, so install
-them from `main` like the rest.
+All ten run on the trust's production system.
 
 ## Initial user setup
 
