@@ -87,6 +87,12 @@ this system was tested against rather than whatever the branch head is today.
 
 ---
 
+## Setting up a second device
+
+Use **[NEW-DEVICE-PROMPT.md](NEW-DEVICE-PROMPT.md)** — a self-contained prompt to
+paste into Claude Code on the other machine. It covers both outcomes: a clean
+system, or a copy of the live warehouse restored from an encrypted backup.
+
 ## Paste-in prompt for Claude Code
 
 If you would rather have Claude Code do it on the machine, paste this:
