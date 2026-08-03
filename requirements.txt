@@ -18,4 +18,4 @@ rl-renderPM>=4.0.3
 # Odoo SKIPS those tests while still printing "0 failed" — a green-looking run
 # that exercised no UI at all. Our CI's zero-skipped-tests gate turns that
 # silent hole into a hard failure; this dependency is what keeps it green.
-websocket-client>=1.7
+websocket-client>=1.9.0
