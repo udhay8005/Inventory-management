@@ -1,5 +1,5 @@
 numpy>=2.4.6,<3.0
-pandas>=3.0.3,<4.0
+pandas>=3.0.5,<4.0
 statsmodels>=0.14.6
 Pillow>=12.3.0
 # Cap reportlab < 5.0. reportlab 5.0 drops the _renderPM fallback and hard-requires
