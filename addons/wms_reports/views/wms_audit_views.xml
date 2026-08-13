@@ -81,8 +81,9 @@
                                 <field name="line_ids"
                                        readonly="state in ('submitted','reviewed','rejected')">
                                     <list editable="bottom"
-                                          decoration-warning="variance != 0"
-                                          decoration-danger="variance &lt; 0">
+                                          decoration-muted="not is_counted"
+                                          decoration-warning="is_counted and variance != 0"
+                                          decoration-danger="is_counted and variance &lt; 0">
                                         <!-- Generated lines stay locked so a
                                              count can never be pointed at the
                                              wrong shelf; lines the keeper adds
@@ -94,6 +95,13 @@
                                                readonly="not is_found_line and expected_qty != 0"/>
                                         <field name="expected_qty" readonly="1"/>
                                         <field name="counted_qty"/>
+                                        <!-- Ticks itself the moment a figure is
+                                             entered. Visible so the keeper can
+                                             see at a glance what is still
+                                             unwalked, and the manager can see
+                                             what the count actually covers. -->
+                                        <field name="is_counted" readonly="1"
+                                               optional="show"/>
                                         <field name="scan_confirm" optional="show"
                                                placeholder="scan to confirm"/>
                                         <field name="scan_status" optional="show"

@@ -1,7 +1,23 @@
 """V20-003/004/005 — perishables are lot-tracked from creation, and Scan
 Receipt finds-or-creates the lot (never merges; auto-names without a batch)."""
 
+from datetime import timedelta
+
+from odoo import fields
 from odoo.tests import TransactionCase, tagged
+
+
+def in_days(n):
+    """An expiry N days from TODAY.
+
+    Deliberately relative. A hard-coded future date silently rots: written when
+    it was comfortably far out, it drifts inside the kind's minimum-shelf-life
+    window as real time passes, and the receipt starts being refused. That is
+    exactly what happened to this file - "2027-01-31" was fine until the
+    calendar reached within 180 days of it, and then a correct guard looked
+    like a broken test.
+    """
+    return fields.Date.to_string(fields.Date.today() + timedelta(days=n))
 
 
 @tagged("post_install", "-at_install", "wms", "wms_perishable")
@@ -69,7 +85,9 @@ class TestLotReceipt(TransactionCase):
         wiz = self.env["wms.scan.receipt"].create(
             {"warehouse_id": self.wh.id, "storekeeper_id": self.keeper.id, "qc_passed": True}
         )
-        for batch, expiry in (("LR-A", "2027-01-31"), ("LR-B", "2028-06-30")):
+        # Two distinct expiries, both comfortably beyond the medicine kind's
+        # 180-day minimum receive window.
+        for batch, expiry in (("LR-A", in_days(400)), ("LR-B", in_days(800))):
             self.env["wms.scan.receipt.line"].create(
                 {
                     "wizard_id": wiz.id,

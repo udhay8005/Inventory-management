@@ -14,7 +14,7 @@ which meant two kinds of error could never be found by counting:
 These tests pin the fix: negatives are listed, a full walk lists empty slots,
 the keeper can add a line for a surprise find, and accepting books it in.
 """
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.tests import TransactionCase, tagged
 
 
@@ -188,11 +188,17 @@ class TestAuditCoverage(TransactionCase):
             line.counted_qty = 3
 
     def test_08_walked_and_empty_is_recorded_without_adjusting_anything(self):
-        """A product-less line left at zero means "I went, it was empty" — it
-        must not be treated as a variance or book anything."""
+        """ "I went, it was empty" must be RECORDED, not merely left blank.
+
+        The keeper enters 0, which marks the line counted. A line left
+        untouched means nobody got there — a different thing entirely, and one
+        that must never be booked (see TestAuditPartialWalk).
+        """
         audit = self._audit(scope="full")
         empty_line = self._line(audit, self.slot_b)
         self.assertTrue(empty_line, "the empty slot is on the walk")
+        empty_line.counted_qty = 0
+        self.assertTrue(empty_line.is_counted, "entering 0 records the visit")
         self.assertEqual(audit.variance_count, 0, "walking an empty slot is not a variance")
         audit.action_submit()
         audit.action_review_accept()
@@ -226,3 +232,92 @@ class TestAuditCoverage(TransactionCase):
         walked = audit.line_ids.mapped("location_id")
         self.assertIn(self.slot_b, walked, "slots in the chosen area are walked")
         self.assertNotIn(other_slot, walked, "slots elsewhere are not")
+
+
+@tagged("post_install", "-at_install", "wms", "wms_audit_coverage")
+class TestAuditPartialWalk(TestAuditCoverage):
+    """A slot nobody reached must not be treated as a slot counted at zero.
+
+    Both states used to be stored identically as counted_qty = 0.0, so
+    accepting an audit applied delta = 0 - expected to every unvisited line and
+    ZEROED its stock. That was survivable while a sheet was two lines; adding
+    the "Full walk" scope makes a 225-line sheet normal, and nobody finishes
+    225 slots in one sitting, so the rare edge case became the default one.
+    """
+
+    def test_10_generated_lines_start_uncounted(self):
+        self.Quant._update_available_quantity(self.product, self.slot_a, 3)
+        self.env.flush_all()
+        audit = self._audit()
+        line = self._line(audit, self.slot_a, self.product)
+        self.assertFalse(line.is_counted, "a fresh sheet line has not been walked yet")
+
+    def test_11_entering_a_figure_marks_the_line_counted(self):
+        self.Quant._update_available_quantity(self.product, self.slot_a, 3)
+        self.env.flush_all()
+        audit = self._audit()
+        line = self._line(audit, self.slot_a, self.product)
+        line.counted_qty = 3
+        self.assertTrue(line.is_counted, "typing a count IS the act of counting")
+
+    def test_12_counting_zero_is_a_real_count(self):
+        """ "I walked there and the slot was empty" must still adjust stock —
+        that is the whole point of distinguishing it from "never reached"."""
+        self.Quant._update_available_quantity(self.product, self.slot_a, 4)
+        self.env.flush_all()
+        audit = self._audit()
+        line = self._line(audit, self.slot_a, self.product)
+        line.counted_qty = 0
+        self.assertTrue(line.is_counted)
+        audit.action_submit()
+        audit.action_review_accept()
+        on_hand = sum(
+            self.Quant.search(
+                [("product_id", "=", self.product.id), ("location_id", "=", self.slot_a.id)]
+            ).mapped("quantity")
+        )
+        self.assertEqual(on_hand, 0, "a slot genuinely counted empty is corrected to zero")
+
+    def test_13_accepting_a_half_walked_audit_leaves_unvisited_stock_alone(self):
+        """The destructive path, pinned."""
+        self.Quant._update_available_quantity(self.product, self.slot_a, 5)
+        self.Quant._update_available_quantity(self.product, self.slot_b, 9)
+        self.env.flush_all()
+        audit = self._audit()
+        walked = self._line(audit, self.slot_a, self.product)
+        walked.counted_qty = 4  # keeper counts this one, then stops
+        untouched = self._line(audit, self.slot_b, self.product)
+        self.assertFalse(untouched.is_counted)
+
+        audit.action_submit()
+        audit.action_review_accept()
+
+        a_qty = sum(
+            self.Quant.search(
+                [("product_id", "=", self.product.id), ("location_id", "=", self.slot_a.id)]
+            ).mapped("quantity")
+        )
+        b_qty = sum(
+            self.Quant.search(
+                [("product_id", "=", self.product.id), ("location_id", "=", self.slot_b.id)]
+            ).mapped("quantity")
+        )
+        self.assertEqual(a_qty, 4, "the counted slot is corrected")
+        self.assertEqual(b_qty, 9, "the slot nobody reached keeps its stock — NOT zeroed")
+
+    def test_14_submitting_an_untouched_sheet_is_refused(self):
+        self.Quant._update_available_quantity(self.product, self.slot_a, 3)
+        self.env.flush_all()
+        audit = self._audit()
+        with self.assertRaises(UserError):
+            audit.action_submit()
+
+    def test_15_the_digest_tells_the_manager_what_was_not_counted(self):
+        self.Quant._update_available_quantity(self.product, self.slot_a, 5)
+        self.Quant._update_available_quantity(self.product, self.slot_b, 9)
+        self.env.flush_all()
+        audit = self._audit()
+        self._line(audit, self.slot_a, self.product).counted_qty = 5
+        audit.action_submit()
+        body = "".join(m.body or "" for m in audit.message_ids)
+        self.assertIn("were not counted", body, "a partial walk must be stated, not implied")

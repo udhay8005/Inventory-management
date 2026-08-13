@@ -276,6 +276,17 @@ class WmsAudit(models.Model):
                         "form)."
                     )
                 )
+            counted = rec.line_ids.filtered("is_counted")
+            if rec.line_ids and not counted:
+                raise UserError(
+                    _(
+                        "Nothing on this sheet has been counted yet, so there is "
+                        "nothing to submit. Walk the slots and enter what you "
+                        "find - a slot you checked and found empty counts: enter 0."
+                    )
+                )
+            uncounted = len(rec.line_ids) - len(counted)
+
             # Single write so the keeper's in_progress -> submitted transition
             # clears the finalised-state write guard in one shot (the guard
             # reads the pre-write state, still in_progress here). A second
@@ -284,7 +295,6 @@ class WmsAudit(models.Model):
             rec.write({"state": "submitted", "submitted_at": fields.Datetime.now()})
 
             # Headline numbers
-            n = len(rec.line_ids)
             v = rec.variance_count
             # Build the digest body. Markup() so the HTML renders
             # instead of escaping.
@@ -310,6 +320,19 @@ class WmsAudit(models.Model):
                         line.counted_qty - line.expected_qty,
                     )
                 )
+            # Say it in the digest, because this is the manager's decision
+            # point: accepting adjusts only what was counted, and the slots
+            # nobody reached are still unverified. Silence here is how a
+            # half-walked sheet gets treated as a full physical count.
+            partial_note = Markup("")
+            if uncounted:
+                partial_note = Markup(
+                    "<p style='color:#b45309'><b>%d of %d slot(s) were not "
+                    "counted</b> and are not part of this count. Accepting "
+                    "adjusts only the %d counted line(s); the rest keep their "
+                    "current stock and remain unverified.</p>"
+                ) % (uncounted, len(rec.line_ids), len(counted))
+
             digest = Markup(
                 "<p><b>Audit submitted: %s.</b></p>"
                 "<p>%d line(s) counted; <b>%d variance(s)</b>. "
@@ -321,8 +344,9 @@ class WmsAudit(models.Model):
                 "<th style='text-align:right;padding:2px 8px'>Counted</th>"
                 "<th style='text-align:right;padding:2px 8px'>Δ</th></tr>"
                 "%s</table>"
+                "%s"
                 "<p><i>Open the audit to review and accept the counts.</i></p>"
-            ) % (rec.name, n, v, "".join(rows))
+            ) % (rec.name, len(counted), v, "".join(rows), partial_note)
 
             rec.message_post(
                 body=digest,
@@ -433,8 +457,14 @@ class WmsAudit(models.Model):
             # happened during the (possibly multi-day) audit window.
             # A product-less line is a full-walk slot the keeper confirmed
             # empty: there is nothing to book, and no product to lock.
+            # is_counted is the load-bearing term. Without it, every slot the
+            # keeper never reached is a line reading counted=0 against
+            # expected=N, and accepting the audit applies delta -N to each -
+            # wiping the stock of every unvisited slot, silently, because the
+            # digest only lists the ten largest variances. Harmless while an
+            # audit was 2 lines; a disaster the moment "Full walk" makes it 225.
             variance_lines = rec.line_ids.filtered(
-                lambda ln: ln.product_id and ln.counted_qty != ln.expected_qty
+                lambda ln: ln.is_counted and ln.product_id and ln.counted_qty != ln.expected_qty
             )
             prod_ids = sorted(set(variance_lines.mapped("product_id").ids))
             if prod_ids:
@@ -538,6 +568,13 @@ class WmsAuditLine(models.Model):
         string="Counted",
         help="What the Store Keeper actually saw on the shelf.",
     )
+    is_counted = fields.Boolean(
+        string="Counted?",
+        default=False,
+        help="Ticked once someone has actually stood in front of this slot. "
+        "A blank line is NOT the same as a slot counted at zero, and the "
+        "difference decides whether accepting the audit touches this stock.",
+    )
     _counted_qty_nonneg = models.Constraint(
         "CHECK(counted_qty >= 0)",
         "Counted quantity cannot be negative.",
@@ -574,6 +611,16 @@ class WmsAuditLine(models.Model):
         related="audit_id.state",
         store=False,
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            # A line the keeper types in by hand (a surprise find) arrives with
+            # a count already on it and is counted by definition. A generated
+            # sheet line arrives at 0.0 and is NOT.
+            if "is_counted" not in vals and vals.get("counted_qty"):
+                vals["is_counted"] = True
+        return super().create(vals_list)
 
     @api.constrains("product_id", "counted_qty")
     def _check_counted_line_names_a_product(self):
@@ -633,7 +680,15 @@ class WmsAuditLine(models.Model):
         after handing the audit in. Managers (and superuser internal paths)
         bypass; to change a submitted count, a manager rejects the audit and the
         keeper re-walks it. Mirrors the absolute unlink() guard below.
+
+        Also marks the line as counted: writing a figure into the Counted
+        column IS the act of counting. That is what separates "I walked to that
+        slot and it held nothing" from "nobody got that far" - two states
+        previously stored identically as 0.0, the second of which silently
+        zeroed real stock when the manager accepted the audit.
         """
+        if "counted_qty" in vals and "is_counted" not in vals:
+            vals = dict(vals, is_counted=True)
         if not self.env.su and not self.env.user.has_group("wms_location.group_wms_manager"):
             for line in self:
                 if line.audit_id.state in ("submitted", "reviewed", "rejected"):
